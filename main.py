@@ -31,11 +31,14 @@ async def on_message(message):
 
 
 
+
 def randoHug():
   return random.choice(botGifs.hugGif)
 
 def randoSelfHug():
   return random.choice(botGifs.selfHugGif)
+
+def 
 
 #<@1234567890>
 

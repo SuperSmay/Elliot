@@ -23,3 +23,8 @@ selfHugGif = [
   "https://c.tenor.com/MctOwe2LKgQAAAAM/franziska-alone.gif",
   "https://c.tenor.com/fWjs4Isxni4AAAAM/anime-anime-sad.gif",
 ]
+
+kissGif = [
+
+]
+
