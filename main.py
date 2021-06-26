@@ -25,9 +25,9 @@ async def on_message(message):
   elif message.content.lower().startswith(prefix + " hug"):
     messageList = message.content.lower().split()
     if len(messageList) >= 3:
-      await message.channel.send(f"{message.author.name} is hugging {messageList[2]} {randoHug()}")
+      await message.channel.send(embed=await hugEmbed(message))
     else:
-      await message.channel.send(f"{message.author.name} wants a hug... {randoSelfHug()}")
+      await message.channel.send(embed=selfHugEmbed(message))
 
 
 
@@ -38,7 +38,39 @@ def randoHug():
 def randoSelfHug():
   return random.choice(botGifs.selfHugGif)
 
-def 
+async def hugEmbed(message):
+  messageList = message.content.lower().split()
+  user2Name = await client.fetch_user(messageList[2].replace("<", "").replace(">", "").replace("@", "").replace("!", ""))
+  embed= discord.Embed(title=f"{message.author.name} is hugging {user2Name.name}", color=embColors())
+  embed.set_image(url=randoHug())
+  return embed
+
+def selfHugEmbed(message):
+  embed= discord.Embed(title=f"{message.author.name} wants a hug...", color=embColors())
+  embed.set_image(url=randoHug())
+  return embed
+
+def embColors():
+  return random.choice(botGifs.colors)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #<@1234567890>
 
