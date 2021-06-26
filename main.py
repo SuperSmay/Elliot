@@ -27,7 +27,7 @@ async def on_message(message):
     if len(messageList) >= 3:
       await message.channel.send(embed=await hugEmbed(message))
     else:
-      await message.channel.send(embed=selfHugEmbed(message))
+      await message.channel.send(embed=selfHugEmbed(message)) 
 
 
 
