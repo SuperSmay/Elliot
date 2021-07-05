@@ -34,6 +34,7 @@ async def on_message(message):
 
 
 
+
 def randoHug():
   return random.choice(botGifs.hugGif)
 
