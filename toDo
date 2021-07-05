@@ -1,2 +1,8 @@
 Embeds
 Make commands better - Classes and class inheritance
+
+
+
+New commands:
+
+Command sent -> command interpreter gets type, length, and catches errors (responds with error message) -> response builder creates correct embed and also logs count -> command sender sends embed
