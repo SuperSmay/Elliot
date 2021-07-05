@@ -2,12 +2,14 @@
 import discord
 import botGifs
 import random
+from globalVariables import client, prefix
+import Interaction
 
-TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+TOKEN =   "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 
-client = discord.Client()
 
-prefix = "eli"
+
+
 
 @client.event
 async def on_ready():
@@ -23,11 +25,12 @@ async def on_message(message):
   elif message.content.lower().startswith(prefix + " cutie"):
     await message.channel.send("ur a cutie 2 ;3")
   elif message.content.lower().startswith(prefix + " hug"):
-    messageList = message.content.lower().split()
-    if len(messageList) >= 3:
-      await message.channel.send(embed=await hugEmbed(message))
-    else:
-      await message.channel.send(embed=selfHugEmbed(message)) 
+    interaction = Interaction.HugInteraction(message, "hug")
+    await interaction.send()
+  elif message.content.lower().startswith(prefix + " test"):
+    interaction = Interaction.BaseInteraction(message, "test")
+    await interaction.send()
+
 
 
 
