@@ -192,7 +192,6 @@ class BaseInteraction:
             file.close()
             return countDict[self.interaction]["receive"]
 
-
 class HugInteraction(BaseInteraction):
 
     def noPingTitle(self):  #The title to use if no pings are provided
