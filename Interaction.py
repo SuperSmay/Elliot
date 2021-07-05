@@ -1,5 +1,3 @@
-from logging import exception
-from discord import message
 import random
 import botGifs
 from globalVariables import client, prefix
@@ -7,7 +5,6 @@ from fnmatch import fnmatch
 import traceback
 import pathlib
 import json
-
 
 import discord
 
@@ -22,10 +19,9 @@ class BaseInteraction:
         self.includedMessage = ""
         self.footer = ""
 
-    async def send(self):
-        self.getArguments()
+    async def send(self):  #Replys with the embed or an error
         try: 
-            await self.splitIntoNamessAndMessage()
+            await self.splitIntoNamesAndMessage()
             self.updateCounts()
             await self.message.reply(embed= self.embed(), mention_author= False)
         except:
@@ -47,7 +43,6 @@ class BaseInteraction:
         countMessage = f"{self.message.author.name} got tested {self.getReceiveCount(self.message.author.id)} times, and tested others {self.getGiveCount()} times." 
         countMessage = countMessage.replace("1 times", "once")
         return countMessage
-
 
     def embed(self):  #Creates the embed to be sent
         embedToReturn = discord.Embed(title= self.getEmbedTitle(), description= self.includedMessage, color= self.getColor())
@@ -80,7 +75,7 @@ class BaseInteraction:
                 return True
         return False
 
-    async def splitIntoNamessAndMessage(self):  #Splits the arugments into the nameList and included message and stores them in the class variables
+    async def splitIntoNamesAndMessage(self):  #Splits the arugments into the nameList and included message and stores them in the class variables
 
         async def getUserPings(self):
             pingIndex = 0
@@ -93,7 +88,6 @@ class BaseInteraction:
                     self.footer = "One or more of the users you mentioned cannot see this channel or aren't in this server, so they were ignored"
                 else:
                     pingList.append(self.arguments[pingIndex])
-
                     del self.arguments[pingIndex]
             self.pingList = pingList
             return pingList
@@ -101,7 +95,6 @@ class BaseInteraction:
         async def getUserNames(self):
             userList = [await client.fetch_user(self.getIDFromPing(ping)) for ping in await getUserPings(self)]
             self.nameList = [user.name for user in userList]
-
 
         def getIncludedMessage(self):
             self.includedMessage = " ".join(self.arguments)
@@ -198,3 +191,24 @@ class BaseInteraction:
             json.dump(countDict, file)
             file.close()
             return countDict[self.interaction]["receive"]
+
+
+class HugInteraction(BaseInteraction):
+
+    def noPingTitle(self):  #The title to use if no pings are provided
+        return f"{self.message.author.name} wants a hug..."
+
+    def pingTitle(self):  #The title to use if there are pings
+        return f"{self.message.author.name} is hugging {self.getJoinedNames()}"
+
+    def noPingImage(self):
+        return random.choice(botGifs.selfHugGif)
+
+    def pingImage(self):
+        return random.choice(botGifs.hugGif)
+
+    def getCountMessage(self):
+        countMessage = f"{self.message.author.name} got hugged {self.getReceiveCount(self.message.author.id)} times, and hugged others {self.getGiveCount()} times." 
+        countMessage = countMessage.replace("1 times", "once")
+        return countMessage
+    

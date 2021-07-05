@@ -25,11 +25,8 @@ async def on_message(message):
   elif message.content.lower().startswith(prefix + " cutie"):
     await message.channel.send("ur a cutie 2 ;3")
   elif message.content.lower().startswith(prefix + " hug"):
-    messageList = message.content.lower().split()
-    if len(messageList) >= 3:
-      await message.channel.send(embed=await hugEmbed(message))
-    else:
-      await message.channel.send(embed=selfHugEmbed(message))
+    interaction = Interaction.HugInteraction(message, "hug")
+    await interaction.send()
   elif message.content.lower().startswith(prefix + " test"):
     interaction = Interaction.BaseInteraction(message, "test")
     await interaction.send()
