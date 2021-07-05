@@ -153,7 +153,7 @@ class BaseInteraction:
             countDict = {}
             countDict[self.interaction] = {"give" : 0, "receive" : 0}
             countDict[self.interaction]["give"] += 1
-            file = open(path, "w")
+            file = open(path, "w+")
             json.dump(countDict, file)
             file.close()
             return countDict[self.interaction]["give"]
@@ -187,7 +187,7 @@ class BaseInteraction:
             countDict = {}
             countDict[self.interaction] = {"give" : 0, "receive" : 0}
             countDict[self.interaction]["receive"] += 1
-            file = open(path, "w")
+            file = open(path, "w+")
             json.dump(countDict, file)
             file.close()
             return countDict[self.interaction]["receive"]
