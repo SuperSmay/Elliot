@@ -62,7 +62,7 @@ class timeLeaderboard:
         elif self.index == 2:
             placement = "3rd place"
         else:
-            placement = f"{self.index}th place"
+            placement = f"{self.index + 1}th place"
         return f"Congratulations <@{self.user.id}>! You just got **{placement}** for fastest leaver with a time of **{self.time}** seconds!!"
 
 

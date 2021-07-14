@@ -40,7 +40,7 @@ class BaseInteraction:
             self.addGiveCount()
     
     def getCountMessage(self):
-        countMessage = f"{self.message.author.name} got tested {self.getReceiveCount(self.message.author.id)} times, and tested others {self.getGiveCount()} times." 
+        countMessage = f"{self.message.author.display_name} got tested {self.getReceiveCount(self.message.author.id)} times, and tested others {self.getGiveCount()} times." 
         countMessage = countMessage.replace("1 times", "once")
         return countMessage
 
@@ -56,10 +56,10 @@ class BaseInteraction:
         return self.pingTitle()
 
     def noPingTitle(self):  #The title to use if no pings are provided
-        return f"{self.message.author.name}"
+        return f"{self.message.author.display_name}"
 
     def pingTitle(self):  #The title to use if there are pings
-        return f"{self.message.author.name} --> {self.getJoinedNames()}"
+        return f"{self.message.author.display_name} --> {self.getJoinedNames()}"
 
     def getJoinedNames(self):  #Joins all the names used into a nice string
         if len(self.nameList) < 2:
@@ -93,8 +93,8 @@ class BaseInteraction:
             return pingList
 
         async def getUserNames(self):
-            userList = [await client.fetch_user(self.getIDFromPing(ping)) for ping in await getUserPings(self)]
-            self.nameList = [user.name for user in userList]
+            userList = [await self.message.guild.fetch_member(self.getIDFromPing(ping)) for ping in await getUserPings(self)]
+            self.nameList = [user.display_name for user in userList]
 
         def getIncludedMessage(self):
             self.includedMessage = " ".join(self.arguments)
@@ -195,10 +195,10 @@ class BaseInteraction:
 class HugInteraction(BaseInteraction):
 
     def noPingTitle(self):  #The title to use if no pings are provided
-        return f"{self.message.author.name} wants a hug..."
+        return f"{self.message.author.display_name} wants a hug..."
 
     def pingTitle(self):  #The title to use if there are pings
-        return f"{self.message.author.name} is hugging {self.getJoinedNames()}"
+        return f"{self.message.author.display_name} is hugging {self.getJoinedNames()}"
 
     def noPingImage(self):
         return random.choice(botGifs.selfHugGif)
@@ -207,7 +207,7 @@ class HugInteraction(BaseInteraction):
         return random.choice(botGifs.hugGif)
 
     def getCountMessage(self):
-        countMessage = f"{self.message.author.name} got hugged {self.getReceiveCount(self.message.author.id)} times, and hugged others {self.getGiveCount()} times." 
+        countMessage = f"{self.message.author.display_name} got hugged {self.getReceiveCount(self.message.author.id)} times, and hugged others {self.getGiveCount()} times." 
         countMessage = countMessage.replace("1 times", "once")
         return countMessage
     

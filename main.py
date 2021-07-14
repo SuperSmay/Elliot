@@ -1,11 +1,10 @@
 #Bot
 import discord
-import botGifs
-import random
-from globalVariables import client, prefix
+from globalVariables import client, prefix, verifyChannel
 import Interaction
 import datetime
 import Leaderboard
+import Verify
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
@@ -35,6 +34,12 @@ async def on_message(message):
   elif message.content.lower().startswith(prefix + " leaverboard") or message.content.lower().startswith(prefix + " leaderboard"):
     interaction = Leaderboard.FetchLeaderboard(message)
     await interaction.send()
+
+
+  elif message.channel.id == verifyChannel[message.guild.id]:
+    verify = Verify.Verify(message)
+    await verify.checkVerifyStatus()
+
 
 @client.event
 async def on_member_remove(user):
