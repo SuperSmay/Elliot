@@ -85,11 +85,26 @@ class FetchLeaderboard:
         return leaderboard
     
     def getLeaderboardEmbed(self):
-        leadboardList = [f"{self.leaderboard['leaveTime'].index(position) + 1} - <@{position['userID']}> - {position['time']} seconds" for position in self.leaderboard["leaveTime"]]
-        embed = discord.Embed(title= f"{self.message.guild.name}'s Leaver Leaderboard", color= 7528669)
+        leadboardList = [f"{self.getPositionNumber(self.leaderboard['leaveTime'].index(position))} - <@{position['userID']}> - {position['time']} seconds" for position in self.leaderboard["leaveTime"]]
+        embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.message.guild.name}'s Leaver Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
         embed.add_field(name= "**Leaderboard**", value= "\n".join(leadboardList))
         embed.set_thumbnail(url=client.user.avatar_url)
         return embed
+
+    def getPositionNumber(self, index):
+        emoteList = [
+            "<:gh_1:856557384071512065>",
+            "<:gh_2:856557978383155200>",
+            "<:gh_3:856557993030189096>",
+            "<:gh_4:856558007352950795>",
+            "<:gh_5:856558030836990002>",
+            "<:gh_6:856558055138394169>",
+            "<:gh_7:856558070069723146>",
+            "<:gh_8:856558533814124544>",
+            "<:gh_9:856558551547510794>",
+            "<:gh_10:856558568986771466>"
+        ]
+        return emoteList[index]
 
     async def send(self):
         await self.message.reply(embed= self.getLeaderboardEmbed(), mention_author= False)

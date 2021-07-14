@@ -7,9 +7,8 @@ import Interaction
 import datetime
 import Leaderboard
 
-TOKEN = "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
-#"ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
-
+TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
 
 
 
@@ -40,9 +39,7 @@ async def on_message(message):
 @client.event
 async def on_member_remove(user):
   timeSinceJoin = datetime.datetime.utcnow() - user.joined_at
-  print(f"Time since join: {timeSinceJoin}")
-  if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 60:
-    print(f"Member stayed for {timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000} seconds")
+  if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(timeSinceJoin, user)
     await leaderboard.scoreSubmit()
 
