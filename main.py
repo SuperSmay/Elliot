@@ -11,7 +11,6 @@ TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 
 
 
-
 @client.event
 async def on_ready():
   print("I love coffee")
