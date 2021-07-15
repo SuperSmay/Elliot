@@ -28,7 +28,7 @@ class BaseInteraction:
             error = traceback.format_exc()
             error = error.replace("c:\\Users\\31415\\Dropbox\\AmesBot", "bot")
             error += f"\nVars:\nMessage: {self.message.content}\nInteraction: {self.interaction}\nArguments: {self.arguments}\nnameList: {self.nameList}\nincludedMessage: {self.includedMessage}"
-            await self.message.reply(content= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps To <@243759220057571328> ```{error}```", mention_author= False) 
+            await self.message.reply(content= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```", mention_author= False) 
             traceback.print_exc()
             return
    

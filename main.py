@@ -1,6 +1,6 @@
 #Bot
 import discord
-from globalVariables import client, prefix, verifyChannel
+from globalVariables import client, prefix, verifyChannel, unverifiedRole
 import Interaction
 import datetime
 import Leaderboard
@@ -36,8 +36,8 @@ async def on_message(message):
     await interaction.send()
 
 
-  elif message.channel.id == verifyChannel[message.guild.id]:
-    verify = Verify.Verify(message)
+  elif unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
+    verify = Verify.Verify(member= message.author, message= message)
     await verify.checkVerifyStatus()
 
 
