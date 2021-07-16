@@ -5,6 +5,7 @@ import Interaction
 import datetime
 import Leaderboard
 import Verify
+import Join
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
@@ -46,6 +47,11 @@ async def on_member_remove(user):
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(timeSinceJoin, user)
     await leaderboard.scoreSubmit()
+
+@client.event
+async def on_member_join(user):
+  join = Join.Join(user)
+  await join.send()
 
 
 
