@@ -9,13 +9,13 @@ menu = [
             {
                 "name" : "Green boba",
                 "info" : "Delious green boba!",
-                "emote" : "<:green_boba:866141439293128724>",
+                "emote" : "<:green_boba:866161601618903070>",
                 "price" : 10
             },
             {
                 "name" : "Yellow boba",
                 "info" : "Tasty yellow boba!",
-                "emote" : "<:yellow_boba:866141439062835250>",
+                "emote" : "<:yellow_boba:866161600990019594>",
                 "price" : 20
             }
         ]

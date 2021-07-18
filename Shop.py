@@ -29,7 +29,7 @@ class Shop:
         self.shopMessage = await self.message.channel.fetch_message(self.shopMessage.id)
 
     async def onReact(self, emoji, member):
-        if member.id != self.member.id or (str(emoji) not in numberEmoteList and str(emoji) != "<:back_arrow:866141339480752180>"):
+        if member.id != self.member.id or (str(emoji) not in numberEmoteList and str(emoji) != "<:back_arrow:866161586157649951>"):
             return
         if self.pageIndex == -1:
             self.pageIndex = self.getPageIndexFromEmoji(emoji)
@@ -43,7 +43,7 @@ class Shop:
 
     def getPageIndexFromEmoji(self, emoji):
         print(str(emoji))
-        if str(emoji) == "<:back_arrow:866141339480752180>":
+        if str(emoji) == "<:back_arrow:866161586157649951>":
             return -1
         return numberEmoteList.index(str(emoji))
 
@@ -73,7 +73,7 @@ class Shop:
         else:
             print(self.pageIndex)
             count = len(menu[self.pageIndex]["items"])
-            await self.shopMessage.add_reaction("<:back_arrow:866141339480752180>")
+            await self.shopMessage.add_reaction("<:back_arrow:866161586157649951>")
         for i in range(0, count):
             client.loop.create_task(self.shopMessage.add_reaction(self.getEmojiNumber(i)))
 
