@@ -210,4 +210,3 @@ class HugInteraction(BaseInteraction):
         countMessage = f"{self.message.author.display_name} got hugged {self.getReceiveCount(self.message.author.id)} times, and hugged others {self.getGiveCount()} times." 
         countMessage = countMessage.replace("1 times", "once")
         return countMessage
-    
