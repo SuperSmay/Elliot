@@ -81,8 +81,8 @@ class FetchLeaderboard:
             file.close()
         return leaderboard
     
-    def getLeaderboardEmbed(self):
-        leadboardList = [f"{self.getPositionNumber(self.leaderboard['leaveTime'].index(position))} - <@{position['userID']}> - {position['time']} seconds" for position in self.leaderboard["leaveTime"]]
+    async def getLeaderboardEmbed(self):
+        leadboardList = [f"{self.getPositionNumber(self.leaderboard['leaveTime'].index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['time']} seconds" for position in self.leaderboard["leaveTime"]]
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.message.guild.name}'s Leaver Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
         embed.add_field(name= "**Leaderboard**", value= "\n".join(leadboardList))
         embed.set_thumbnail(url=client.user.avatar_url)
@@ -92,5 +92,5 @@ class FetchLeaderboard:
         return numberEmoteList[index]
 
     async def send(self):
-        await self.message.reply(embed= self.getLeaderboardEmbed(), mention_author= False)
+        await self.message.reply(embed= await self.getLeaderboardEmbed(), mention_author= False)
 
