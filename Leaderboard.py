@@ -2,12 +2,9 @@ import json
 import pathlib
 import discord
 from discord import embeds
-from globalVariables import client
+from globalVariables import client, numberEmoteList, joinChannel
 
-joinChannel = {
-    811369107181666343 : 811386285876445184,
-    764385563289452545 : 764385563813871618
-    }
+
 
 class timeLeaderboard:
 
@@ -46,7 +43,7 @@ class timeLeaderboard:
             
     def saveLeaderboard(self):
         self.leaderboard["leaveTime"].insert(self.index, {"time" : self.time, "userID" : self.user.id})
-        self.leaderboard["leaveTime"] = self.leaderboard["leaveTime"][:9]
+        self.leaderboard["leaveTime"] = self.leaderboard["leaveTime"][:10]
 
         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
 
@@ -92,19 +89,7 @@ class FetchLeaderboard:
         return embed
 
     def getPositionNumber(self, index):
-        emoteList = [
-            "<:gh_1:856557384071512065>",
-            "<:gh_2:856557978383155200>",
-            "<:gh_3:856557993030189096>",
-            "<:gh_4:856558007352950795>",
-            "<:gh_5:856558030836990002>",
-            "<:gh_6:856558055138394169>",
-            "<:gh_7:856558070069723146>",
-            "<:gh_8:856558533814124544>",
-            "<:gh_9:856558551547510794>",
-            "<:gh_10:856558568986771466>"
-        ]
-        return emoteList[index]
+        return numberEmoteList[index]
 
     async def send(self):
         await self.message.reply(embed= self.getLeaderboardEmbed(), mention_author= False)
