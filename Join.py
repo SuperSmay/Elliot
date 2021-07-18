@@ -14,7 +14,14 @@ class Join:
             f"🔔 \*Ding ding\* 🔔 <@{self.member.id}> just entered {self.guild.name}!",
             f"Hi <@{self.member.id}>, we hope you enjoy your time here at {self.guild.name}!"
         ]
-        return random.choice(joinMessageList)
+        rolePlayMessageList = [
+            f"Seat yourself anywhere you'd like!",
+            f"There are some free tables to the left if you'd like to sit down!",
+            f"Feel free to sit down anywhere you like!",
+            f"There are drinks up front and free tables in the back!"
+        ]
+        return f"{random.choice(joinMessageList)} {random.choice(rolePlayMessageList)}"
+
 
     def getMemberCount(self):
         memberCount = 0
