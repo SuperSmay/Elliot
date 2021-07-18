@@ -1,5 +1,5 @@
 import random
-from globalVariables import welcomeChannel
+from globalVariables import welcomeChannel, botRole
 
 class Join:
     def __init__(self, member):
@@ -16,6 +16,14 @@ class Join:
         ]
         return random.choice(joinMessageList)
 
+    def getMemberCount(self):
+        memberCount = 0
+        for member in self.guild.members:
+            if not botRole[self.guild.id] in [role.id for role in member.roles]:
+                memberCount += 1
+        return memberCount
+
+
     async def send(self):
         channel = self.guild.get_channel(welcomeChannel[self.guild.id])
-        await channel.send(self.getJoinMessage())
+        await channel.send(f"{self.getJoinMessage()}\nThere are now {self.getMemberCount()} customers in {self.guild.name}!")
