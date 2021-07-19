@@ -4,7 +4,7 @@ menu = [
         "info" : "See our selection of boba flavors!",
         "pageName" : "Boba Menu",
         "pageInfo" : "Here are our boba favors!",
-        "coverEmote" : "<:green_boba:865722621210394634>",
+        "coverEmote" : "<:green_boba:866161601618903070>",
         "items" : [
             {
                 "name" : "Green boba",

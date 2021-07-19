@@ -1,4 +1,5 @@
 #Bot
+from operator import invert
 import discord
 from globalVariables import client, prefix, verifyChannel, unverifiedRole
 from activeMessages import activeMessages
@@ -22,7 +23,7 @@ async def on_ready():
     print(guild.name)
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.Message):
   if message.author.bot:
     return
   elif message.content.lower().startswith(prefix + " cutie"):
@@ -39,11 +40,20 @@ async def on_message(message):
   elif message.content.lower().startswith(prefix + " shop"):
     shop = Shop.Shop(message)
     await shop.send()
+  elif message.content.lower().startswith(prefix + " inv"):
+    inventory = Shop.Inventory(message)
+    await inventory.send()
+  elif message.content.lower().startswith(prefix + " bal"):
+    balance = Shop.Balance(message)
+    await balance.send()
 
 
   elif unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
     verify = Verify.Verify(member= message.author, message= message)
     await verify.checkVerifyStatus()
+
+  if str(client.user.id) in message.content.lower():
+    await message.add_reaction("<a:ping:866475995317534740>")
 
   
 
