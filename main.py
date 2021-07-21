@@ -60,6 +60,8 @@ async def on_message(message: discord.Message):
 
 @client.event
 async def on_member_remove(user):
+  leave = Join.Leave(user)
+  await leave.send()
   timeSinceJoin = datetime.datetime.utcnow() - user.joined_at
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(timeSinceJoin, user)

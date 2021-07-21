@@ -6,7 +6,7 @@ class Join:
         self.member = member
         self.guild = member.guild
 
-    def getJoinMessage(self):
+    async def getMessage(self):
         joinMessageList = [
             f"Welcome to {self.guild.name}, <@{self.member.id}>!!",
             f":0 Hello there <@{self.member.id}>, welcome to {self.guild.name}!",
@@ -33,4 +33,28 @@ class Join:
 
     async def send(self):
         channel = self.guild.get_channel(welcomeChannel[self.guild.id])
-        await channel.send(f"{self.getJoinMessage()}\nThere are now {self.getMemberCount()} customers in {self.guild.name}!")
+        await channel.send(f"{await self.getMessage()}\nThere are now {self.getMemberCount()} customers in {self.guild.name}")
+
+class Leave(Join):
+
+    async def getMessage(self):
+        joinMessageList = [
+            f"I hope you enjoyed your time at {self.guild.name}, <@{self.member.id}>. Goodbye!",
+            f"So long <@{self.member.id}>. I hope you had fun at {self.guild.name}!",
+            f"<@{self.member.id}> has exited {self.guild.name}.",
+            f":c <@{self.member.id}> just left {self.guild.name}.",
+            f"Sadly, <@{self.member.id}> left {self.guild.name}!"
+        ]
+        banMessageList = [
+            f"<@{self.member.id}> was a nasty Karen and won't be missed. Goodbye!",
+            f"<@{self.member.id}> has been banned from returning to {self.guild.name}.",
+            f"<@{self.member.id}> had to be removed from {self.guild.name}.",
+            f"The managers had to speak with <@{self.member.id}>. Needless to say, it didn't go well for <@{self.member.id}>."
+        ]
+        if await self.checkIfBanned(): return random.choice(banMessageList)
+        return random.choice(joinMessageList)
+
+    async def checkIfBanned(self):
+        if await self.member in [ban.user for ban in await self.member.guild.bans()]:
+            return True
+        return False
