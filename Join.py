@@ -33,7 +33,8 @@ class Join:
 
     async def send(self):
         channel = self.guild.get_channel(welcomeChannel[self.guild.id])
-        await channel.send(f"{await self.getMessage()}\nThere are now {self.getMemberCount()} customers in {self.guild.name}")
+        await channel.send(f"{await self.getMessage()}")
+        await channel.send(f"\nThere are now {self.getMemberCount()} customers here at {self.guild.name}.")
 
 class Leave(Join):
 
