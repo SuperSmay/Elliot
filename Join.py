@@ -55,6 +55,6 @@ class Leave(Join):
         return random.choice(joinMessageList)
 
     async def checkIfBanned(self):
-        if await self.member in [ban.user for ban in await self.member.guild.bans()]:
+        if self.member in [ban.user for ban in await self.member.guild.bans()]:
             return True
         return False
