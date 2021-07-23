@@ -66,6 +66,8 @@ async def on_member_remove(user):
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(timeSinceJoin, user)
     await leaderboard.scoreSubmit()
+    weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(timeSinceJoin, user)
+    await leaderboard.scoreSubmit()
 
 @client.event
 async def on_member_join(user):
@@ -74,12 +76,15 @@ async def on_member_join(user):
 
 @client.event
 async def on_raw_reaction_add(payload):  #When reaction added
+  try:
     emoji = payload.emoji  #Get emoji from the reaction payload
     channel = await client.fetch_channel(payload.channel_id)  #Get channel from the reaction payload
     message = await channel.fetch_message(payload.message_id)  #Get message from the reaction payload
     user = await client.fetch_user(payload.user_id)  #Get user from the reaction payload
     if message.id in activeMessages.keys():
       await activeMessages[message.id].onReact(emoji, user)
+  except:
+    print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
 
     
 
