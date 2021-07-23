@@ -122,7 +122,7 @@ class weeklyTimeLeaderboard(timeLeaderboard):
         if time.time() - self.leaderboard[self.leaderboardType][0]["epochSeconds"] > 604800:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())
-            self.saveLeaderboard()
+            self.saveLeaderboard(force= True)
         elif self.index == 0:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())
