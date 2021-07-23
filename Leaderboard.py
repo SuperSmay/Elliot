@@ -115,7 +115,7 @@ class weeklyTimeLeaderboard(timeLeaderboard):
     def __init__(self, timeDelta, user):
         super().__init__(timeDelta, user)
         self.leaderboardType = "weeklyLeaveTime"
-        try: self.leaderboard["weeklyLeaveTime"]
+        try: temp = self.leaderboard["weeklyLeaveTime"]
         except: self.leaderboard["weeklyLeaveTime"] = [{"time" : None, "userID" : None, "epochSeconds" : 0}]
 
     async def scoreSubmit(self):
