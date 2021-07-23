@@ -119,7 +119,7 @@ class weeklyTimeLeaderboard(timeLeaderboard):
         except: self.leaderboard["weeklyLeaveTime"] = [{"time" : None, "userID" : None, "epochSeconds" : 0}]
 
     async def scoreSubmit(self):
-        if time.time() - self.leaderboard[self.leaderboardType]["epochSeconds"] > 604800:
+        if time.time() - self.leaderboard[self.leaderboardType][0]["epochSeconds"] > 604800:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())
             self.saveLeaderboard()
