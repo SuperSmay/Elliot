@@ -153,5 +153,4 @@ class weeklyTimeLeaderboard(timeLeaderboard):
         return index
 
     def getHighscoreMessage(self):
-        if self.index == 0:
-            return f"Congratulations <@{self.user.id}>! You just got a new 7 day record for fastest leaver with a time of **{self.time}** seconds!!"
+        return f"Congratulations <@{self.user.id}>! You just got a new 7 day record for fastest leaver with a time of **{self.time}** seconds!!"
