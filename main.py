@@ -67,7 +67,7 @@ async def on_member_remove(user):
     leaderboard = Leaderboard.timeLeaderboard(timeSinceJoin, user)
     await leaderboard.scoreSubmit()
     weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(timeSinceJoin, user)
-    await leaderboard.scoreSubmit()
+    await weeklyLeaderboard.scoreSubmit()
 
 @client.event
 async def on_member_join(user):
