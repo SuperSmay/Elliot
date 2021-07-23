@@ -133,7 +133,7 @@ class weeklyTimeLeaderboard(timeLeaderboard):
             self.leaderboard[self.leaderboardType][0] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
         else:
             self.leaderboard[self.leaderboardType].insert(self.index, {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()})
-        self.leaderboard[self.leaderboardType] = self.leaderboard[self.leaderboardType][0]
+        self.leaderboard[self.leaderboardType] = self.leaderboard[self.leaderboardType][0:]
 
         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
 
