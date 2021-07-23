@@ -143,6 +143,8 @@ class weeklyTimeLeaderboard(timeLeaderboard):
 
     def getIndex(self):
         self.leaderboardType = "weeklyLeaveTime"
+        try: temp = self.leaderboard["weeklyLeaveTime"]
+        except: self.leaderboard["weeklyLeaveTime"] = [{"time" : None, "userID" : None, "epochSeconds" : 0}]
         index = 0
         while index < len(self.leaderboard[self.leaderboardType]):
             if self.leaderboard[self.leaderboardType][index]["time"] > self.time:
