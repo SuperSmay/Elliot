@@ -102,7 +102,7 @@ class FetchLeaderboard:
             embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.message.guild.name}'s Leaver Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
             embed.add_field(name= "**Leaderboard**", value= "\n".join(leadboardList))
             embed.set_thumbnail(url=client.user.avatar_url)
-            return embed
+        return embed
 
     def getPositionNumber(self, index):
         return numberEmoteList[index]
