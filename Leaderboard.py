@@ -113,10 +113,7 @@ class FetchLeaderboard:
 class weeklyTimeLeaderboard(timeLeaderboard):
 
     def __init__(self, timeDelta, user):
-        self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
-        self.user = user        
-        self.leaderboard = self.getLeaderboard()
-        self.index = self.getIndex()
+        super().__init__(timeDelta, user)
         self.leaderboardType = "weeklyLeaveTime"
         try: self.leaderboard["weeklyLeaveTime"]
         except: self.leaderboard["weeklyLeaveTime"] = [{"time" : None, "userID" : None, "epochSeconds" : 0}]
@@ -145,6 +142,7 @@ class weeklyTimeLeaderboard(timeLeaderboard):
         file.close()
 
     def getIndex(self):
+        self.leaderboardType = "weeklyLeaveTime"
         index = 0
         while index < len(self.leaderboard[self.leaderboardType]):
             if self.leaderboard[self.leaderboardType][index]["time"] > self.time:
