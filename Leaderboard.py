@@ -94,7 +94,7 @@ class FetchLeaderboard:
     
     async def getLeaderboardEmbed(self):
         if self.isWeekly():
-            entry = f"{(await client.fetch_user(self.leaderboard['weeklyLeaveTime'][0]['userID'])).name} - {self.leaderboard['weeklyLeaveTime'][0]['time']} seconds"
+            entry = f"**{(await client.fetch_user(self.leaderboard['weeklyLeaveTime']['userID'])).name} - {self.leaderboard['weeklyLeaveTime']['time']} seconds**"
             embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.message.guild.name}'s 7 Day Top Leaver☾∘∙⊱⋅•⋅", description= entry, color= 7528669)
             embed.set_thumbnail(url=client.user.avatar_url)
         else:
@@ -110,47 +110,50 @@ class FetchLeaderboard:
     async def send(self):
         await self.message.reply(embed= await self.getLeaderboardEmbed(), mention_author= False)
 
-class weeklyTimeLeaderboard(timeLeaderboard):
+class weeklyTimeLeaderboard:
 
     def __init__(self, timeDelta, user):
-        super().__init__(timeDelta, user)
+        self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
+        self.user = user        
+        self.leaderboard = self.getLeaderboard()
         self.leaderboardType = "weeklyLeaveTime"
-        try: temp = self.leaderboard["weeklyLeaveTime"]
-        except: self.leaderboard["weeklyLeaveTime"] = [{"time" : None, "userID" : None, "epochSeconds" : 0}]
+        try: temp = self.leaderboard[self.leaderboardType]
+        except: self.leaderboard[self.leaderboardType] = {"time" : 0, "userID" : 0, "epochSeconds" : 0}
+
+    def getLeaderboard(self):
+        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
+        if pathlib.Path.exists(path):
+            file = open(path, "r")
+            leaderboard = json.load(file)
+            file.close()
+        else:
+            leaderboard = {"leaveTime" : [], "weeklyLeaveTime" : {}}
+            file = open(path, "w+")
+            json.dump(leaderboard, file)
+            file.close()
+        return leaderboard
 
     async def scoreSubmit(self):
-        if time.time() - self.leaderboard[self.leaderboardType][0]["epochSeconds"] > 604800:
+        if time.time() - self.leaderboard[self.leaderboardType]["epochSeconds"] > 604800:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())
             self.saveLeaderboard(force= True)
-        elif self.index == 0:
+        elif self.time < self.leaderboard[self.leaderboardType]["time"]:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())
             self.saveLeaderboard()
             
     def saveLeaderboard(self, force = False):
         if force:
-            self.leaderboard[self.leaderboardType][0] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
+            self.leaderboard[self.leaderboardType] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
         else:
-            self.leaderboard[self.leaderboardType].insert(self.index, {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()})
-        self.leaderboard[self.leaderboardType] = self.leaderboard[self.leaderboardType][0:]
+            self.leaderboard[self.leaderboardType] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
 
         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
 
         file = open(path, "w")
         json.dump(self.leaderboard, file)
         file.close()
-
-    def getIndex(self):
-        self.leaderboardType = "weeklyLeaveTime"
-        try: temp = self.leaderboard["weeklyLeaveTime"]
-        except: self.leaderboard["weeklyLeaveTime"] = [{"time" : 0, "userID" : 0, "epochSeconds" : 0}]
-        index = 0
-        while index < len(self.leaderboard[self.leaderboardType]):
-            if self.leaderboard[self.leaderboardType][index]["time"] > self.time:
-                return index
-            index += 1
-        return index
 
     def getHighscoreMessage(self):
         return f"Congratulations <@{self.user.id}>! You just got a new 7 day record for fastest leaver with a time of **{self.time}** seconds!!"
