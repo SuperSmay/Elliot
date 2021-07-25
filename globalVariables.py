@@ -79,3 +79,5 @@ joinChannel = {
 botRole = {
    811369107181666343 : 811452026150977576
 }
+
+loadedInventories = {}

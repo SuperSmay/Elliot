@@ -1,5 +1,4 @@
 #Bot
-from operator import invert
 import discord
 from globalVariables import client, prefix, verifyChannel, unverifiedRole
 from activeMessages import activeMessages
@@ -9,6 +8,7 @@ import Leaderboard
 import Verify
 import Join
 import Shop
+import traceback
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
@@ -41,10 +41,10 @@ async def on_message(message: discord.Message):
     shop = Shop.Shop(message)
     await shop.send()
   elif message.content.lower().startswith(prefix + " inv"):
-    inventory = Shop.Inventory(message)
+    inventory = Shop.InventoryMessage(message)
     await inventory.send()
   elif message.content.lower().startswith(prefix + " bal"):
-    balance = Shop.Balance(message)
+    balance = Shop.BalanceMessage(message)
     await balance.send()
 
 
@@ -84,6 +84,7 @@ async def on_raw_reaction_add(payload):  #When reaction added
     if message.id in activeMessages.keys():
       await activeMessages[message.id].onReact(emoji, user)
   except:
+    traceback.print_exc()
     print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
 
     

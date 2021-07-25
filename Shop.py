@@ -1,13 +1,14 @@
 from typing import AsyncContextManager
 import discord
 from discord import embeds
-from globalVariables import client, numberEmoteList, prefix
+from globalVariables import client, numberEmoteList, prefix, loadedInventories
 from Menu import menu
 from activeMessages import activeMessages
 import asyncio
 import json
 import pathlib
 import datetime
+import uuid
 
 class Shop:
     def __init__(self, message):
@@ -81,64 +82,147 @@ class Shop:
     def getEmojiNumber(self, index):
         return numberEmoteList[index]
 
+
+
+class Inventory:
+    def __init__(self, member, inventoryDict):
+        self.guild = member.guild
+        self.member = member
+        self.balance = inventoryDict["balance"]
+        self.items = [Item(itemDict) for itemDict in inventoryDict["items"]]
+
+    def getDict(self):
+        return {
+            "balance" : self.balance,
+            "items" : [item.getDict() for item in self.items]
+        }
+
+    def addItem(self, item):
+        self.items.append(item)
+
+    def charge(self, amount):
+        self.balance = self.balance - amount
+    
+
+class Item:
+
+    def __init__(self, itemDict):
+        self.name = itemDict["name"]
+        self.info = itemDict["info"]
+        self.emote = itemDict["emote"]
+        self.UUID = itemDict["UUID"]
+
+    def getDict(self):
+        return {
+            "name" : self.name,
+            "info" : self.info,
+            "emote" : self.emote,
+            "UUID" : self.UUID
+        }
+
+def generateItemFromStore(itemDict):
+    newDict = {
+        "name" : itemDict["name"],
+        "info" : itemDict["info"],
+        "emote" : itemDict["emote"],
+        "UUID" : str(uuid.uuid4())
+    }
+    return Item(newDict)
+
+class InventoryHandler:
+
+    def __init__(self, member= None, inventory= None):
+        self.member = member
+        self.inventory = inventory
+        
+    def getInventory(self):
+        if self.isInventoryLoaded():
+            return loadedInventories[self.member.id]
+        else: 
+            return self.loadInventory()
+
+    def loadInventory(self):
+        path = pathlib.Path(f"Inventory/{self.member.guild.id}/{self.member.id}")
+        if pathlib.Path.exists(path):
+            file = open(path, "r")
+            inventoryDict = json.load(file)
+            file.close()
+        else:
+            inventoryDict = {"balance" : 0, "items" : []}
+            folderPath = pathlib.Path(f"Inventory/{self.member.guild.id}")
+            if not folderPath.exists():
+                folderPath.mkdir()
+            file = open(path, "w+")
+            json.dump(inventoryDict, file)
+            file.close()
+        inventory = Inventory(self.member, inventoryDict)
+        loadedInventories[self.member.id] = inventory
+        return inventory
+
+    def saveInventory(self):
+        path = pathlib.Path(f"Inventory/{self.inventory.guild.id}/{self.inventory.member.id}")
+        if pathlib.Path.exists(path):
+            file = open(path, "w")
+            json.dump(self.inventory.getDict(), file)
+            file.close()
+        else:
+            folderPath = pathlib.Path(f"Inventory/{self.inventory.guild.id}")
+            if not folderPath.exists():
+                folderPath.mkdir()
+            file = open(path, "w+")
+            json.dump(self.inventory.getDict(), file)
+            file.close()
+
+    def isInventoryLoaded(self):
+        return self.member.id in loadedInventories.keys()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class ShopInteraction:
 
     def __init__(self, message, item):
         self.message = message
         self.member = message.author
         self.guild = message.guild
-        self.inventory = self.getInventory()
+        self.inventory = InventoryHandler(member=self.member).getInventory()
         self.item = item
 
     def buyItem(self):
         if self.userCanAfford():
             self.chargeUser()
             self.addItemToInventory()
-            self.saveInventory()
+            InventoryHandler(inventory=self.inventory).saveInventory()
             return self.itemBoughtMessage()
         else:
             return self.priceErrorMessage()
 
     def priceErrorMessage(self):
-        return f"Sorry, you only have ${self.inventory['balance']}, but you need ${self.item['price']} to buy that."
+        return f"Sorry, you only have ${self.inventory.balance}, but you need ${self.item['price']} to buy that."
 
     def addItemToInventory(self):
-        self.inventory["items"].append(self.item)
+        self.inventory.addItem(generateItemFromStore(self.item))
 
     def userCanAfford(self):
-        return self.inventory["balance"] >= self.item["price"]
-
-    def getInventory(self):
-        path = pathlib.Path(f"Inventory/{self.guild.id}/{self.member.id}")
-        if pathlib.Path.exists(path):
-            file = open(path, "r")
-            inventory = json.load(file)
-            file.close()
-        else:
-            inventory = {"balance" : 0, "items" : []}
-            folderPath = pathlib.Path(f"Inventory/{self.guild.id}")
-            if not folderPath.exists():
-                folderPath.mkdir()
-            file = open(path, "w+")
-            json.dump(inventory, file)
-            file.close()
-        return inventory
-
-    def saveInventory(self):
-        path = pathlib.Path(f"Inventory/{self.guild.id}/{self.member.id}")
-        if pathlib.Path.exists(path):
-            file = open(path, "w")
-            json.dump(self.inventory, file)
-            file.close()
-        else:
-            inventory = {"balance" : 0, "items" : []}
-            path.mkdir()
-            file = open(path, "w+")
-            json.dump(inventory, file)
-            file.close()
+        return self.inventory.balance >= self.item["price"]
 
     def chargeUser(self):
-        self.inventory["balance"] = self.inventory["balance"] - self.item["price"]
+        self.inventory.charge(self.item["price"])
 
     def generateReceipt(self):
         return f"```-------Thank you for your purchase-------\n\nPurchase: {self.item['name']} --     -- ${self.item['price']}\n------------------------------------\nCashier: @{client.user.name}   Date: {datetime.datetime.now().strftime('%m/%d/%y')}```"
@@ -146,29 +230,13 @@ class ShopInteraction:
     def itemBoughtMessage(self):
         return f"Successfully bought item! Here is your receipt:\n{self.generateReceipt()}"
         
-class Inventory:
+class InventoryMessage:
 
     def __init__(self, message):
         self.message = message
         self.member = message.author
         self.guild = message.guild
-        self.inventory = self.getInventory()
-
-    def getInventory(self):
-        path = pathlib.Path(f"Inventory/{self.guild.id}/{self.member.id}")
-        if pathlib.Path.exists(path):
-            file = open(path, "r")
-            inventory = json.load(file)
-            file.close()
-        else:
-            inventory = {"balance" : 0, "items" : []}
-            folderPath = pathlib.Path(f"Inventory/{self.guild.id}")
-            if not folderPath.exists():
-                folderPath.mkdir()
-            file = open(path, "w+")
-            json.dump(inventory, file)
-            file.close()
-        return inventory
+        self.inventory = InventoryHandler(member=self.member).getInventory()
     
     def inventoryEmbed(self):
         embed = discord.Embed(title= f"{self.member.display_name}'s inventory", description= self.inventoryList(), color= 7528669)
@@ -177,14 +245,14 @@ class Inventory:
 
     def inventoryList(self):
         inventory = []
-        for item in self.inventory["items"]:
-            inventory.append(f"**{item['emote']} - {item['name']}**")
+        for item in self.inventory.items:
+            inventory.append(f"**{item.emote} - {item.name}**")
         return "\n".join(inventory)
 
     async def send(self):
         await self.message.reply(embed= self.inventoryEmbed(), mention_author= False)
 
-class Balance:
+class BalanceMessage:
     def __init__(self, message):
         self.message = message
         self.member = message.author
