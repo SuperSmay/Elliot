@@ -20,7 +20,7 @@ class Join:
             f"Feel free to sit down anywhere you like!",
             f"There are drinks up front and free tables in the back!"
         ]
-        return f"{random.choice(joinMessageList)} {random.choice(rolePlayMessageList)}"
+        return f"<:join:868675783026180097> {random.choice(joinMessageList)} {random.choice(rolePlayMessageList)}"
 
 
     def getMemberCount(self):
@@ -34,7 +34,7 @@ class Join:
     async def send(self):
         channel = self.guild.get_channel(welcomeChannel[self.guild.id])
         await channel.send(f"{await self.getMessage()}")
-        await channel.send(f"\nThere are now {self.getMemberCount()} customers here at {self.guild.name}.")
+        await channel.send(f"`There are now {self.getMemberCount()} customers here at {self.guild.name}.`")
 
 class Leave(Join):
 
@@ -52,8 +52,8 @@ class Leave(Join):
             f"<@{self.member.id}> had to be removed from {self.guild.name}.",
             f"The managers had to speak with <@{self.member.id}>. Needless to say, it didn't go well for <@{self.member.id}>."
         ]
-        if await self.checkIfBanned(): return random.choice(banMessageList)
-        return random.choice(joinMessageList)
+        if await self.checkIfBanned(): return f"<:x_:868676514995118130> {random.choice(banMessageList)}"
+        return f"<:leave:868675783302975538> {random.choice(joinMessageList)}"
 
     async def checkIfBanned(self):
         if self.member in [ban.user for ban in await self.member.guild.bans()]:
