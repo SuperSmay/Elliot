@@ -1,5 +1,7 @@
 import random
-from globalVariables import welcomeChannel, botRole
+
+import discord
+from globalVariables import welcomeChannel, botRole, logChannel
 
 class Join:
     def __init__(self, member):
@@ -35,22 +37,30 @@ class Join:
         channel = self.guild.get_channel(welcomeChannel[self.guild.id])
         await channel.send(f"{await self.getMessage()}")
         await channel.send(f"`There are now {self.getMemberCount()} customers here at {self.guild.name}.`")
+        await self.log()
 
+    async def log(self):
+        channel = self.guild.get_channel(logChannel[self.guild.id])
+        embed = discord.Embed(title= "Member joined", description= f"User is {self.member.mention}", color= 15672122)
+        embed.set_author(name= self.member.display_name, url= self.member.avatar_url)
+        embed.set_footer(text= f"ID: {self.member.id}")
+        embed.set_thumbnail(url= self.member.avatar_url)
+        await channel.send(embed= embed)
 class Leave(Join):
 
     async def getMessage(self):
         joinMessageList = [
-            f"I hope you enjoyed your time at {self.guild.name}, <@{self.member.id}>. Goodbye!",
-            f"So long <@{self.member.id}>. I hope you had fun at {self.guild.name}!",
-            f"<@{self.member.id}> has exited {self.guild.name}.",
-            f":c <@{self.member.id}> just left {self.guild.name}.",
-            f"Sadly, <@{self.member.id}> left {self.guild.name}!"
+            f"I hope you enjoyed your time at {self.guild.name}, {self.member.display_name}. Goodbye!",
+            f"So long {self.member.display_name}. I hope you had fun at {self.guild.name}!",
+            f"{self.member.display_name} has exited {self.guild.name}.",
+            f":c {self.member.display_name} just left {self.guild.name}.",
+            f"Sadly, {self.member.display_name} left {self.guild.name}!"
         ]
         banMessageList = [
-            f"<@{self.member.id}> was a nasty Karen and won't be missed. Goodbye!",
-            f"<@{self.member.id}> has been banned from returning to {self.guild.name}.",
-            f"<@{self.member.id}> had to be removed from {self.guild.name}.",
-            f"The managers had to speak with <@{self.member.id}>. Needless to say, it didn't go well for <@{self.member.id}>."
+            f"{self.member.display_name} was a nasty Karen and won't be missed. Goodbye!",
+            f"{self.member.display_name} has been banned from returning to {self.guild.name}.",
+            f"{self.member.display_name} had to be removed from {self.guild.name}.",
+            f"The managers had to speak with {self.member.display_name}. Needless to say, it didn't go well for {self.member.display_name}."
         ]
         if await self.checkIfBanned(): return f"<:x_:868676514995118130> {random.choice(banMessageList)}"
         return f"<:leave:868675783302975538> {random.choice(joinMessageList)}"
@@ -59,3 +69,11 @@ class Leave(Join):
         if self.member in [ban.user for ban in await self.member.guild.bans()]:
             return True
         return False
+
+    async def log(self):
+        channel = self.guild.get_channel(logChannel[self.guild.id])
+        embed = discord.Embed(title= "Member leave", description= f"User is {self.member.mention}", color= 15672122)
+        embed.set_author(name= self.member.display_name, url= self.member.avatar_url)
+        embed.set_footer(text= f"ID: {self.member.id}")
+        embed.set_thumbnail(url= self.member.avatar_url)
+        await channel.send(embed= embed)
