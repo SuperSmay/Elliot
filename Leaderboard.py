@@ -12,13 +12,11 @@ class timeLeaderboard:
     def __init__(self, timeDelta, user):
         self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
         self.user = user        
+        self.leaderboardType = "leaveTime"
         self.leaderboard = self.getLeaderboard()
         self.index = self.getIndex()
-        self.leaderboardType = "leaveTime"
-
+        
     def getIndex(self):
-        if self.user.id == 812156805244911647:
-            return 10
         index = 0
         while index < len(self.leaderboard[self.leaderboardType]):
             if self.leaderboard[self.leaderboardType][index]["time"] > self.time:
@@ -40,6 +38,7 @@ class timeLeaderboard:
         return leaderboard
 
     async def scoreSubmit(self):
+        if self.user.id == 812156805244911647: return  #Ignore alt
         if self.index < 10:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())
@@ -134,6 +133,7 @@ class weeklyTimeLeaderboard:
         return leaderboard
 
     async def scoreSubmit(self):
+        if self.user.id == 812156805244911647: return  #Ignore alt
         if time.time() - self.leaderboard[self.leaderboardType]["epochSeconds"] > 604800:
             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
             await channel.send(self.getHighscoreMessage())

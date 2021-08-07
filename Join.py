@@ -34,6 +34,7 @@ class Join:
 
 
     async def send(self):
+        if self.member.id == 812156805244911647: return  #Ignore alt
         channel = self.guild.get_channel(welcomeChannel[self.guild.id])
         await channel.send(f"{await self.getMessage()}")
         await channel.send(f"`There are now {self.getMemberCount()} customers here at {self.guild.name}.`")
