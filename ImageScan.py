@@ -46,3 +46,4 @@ class MemberScanner:
     async def takeAction(self):
         channel = self.guild.get_channel(logChannel[self.guild.id])
         await channel.send(f"<@243759220057571328> Suspicious profile picture containing `{self.getReasons()}` from {self.member.mention}")
+        # <@811369189658591233>, <@811376322584641606>, <@811441753194233856> Mod role pings
