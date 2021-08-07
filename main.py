@@ -9,6 +9,7 @@ import Verify
 import Join
 import Shop
 import traceback
+import ImageScan
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
@@ -73,6 +74,8 @@ async def on_member_remove(user):
 async def on_member_join(user):
   join = Join.Join(user)
   await join.send()
+  scan = ImageScan.MemberScanner(user)
+  await scan.scanMember()
 
 @client.event
 async def on_raw_reaction_add(payload):  #When reaction added
