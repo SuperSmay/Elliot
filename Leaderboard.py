@@ -1,5 +1,6 @@
 import json
 import pathlib
+from typing import List
 import discord
 from discord import embeds
 from globalVariables import client, numberEmoteList, joinChannel
@@ -7,63 +8,251 @@ import time
 
 
 
-class timeLeaderboard:
 
-    def __init__(self, timeDelta, user):
-        self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
-        self.user = user        
-        self.leaderboardType = "leaveTime"
+class Leaderboard:
+
+    def __init__(self, user, type = "default"):
+        #Options
+        self.type = type
+        self.overwriteOldScore = False
+        self.leaderboardName = "default"
+
+
+        self.annouce = False
+        self.indexToAnnounce = 0
+        self.user = user
+        self.score = 0
+        self.lowerScoreBetter = False
         self.leaderboard = self.getLeaderboard()
-        self.index = self.getIndex()
-        
-    def getIndex(self):
+
+
+    #Get leaderboard 
+    def getLeaderboard(self) -> List:
+        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}/{self.type}")
+        if path.exists():
+            leaderboard = self.loadLeaderboard(path)
+        else:
+            print('Leaderboard does not exist, creating new leaderboard...')
+            leaderboard = self.createNewLeaderboard(path)
+        return leaderboard
+
+    #Load leaderboard
+    def loadLeaderboard(self, path):
+        file = open(path, "r")
+        leaderboard = json.load(file)
+        file.close()
+        return leaderboard
+
+    #Create file for leaderboard
+    def createNewLeaderboard(self, path):
+        folderPath = path.parent
+        print(folderPath)
+        if not folderPath.exists():
+            folderPath.mkdir()
+        file = open(path, "w+")
+        leaderboard = self.emptyLeaderboard()
+        json.dump(leaderboard, file)
+        file.close()
+        return leaderboard
+
+    def setUserScore(self, score):
+        self.score = score
+
+    def getUserScore(self):
+        for entry in self.leaderboard:
+            if entry["userID"] == self.user.id: return entry["score"]
+        return 0
+
+    def addUserScore(self, score):
+        self.score = self.getUserScore() + score
+
+    def userBetterThanIndex(self, index):
+        return (self.score > self.leaderboard[index]["score"] and not self.lowerScoreBetter) or (self.score < self.leaderboard[index]["score"] and self.lowerScoreBetter)
+    
+    def getIndexToInsert(self):
         index = 0
-        while index < len(self.leaderboard[self.leaderboardType]):
-            if self.leaderboard[self.leaderboardType][index]["time"] > self.time:
+        while index < len(self.leaderboard):
+            if self.userBetterThanIndex(index):
                 return index
             index += 1
         return index
 
-    def getLeaderboard(self):
-        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
-        if pathlib.Path.exists(path):
-            file = open(path, "r")
-            leaderboard = json.load(file)
-            file.close()
-        else:
-            leaderboard = {"leaveTime" : [], "weeklyLeaveTime" : []}
-            file = open(path, "w+")
-            json.dump(leaderboard, file)
-            file.close()
-        return leaderboard
+    #make comparison dictionary
+    def entryDict(self):
+        return {
+            "userID" : self.user.id,
+            "score" : self.score
+        }
 
-    async def scoreSubmit(self):
-        if self.user.id == 812156805244911647: return  #Ignore alt
-        if self.index < 10:
-            channel = await client.fetch_channel(joinChannel[self.user.guild.id])
-            await channel.send(self.getHighscoreMessage())
-            self.saveLeaderboard()
-            
+    def userOnLeaderboard(self):
+        for entry in self.leaderboard:
+            if entry["userID"] == self.user.id: return True
+        return False
+
+    def getUserIndexOnLeaderboard(self):
+        index = 0
+        while index < len(self.leaderboard):
+            if self.leaderboard[index]["userID"] == self.user.id: return index
+            index += 1
+        return -1
+
+    #Edit 
+    def setScoreOnLeaderboard(self):
+        if self.userOnLeaderboard() and ((self.getUserScore() < self.score and not self.lowerScoreBetter) or (self.getUserScore() > self.score and self.lowerScoreBetter) or self.overwriteOldScore):
+            self.indexToAnnounce = self.getIndexToInsert()
+            del self.leaderboard[(self.getUserIndexOnLeaderboard())]
+            self.leaderboard.insert(self.getIndexToInsert(), self.entryDict())
+            self.annouce = True
+        elif not self.userOnLeaderboard():
+            self.leaderboard.insert(self.getIndexToInsert(), self.entryDict())
+            self.annouce = True
+    
+    #save
     def saveLeaderboard(self):
-        self.leaderboard[self.leaderboardType].insert(self.index, {"time" : self.time, "userID" : self.user.id})
-        self.leaderboard[self.leaderboardType] = self.leaderboard[self.leaderboardType][:10]
-
-        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
-
+        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}/{self.type}")
         file = open(path, "w")
         json.dump(self.leaderboard, file)
         file.close()
+###
+    
 
-    def getHighscoreMessage(self):
-        if self.index == 0:
+    #Get empty leaderboard
+    def emptyLeaderboard(self):
+        return []
+
+
+    #Message to send
+    def positionAnnoucenment(self):
+        return f"Congratulations <@{self.user.id}>! You just got **{self.placement()}** on the {self.leaderboardName} leaderboard with a score of **{self.score}**!!"
+
+    def placement(self):
+        index = self.getUserIndexOnLeaderboard()
+        if index == 0:
             placement = "a __new record__"
-        elif self.index == 1:
-            placement = "2nd place"
-        elif self.index == 2:
-            placement = "3rd place"
+        elif index % 10 == 1:
+            placement = f"{index + 1}nd place"
+        elif index % 10 == 2:
+            placement = f"{index + 1}rd place"
         else:
-            placement = f"{self.index + 1}th place"
-        return f"Congratulations <@{self.user.id}>! You just got **{placement}** for fastest leaver with a time of **{self.time}** seconds!!"
+            placement = f"{index + 1}th place"
+        return placement
+
+    #Create leaderboard
+    async def getLeaderboardEmbed(self):
+        embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.user.guild.name}'s {self.leaderboardName} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
+        embed.add_field(name= "**Leaderboard**", value= self.leaderboardString(await self.leaderboardList()))
+        embed.set_thumbnail(url=client.user.avatar_url)
+        return embed
+
+    def getPositionNumber(self, index):
+        return numberEmoteList[index]
+
+        #List of users
+    async def leaderboardList(self):
+        leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard]
+        return leaderboardList[:10]
+
+    def leaderboardString(self, leaderboardList):
+        if len(leaderboardList) == 0:
+            return "This leaderboard is empty"
+        return "\n".join(leaderboardList)
+
+    #message for specific user
+
+        #Create message to send if they are
+
+
+class timeLeaderboard(Leaderboard):
+    def __init__(self, user):
+        super().__init__(user, "leaveTime")
+        self.leaderboardName = "Leaver"
+        self.lowerScoreBetter = True
+
+    def positionAnnoucenment(self):
+        return f"Congratulations <@{self.user.id}>! You just got **{self.placement()}** for fastest leaver with a time of **{self.score}** seconds!!"
+
+
+class weeklyTimeLeaderboard(Leaderboard):
+    def __init__(self, user):
+        super().__init__(user, "weeklyLeaveTime")
+        self.leaderboardName = "7 day leaver"
+        self.lowerScoreBetter = True
+
+    def entryDict(self):
+        return {
+            "userID" : self.user.id,
+            "score" : self.score,
+            "joinTime" : time.time()
+        }
+
+    def setScoreOnLeaderboard(self):
+        if len(self.leaderboard) == 0 or time.time() - self.leaderboard[0]["joinTime"] > 604800 or self.score < self.leaderboard[0]["score"]:
+            self.leaderboard = [self.entryDict()]
+            self.annouce = True
+
+    def positionAnnoucenment(self):
+        return f"Congratulations <@{self.user.id}>! You just got **{self.placement()}** for fastest 7 day leaver with a time of **{self.score}** seconds!!"
+
+
+
+
+# class timeLeaderboard:
+
+#     def __init__(self, timeDelta, user):
+#         self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
+#         self.user = user        
+#         self.leaderboardType = "leaveTime"
+#         self.leaderboard = self.getLeaderboard()
+#         self.index = self.getIndex()
+        
+#     def getIndex(self):
+#         index = 0
+#         while index < len(self.leaderboard[self.leaderboardType]):
+#             if self.leaderboard[self.leaderboardType][index]["time"] > self.time:
+#                 return index
+#             index += 1
+#         return index
+
+#     def getLeaderboard(self):
+#         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
+#         if pathlib.Path.exists(path):
+#             file = open(path, "r")
+#             leaderboard = json.load(file)
+#             file.close()
+#         else:
+#             leaderboard = {"leaveTime" : [], "weeklyLeaveTime" : []}
+#             file = open(path, "w+")
+#             json.dump(leaderboard, file)
+#             file.close()
+#         return leaderboard
+
+#     async def scoreSubmit(self):
+#         #if self.user.id == 812156805244911647: return  #Ignore alt
+#         if self.index < 10:
+#             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
+#             await channel.send(self.getHighscoreMessage())
+#             self.saveLeaderboard()
+            
+#     def saveLeaderboard(self):
+#         self.leaderboard[self.leaderboardType].insert(self.index, {"time" : self.time, "userID" : self.user.id})
+#         self.leaderboard[self.leaderboardType] = self.leaderboard[self.leaderboardType][:10]
+
+#         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
+
+#         file = open(path, "w")
+#         json.dump(self.leaderboard, file)
+#         file.close()
+
+#     def getHighscoreMessage(self):
+#         if self.index == 0:
+#             placement = "a __new record__"
+#         elif self.index == 1:
+#             placement = "2nd place"
+#         elif self.index == 2:
+#             placement = "3rd place"
+#         else:
+#             placement = f"{self.index + 1}th place"
+#         return f"Congratulations <@{self.user.id}>! You just got **{placement}** for fastest leaver with a time of **{self.time}** seconds!!"
 
 
 class FetchLeaderboard:
@@ -109,51 +298,51 @@ class FetchLeaderboard:
     async def send(self):
         await self.message.reply(embed= await self.getLeaderboardEmbed(), mention_author= False)
 
-class weeklyTimeLeaderboard:
+# class weeklyTimeLeaderboard:
 
-    def __init__(self, timeDelta, user):
-        self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
-        self.user = user        
-        self.leaderboard = self.getLeaderboard()
-        self.leaderboardType = "weeklyLeaveTime"
-        try: temp = self.leaderboard[self.leaderboardType]
-        except: self.leaderboard[self.leaderboardType] = {"time" : 0, "userID" : 0, "epochSeconds" : 0}
+#     def __init__(self, timeDelta, user):
+#         self.time = round(timeDelta.seconds + timeDelta.microseconds/1000000, 2)
+#         self.user = user        
+#         self.leaderboard = self.getLeaderboard()
+#         self.leaderboardType = "weeklyLeaveTime"
+#         try: temp = self.leaderboard[self.leaderboardType]
+#         except: self.leaderboard[self.leaderboardType] = {"time" : 0, "userID" : 0, "epochSeconds" : 0}
 
-    def getLeaderboard(self):
-        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
-        if pathlib.Path.exists(path):
-            file = open(path, "r")
-            leaderboard = json.load(file)
-            file.close()
-        else:
-            leaderboard = {"leaveTime" : [], "weeklyLeaveTime" : {}}
-            file = open(path, "w+")
-            json.dump(leaderboard, file)
-            file.close()
-        return leaderboard
+#     def getLeaderboard(self):
+#         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
+#         if pathlib.Path.exists(path):
+#             file = open(path, "r")
+#             leaderboard = json.load(file)
+#             file.close()
+#         else:
+#             leaderboard = {"leaveTime" : [], "weeklyLeaveTime" : {}}
+#             file = open(path, "w+")
+#             json.dump(leaderboard, file)
+#             file.close()
+#         return leaderboard
 
-    async def scoreSubmit(self):
-        if self.user.id == 812156805244911647: return  #Ignore alt
-        if time.time() - self.leaderboard[self.leaderboardType]["epochSeconds"] > 604800:
-            channel = await client.fetch_channel(joinChannel[self.user.guild.id])
-            await channel.send(self.getHighscoreMessage())
-            self.saveLeaderboard(force= True)
-        elif self.time < self.leaderboard[self.leaderboardType]["time"]:
-            channel = await client.fetch_channel(joinChannel[self.user.guild.id])
-            await channel.send(self.getHighscoreMessage())
-            self.saveLeaderboard()
+#     async def scoreSubmit(self):
+#         if self.user.id == 812156805244911647: return  #Ignore alt
+#         if time.time() - self.leaderboard[self.leaderboardType]["epochSeconds"] > 604800:
+#             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
+#             await channel.send(self.getHighscoreMessage())
+#             self.saveLeaderboard(force= True)
+#         elif self.time < self.leaderboard[self.leaderboardType]["time"]:
+#             channel = await client.fetch_channel(joinChannel[self.user.guild.id])
+#             await channel.send(self.getHighscoreMessage())
+#             self.saveLeaderboard()
             
-    def saveLeaderboard(self, force = False):
-        if force:
-            self.leaderboard[self.leaderboardType] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
-        else:
-            self.leaderboard[self.leaderboardType] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
+#     def saveLeaderboard(self, force = False):
+#         if force:
+#             self.leaderboard[self.leaderboardType] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
+#         else:
+#             self.leaderboard[self.leaderboardType] = {"time" : self.time, "userID" : self.user.id, "epochSeconds" : time.time()}
 
-        path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
+#         path = pathlib.Path(f"Leaderboard/{self.user.guild.id}")
 
-        file = open(path, "w")
-        json.dump(self.leaderboard, file)
-        file.close()
+#         file = open(path, "w")
+#         json.dump(self.leaderboard, file)
+#         file.close()
 
-    def getHighscoreMessage(self):
-        return f"Congratulations <@{self.user.id}>! You just got a new 7 day record for fastest leaver with a time of **{self.time}** seconds!!"
+#     def getHighscoreMessage(self):
+#         return f"Congratulations <@{self.user.id}>! You just got a new 7 day record for fastest leaver with a time of **{self.time}** seconds!!"

@@ -1,6 +1,7 @@
 #Bot
 import discord
-from globalVariables import client, prefix, verifyChannel, unverifiedRole
+from discord import embeds
+from globalVariables import client, prefix, verifyChannel, unverifiedRole, joinChannel
 from activeMessages import activeMessages
 import Interaction
 import datetime
@@ -36,8 +37,11 @@ async def on_message(message: discord.Message):
     interaction = Interaction.BaseInteraction(message, "test")
     await interaction.send()
   elif message.content.lower().startswith(prefix + " leaverboard") or message.content.lower().startswith(prefix + " leaderboard"):
-    interaction = Leaderboard.FetchLeaderboard(message)
-    await interaction.send()
+    if len(message.content.split(" ")) > 2 and message.content.split(" ")[2].startswith("week"):
+      interaction = Leaderboard.weeklyTimeLeaderboard(message.author)
+    else:
+      interaction = Leaderboard.timeLeaderboard(message.author)
+    await message.reply(embed= await interaction.getLeaderboardEmbed(), mention_author= False)
   elif message.content.lower().startswith(prefix + " shop"):
     shop = Shop.Shop(message)
     await shop.send()
@@ -65,10 +69,22 @@ async def on_member_remove(user):
   await leave.send()
   timeSinceJoin = datetime.datetime.utcnow() - user.joined_at
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
-    leaderboard = Leaderboard.timeLeaderboard(timeSinceJoin, user)
-    await leaderboard.scoreSubmit()
-    weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(timeSinceJoin, user)
-    await weeklyLeaderboard.scoreSubmit()
+    leaderboard = Leaderboard.timeLeaderboard(user)
+    leaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
+    leaderboard.setScoreOnLeaderboard()
+    leaderboard.saveLeaderboard()
+    if leaderboard.getUserIndexOnLeaderboard() < 10 and leaderboard.annouce:
+      channel = await client.fetch_channel(joinChannel[user.guild.id])
+      await channel.send(leaderboard.positionAnnoucenment())
+    
+    weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(user)
+    weeklyLeaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
+    weeklyLeaderboard.setScoreOnLeaderboard()
+    weeklyLeaderboard.saveLeaderboard()
+    if weeklyLeaderboard.getUserIndexOnLeaderboard() < 1 and weeklyLeaderboard.annouce:
+      channel = await client.fetch_channel(joinChannel[user.guild.id])
+      await channel.send(weeklyLeaderboard.positionAnnoucenment())
+    
 
 @client.event
 async def on_member_join(user):
