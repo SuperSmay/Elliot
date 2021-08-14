@@ -73,7 +73,7 @@ async def on_member_remove(user):
     leaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
     leaderboard.setScoreOnLeaderboard()
     leaderboard.saveLeaderboard()
-    if leaderboard.getUserIndexOnLeaderboard() < 10 and leaderboard.annouce:
+    if leaderboard.indexToAnnounce < 10 and leaderboard.annouce:
       channel = await client.fetch_channel(joinChannel[user.guild.id])
       await channel.send(leaderboard.positionAnnoucenment())
     
@@ -81,7 +81,7 @@ async def on_member_remove(user):
     weeklyLeaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
     weeklyLeaderboard.setScoreOnLeaderboard()
     weeklyLeaderboard.saveLeaderboard()
-    if weeklyLeaderboard.getUserIndexOnLeaderboard() < 1 and weeklyLeaderboard.annouce:
+    if weeklyLeaderboard.indexToAnnounce < 1 and weeklyLeaderboard.annouce:
       channel = await client.fetch_channel(joinChannel[user.guild.id])
       await channel.send(weeklyLeaderboard.positionAnnoucenment())
     
