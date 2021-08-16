@@ -150,12 +150,13 @@ class Leaderboard:
         return embed
 
     def getPositionNumber(self, index):
-        return numberEmoteList[index]
+        try: return numberEmoteList[index]
+        except: return numberEmoteList[9]
 
         #List of users
     async def leaderboardList(self):
         leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard]
-        return leaderboardList[:9]
+        return leaderboardList[:10]
 
     def leaderboardString(self, leaderboardList):
         if len(leaderboardList) == 0:
