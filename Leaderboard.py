@@ -129,10 +129,15 @@ class Leaderboard:
         index = self.getUserIndexOnLeaderboard()
         if index == 0:
             placement = "a __new record__"
+        
         elif index % 10 == 1:
             placement = f"{index + 1}nd place"
         elif index % 10 == 2:
             placement = f"{index + 1}rd place"
+        elif index == 11:
+            placement = "12th place"
+        elif index == 12:
+            placement = "13th place"
         else:
             placement = f"{index + 1}th place"
         return placement
@@ -150,7 +155,7 @@ class Leaderboard:
         #List of users
     async def leaderboardList(self):
         leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard]
-        return leaderboardList[:10]
+        return leaderboardList[:9]
 
     def leaderboardString(self, leaderboardList):
         if len(leaderboardList) == 0:
