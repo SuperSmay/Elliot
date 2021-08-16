@@ -11,6 +11,7 @@ import Join
 import Shop
 import traceback
 import ImageScan
+import BumpReminder
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
@@ -23,6 +24,7 @@ async def on_ready():
   
   async for guild in client.fetch_guilds(limit=150):
     print(guild.name)
+    client.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
 
 @client.event
 async def on_message(message: discord.Message):
