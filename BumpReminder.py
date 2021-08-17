@@ -32,7 +32,11 @@ async def startBumpReminderTask(guild):
 
     bumpRemindMessage = await channel.history(limit=50).find(predicate)
 
-    if (bumpRemindMessage.created_at - bumpMessage.created_at).total_seconds() > 0: return
+    #print(f"bumpRemindMessage.created_at - bumpMessage.created_at ({bumpRemindMessage.created_at} - {bumpMessage.created_at} = {bumpRemindMessage.created_at - bumpMessage.created_at}")
+
+    if (bumpRemindMessage.created_at - bumpMessage.created_at).total_seconds() > 0: 
+        bumpReminderTasks[guild.id] = False
+        return
 
     
     
@@ -54,7 +58,7 @@ async def bumpReminderTask(waitTime, guild):
     await TEMPUser.send("Reminder looks like:", embed= getReminderEmbed(guild))
     #await channel.send("Time until bump: " + str(waitTime) + "seconds")
     await asyncio.sleep(waitTime)
-    await channel.send(embed= getReminderEmbed(guild))
+    #await channel.send(embed= getReminderEmbed(guild))
     bumpReminderTasks[guild.id] = False
 
 async def backgroundReminderRestarter(guild):
