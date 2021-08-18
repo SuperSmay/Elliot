@@ -76,7 +76,7 @@ def getReminderEmbed(guild):
 #Async tasks
 async def bumpReminderTask(waitTime, guild):
     channel = await client.fetch_channel(bumpChannel[guild.id])
-    await channel.send("Time until bump: " + str(waitTime) + "seconds")
+    #await channel.send("Time until bump: " + str(waitTime) + "seconds")
     await asyncio.sleep(waitTime)
     await channel.send(embed= getReminderEmbed(guild))
     bumpReminderTasks[guild.id] = False
