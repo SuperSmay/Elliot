@@ -1,6 +1,7 @@
 import pathlib
 import asyncio
 import datetime
+from attr import validate
 import discord
 
 from discord import embeds, message
@@ -19,10 +20,14 @@ async def startBumpReminderTask(guild):
     def bumpMessageCheck(message):
         return (message.author.id == 302050872383242240 and "Bump done :thumbsup:" in message.embeds[0].description)
 
-    def predicate(message):
+    def bumpRemindCheck(message):
         return (message.author.id == client.user.id and "Bump the server" in message.embeds[0].description)
 
-    bumpMessage = await channel.history(limit=50).find(bumpMessageCheck)
+    bumpMessage = await getMessage(guild, bumpMessageCheck)
+
+    if bumpMessage == None:
+        client.loop.create_task(bumpReminderTask(0, guild))
+        return
 
     #Get time since last bump message
     timeSinceBump = datetime.datetime.utcnow() - bumpMessage.created_at
@@ -30,11 +35,11 @@ async def startBumpReminderTask(guild):
     #Get time unitl next bump
     timeUntilBump = datetime.timedelta(hours= 2) - timeSinceBump
 
-    bumpRemindMessage = await channel.history(limit=50).find(predicate)
+    bumpRemindMessage = await getMessage(guild, bumpRemindCheck)
 
     #print(f"bumpRemindMessage.created_at - bumpMessage.created_at ({bumpRemindMessage.created_at} - {bumpMessage.created_at} = {bumpRemindMessage.created_at - bumpMessage.created_at}")
 
-    if (bumpRemindMessage.created_at - bumpMessage.created_at).total_seconds() > 0: 
+    if bumpRemindMessage != None and (bumpRemindMessage.created_at - bumpMessage.created_at).total_seconds() > 0: 
         bumpReminderTasks[guild.id] = False
         return
 
@@ -43,6 +48,24 @@ async def startBumpReminderTask(guild):
     #Start async task waiting for time until next bump
     client.loop.create_task(bumpReminderTask(timeUntilBump.total_seconds(), guild))
 
+
+async def getMessage(guild, search):
+
+    #Get channel
+    channel = await client.fetch_channel(bumpChannel[guild.id])
+
+    message = await channel.history(limit=50).find(search)
+    
+    if message == None:
+        message = await channel.history(limit=150).find(search)
+
+    if message == None:
+        message = await channel.history(limit=1500).find(search)
+
+    if message == None:
+        message = await channel.history(limit=None).find(search)
+
+    return message
 
 #Make bump message
 def getReminderEmbed(guild):
@@ -53,12 +76,9 @@ def getReminderEmbed(guild):
 #Async tasks
 async def bumpReminderTask(waitTime, guild):
     channel = await client.fetch_channel(bumpChannel[guild.id])
-    TEMPUser = await client.fetch_user(243759220057571328)
-    await TEMPUser.send(f"Bump reminder in {waitTime} seconds")
-    await TEMPUser.send("Reminder looks like:", embed= getReminderEmbed(guild))
     #await channel.send("Time until bump: " + str(waitTime) + "seconds")
     await asyncio.sleep(waitTime)
-    #await channel.send(embed= getReminderEmbed(guild))
+    await channel.send(embed= getReminderEmbed(guild))
     bumpReminderTasks[guild.id] = False
 
 async def backgroundReminderRestarter(guild):
