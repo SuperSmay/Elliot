@@ -13,10 +13,11 @@ class Verify:
         await self.member.remove_roles(self.guild.get_role(unverifiedRole[self.guild.id]), reason= 'Autoverify')
         await self.member.add_roles(self.guild.get_role(verifiedRole[self.guild.id]))
         await self.logAction(f"Autoverified {self.member.mention}")
-        await self.member.send("You've been verified. Welcome to The Gayming Café!!")
+        try: await self.member.send("You've been verified. Welcome to The Gayming Café!!")
+        except discord.errors.Forbidden: await self.message.reply(content= f"You've been verified. Welcome to The Gayming Café!!", mention_author= False) 
 
     async def ageDeny(self):
-        await self.member.send("Sorry, The Gayming Café has an age limit of 19. If you chose the 20+ role accidentally, feel free to join again.")
+        await self.member.send("Sorry, The Gayming Café has an age limit of 20. If you chose the 21+ role accidentally, feel free to join again.")
         await self.guild.kick(user= self.member, reason= "Autokick - Over age limit")
         await self.logAction(f"Autokicked {self.member.mention} - Over age limit")
 
@@ -26,10 +27,10 @@ class Verify:
     async def checkVerifyStatus(self):
         try:
             if unverifiedRole[self.guild.id] in [role.id for role in self.member.roles]:
-                if self.hasPronounRole() and self.hasAgeRole():
-                    await self.verify()
-                elif self.isTooOld():
+                if self.isTooOld():
                     await self.ageDeny()
+                elif self.hasPronounRole() and self.hasAgeRole():
+                    await self.verify()
                 elif self.message != None and "verify" in self.message.content or "verified" in self.message.content or "help" in self.message.content:
                     await self.verifyInfo()
         except:
