@@ -1,5 +1,6 @@
 import discord
-from globalVariables import unverifiedRole, ageRoleList, pronounRoleList, tooOldRole, verifiedRole, logChannel, roleChannel
+from discord import message
+from globalVariables import unverifiedRole, ageRoleList, pronounRoleList, tooOldRole, verifiedRole, logChannel, roleChannel, client
 import traceback
 
 class Verify:
@@ -40,7 +41,9 @@ class Verify:
             error = traceback.format_exc()
             error = error.replace("c:\\Users\\31415\\Dropbox\\AmesBot", "bot")
             error += f"\nVars:\nMessage: {self.message.content}"
-            await self.message.reply(content= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```", mention_author= False) 
+            await self.message.reply(content= f"An error occured. If you're seeing this it means <@243759220057571328> is a big dummy. If you can reproduce this message DM reproduction steps to <@243759220057571328>", mention_author= False) 
+            smay = await client.fetch_user()
+            smay.send(f"An error occured.\nMessage link: https://discord.com/channels/{self.message.guild.id}/{self.message.channel.id}/{self.message.id}\n```{error}```")
             traceback.print_exc()
             return
 
