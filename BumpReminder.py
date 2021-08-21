@@ -104,7 +104,7 @@ async def backgroundReminderRestarter(guild):
     while bumpTasksEnabled == True:
         print("Attempting reminder task start...")
         if not bumpReminderTasks[guild.id]:
+            bumpReminderTasks[guild.id] = True
             await startBumpReminderTask(guild)
             print('New reminder task started')
-            bumpReminderTasks[guild.id] = True
         await asyncio.sleep(600)
