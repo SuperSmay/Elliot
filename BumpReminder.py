@@ -5,7 +5,7 @@ from attr import validate
 import discord
 
 from discord import embeds, message
-from globalVariables import client, bumpChannel
+from globalVariables import client, bumpChannel, bumpRole
 
 bumpTasksEnabled = True
 
@@ -92,7 +92,7 @@ async def bumpReminderTask(waitTime, guild):
     print("Bump reminder sender: Channel got")
     #TEMPUser = await client.fetch_user(243759220057571328)
     #await TEMPUser.send(embed= getReminderEmbed(guild))
-    await channel.send(embed= getReminderEmbed())
+    await channel.send(embed= getReminderEmbed(), content= f"<@&{bumpRole[id]}>")
     print("Bump reminder sender: Sending reminder")
     bumpReminderTasks[id] = False
     print("Bump reminder sender: task running set to False")
