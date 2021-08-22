@@ -15,7 +15,7 @@ bumpReminderTasks = {
 #Run on bot startup
 async def startBumpReminderTask(guild):
     #Get channel
-    print('Bump reminder starting...')
+    #print('Bump reminder starting...')
     channel = await client.fetch_channel(bumpChannel[guild.id])
     #Find last "bump success" message
     def bumpMessageCheck(message):
@@ -25,7 +25,7 @@ async def startBumpReminderTask(guild):
         return (message.author.id == client.user.id and "Bump the server" in message.embeds[0].description)
 
     bumpMessage = await getMessage(guild, bumpMessageCheck)
-    print("Bump message found")
+    #print("Bump message found")
 
     if bumpMessage == None:
         print("Bump message was empty, reminding now")
@@ -38,10 +38,10 @@ async def startBumpReminderTask(guild):
 
     #Get time unitl next bump
     timeUntilBump = datetime.timedelta(hours= 2) - timeSinceBump
-    print(f"Time until bump us {timeUntilBump}")
+    #print(f"Time until bump us {timeUntilBump}")
 
     bumpRemindMessage = await getMessage(guild, bumpRemindCheck)
-    print("Got bump remind message")
+    #print("Got bump remind message")
 
     #print(f"bumpRemindMessage.created_at - bumpMessage.created_at ({bumpRemindMessage.created_at} - {bumpMessage.created_at} = {bumpRemindMessage.created_at - bumpMessage.created_at}")
 
@@ -51,10 +51,10 @@ async def startBumpReminderTask(guild):
         return
 
     
-    print("Creating new reminder sender task...")
+    #print("Creating new reminder sender task...")
     #Start async task waiting for time until next bump
     client.loop.create_task(bumpReminderTask(timeUntilBump.total_seconds(), guild))
-    print("Reminder sender task created")
+    #print("Reminder sender task created")
 
 
 async def getMessage(guild, search):
@@ -84,27 +84,27 @@ def getReminderEmbed():
 #Async tasks
 async def bumpReminderTask(waitTime, guild):
     id = guild.id
-    print(f"Bump reminder sender: Sleeping for {waitTime} seconds...")
+    #print(f"Bump reminder sender: Sleeping for {waitTime} seconds...")
     await asyncio.sleep(waitTime)
-    print("Bump reminder sender: Waking from sleep")
-    print("Bump reminder sender: Getting channel")
+    #print("Bump reminder sender: Waking from sleep")
+    #print("Bump reminder sender: Getting channel")
     channel = await client.fetch_channel(bumpChannel[id])
-    print("Bump reminder sender: Channel got")
+    #print("Bump reminder sender: Channel got")
     #TEMPUser = await client.fetch_user(243759220057571328)
     #await TEMPUser.send(embed= getReminderEmbed(guild))
     await channel.send(embed= getReminderEmbed(), content= f"<@&{bumpRole[id]}>")
-    print("Bump reminder sender: Sending reminder")
+    #print("Bump reminder sender: Sending reminder")
     bumpReminderTasks[id] = False
-    print("Bump reminder sender: task running set to False")
+    #print("Bump reminder sender: task running set to False")
 
 async def backgroundReminderRestarter(guild):
     if guild.id not in bumpReminderTasks.keys(): return
     if guild.id not in bumpChannel.keys(): return
     print(f"Bump reminder task starter started for guild {guild.name}")
     while bumpTasksEnabled == True:
-        print("Attempting reminder task start...")
+        #print("Attempting reminder task start...")
         if not bumpReminderTasks[guild.id]:
             bumpReminderTasks[guild.id] = True
             await startBumpReminderTask(guild)
-            print('New reminder task started')
+            #print('New reminder task started')
         await asyncio.sleep(600)
