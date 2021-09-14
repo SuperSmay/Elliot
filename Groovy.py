@@ -1,5 +1,6 @@
 import asyncio
 from json import load
+import traceback
 import discord
 import youtube_dl
 
@@ -90,8 +91,9 @@ class MusicCommands:
         try:
             await player.play(self.getURL())
             await self.send()
+            traceback.print_exc()
         except:
-            self.message.reply(f"An error occured while playing the URL `{self.getURL()}`")
+            await self.message.reply(f"An error occured while playing the URL `{self.getURL()}`")
 
     def getEmbed(self):
         embed = discord.Embed(title="Now Playing", description= f"{self.getPlayer().currentPlayer.title}")
