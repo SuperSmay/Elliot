@@ -89,6 +89,7 @@ class MusicCommands:
 
         player = self.getPlayer()
         try:
+            if self.guild.voice_client.is_playing: self.guild.voice_client.stop()
             await player.play(self.getURL())
             await self.send()
             traceback.print_exc()
