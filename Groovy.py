@@ -76,15 +76,22 @@ class MusicCommands:
     async def move(self):
         await self.guild.voice_client.move_to(await self.getVC)
 
+    def moveToNewVC(self):
+        return True
+
     async def play(self):
         if len(self.arguments) == 0: return await self.message.reply("You need to provide a URL to play")
         if not self.message.author.voice: return await self.message.reply("You need to join a vc")
         if self.guild.voice_client == None: await self.join()
+        elif self.guild.voice_client.channel == await self.getVC(): pass
         elif self.moveToNewVC(): await self.move()
 
         player = self.getPlayer()
-        await player.play(self.getURL())
-        await self.send()
+        try:
+            await player.play(self.getURL())
+            await self.send()
+        except:
+            self.message.reply(f"An error occured while playing the URL `{self.getURL()}`")
 
     def getEmbed(self):
         embed = discord.Embed(title="Now Playing", description= f"{self.getPlayer().currentPlayer.title}")
