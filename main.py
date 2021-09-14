@@ -29,11 +29,11 @@ async def on_ready():
     print(guild.name)
     client.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
 
-  channel = await client.fetch_channel(866160840037236739)
-  message = await channel.fetch_message(876938127636316242)
-  vc = await client.fetch_channel(866160840037236740)
-  await Groovy.Music.join(channel.guild, vc)
-  await Groovy.Music.stream(message, "https://www.youtube.com/watch?v=W2TE0DjdNqI")
+  #channel = await client.fetch_channel(866160840037236739)
+  #message = await channel.fetch_message(876938127636316242)
+  #vc = await client.fetch_channel(866160840037236740)
+  #await Groovy.Music.join(channel.guild, vc)
+  #await Groovy.Music.stream(message, "https://www.youtube.com/watch?v=W2TE0DjdNqI")
 
 @client.event
 async def on_message(message: discord.Message):
@@ -62,6 +62,9 @@ async def on_message(message: discord.Message):
   elif message.content.lower().startswith(prefix + " bal"):
     balance = Shop.BalanceMessage(message)
     await balance.send()
+  elif message.content.lower().startswith(prefix + " play"):
+    player = Groovy.MusicCommands(message)
+    await player.play()
 
 
   elif unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:

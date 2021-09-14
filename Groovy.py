@@ -1,17 +1,15 @@
 import asyncio
-
+from json import load
 import discord
 import youtube_dl
 
-from discord.ext import commands
-
-from globalVariables import client
+from globalVariables import client, musicPlayers, prefix
 
 # Suppress noise about console usage from errors
 youtube_dl.utils.bug_reports_message = lambda: ''
 
 
-ytdl_format_options = {
+ytdlFormatOptions = {
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
@@ -25,11 +23,85 @@ ytdl_format_options = {
     'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
 }
 
-ffmpeg_options = {
+ffmpegOptions = {
     'options': '-vn'
 }
 
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
+
+class MusicPlayer:
+
+    def __init__(self, message):
+        self.guildID = message.guild.id
+        self.playlist = []
+        self.currentlyPlaying = None
+        self.currentPlayer = None
+        musicPlayers[self.guildID] = self
+
+    async def play(self, url):
+        player = await YTDLSource.from_url(YTDLSource, url, loop=client.loop, stream=True)
+        guild = await self.guild()
+        guild.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        self.currentPlayer = player
+
+    async def guild(self):
+        return await client.fetch_guild(self.guildID)
+        
+    
+
+class MusicCommands:
+    def __init__(self, message):
+        self.message = message
+        self.guild = message.guild
+        self.channel = message.channel
+        self.arguments = self.getArguments()
+
+    def getArguments(self):
+        argString = self.message.content[len(prefix) + len("play") + 1:].strip()  #Remove the prefix and interaction by cutting the string by the length of those two combined
+        return argString.split(" ")
+
+    def getURL(self):
+        return self.arguments[0]
+
+    async def getVC(self):
+        return self.message.author.voice.channel
+
+    def getPlayer(self):
+        if self.guild.id in musicPlayers.keys(): return musicPlayers[self.guild.id]
+        else: return MusicPlayer(self.message)
+
+    async def join(self):
+        await (await self.getVC()).connect()
+
+    async def move(self):
+        await self.guild.voice_client.move_to(await self.getVC)
+
+    async def play(self):
+        if len(self.arguments) == 0: return await self.message.reply("You need to provide a URL to play")
+        if not self.message.author.voice: return await self.message.reply("You need to join a vc")
+        if self.guild.voice_client == None: await self.join()
+        elif self.moveToNewVC(): await self.move()
+
+        player = self.getPlayer()
+        await player.play(self.getURL())
+        await self.send()
+
+    def getEmbed(self):
+        embed = discord.Embed(title="Now Playing", description= f"{self.getPlayer().currentPlayer.title}")
+        embed.color = 7528669
+        return embed
+
+    async def send(self):
+        await self.message.reply(embed= self.getEmbed())
+
+        
+
+
+
+
+
+
+
 
 
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -50,7 +122,10 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
+        return cls(source, data=data)
+
+
 
 class Music:
 
