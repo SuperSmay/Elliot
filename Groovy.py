@@ -160,7 +160,7 @@ class Skip(MusicCommand):
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
-        return "```" + {[f"{self.player.playlist.index(song) + 1}) {song['title']} -------- {song['duration']}\n" for song in self.player.playlist]} + "```"
+        return "```" + "\n".join([f"{self.player.playlist.index(song) + 1}) {song['title']} ----------------- {song['duration']}" for song in self.player.playlist]) + "```"
 
     def getPlaylistEmbed(self):
         embed = discord.Embed(title="Up Next", description= self.getPlaylistString())
