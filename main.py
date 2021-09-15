@@ -62,6 +62,9 @@ async def on_message(message: discord.Message):
   elif message.content.lower().startswith(prefix + " bal"):
     balance = Shop.BalanceMessage(message)
     await balance.send()
+  elif message.content.lower().startswith(prefix + " playlist"):
+    playlist = Groovy.Playlist(message)
+    await playlist.send()
   elif message.content.lower().startswith(prefix + " play"):
     play = Groovy.Play(message)
     await play.attemptPlay()
@@ -69,9 +72,6 @@ async def on_message(message: discord.Message):
     skip = Groovy.Skip(message)
     skip.skip()
     await skip.send()
-  elif message.content.lower().startswith(prefix + " playlist"):
-    playlist = Groovy.Playlist(message)
-    await playlist.send()
   
 
 
