@@ -143,11 +143,13 @@ class Play(MusicCommand):
 
 class Skip(MusicCommand):
 
-    async def skip(self):
+    def skip(self):
         player = YTDLSource.from_url(YTDLSource, self.player.playlist[0], loop=client.loop, stream=True)
         del(self.player.playlist[0])
         self.player.currentPlayer = player
         self.guild.voice_client.source = player
+
+    async def send(self):    
         await self.channel.send(embed= self.getNowPlayingEmbed())
 
     def getNowPlayingEmbed(self):
@@ -155,11 +157,18 @@ class Skip(MusicCommand):
         embed.color = 7528669
         return embed
 
-    
+class Playlist(MusicCommand):
 
+    def getPlaylistString(self):
+        return "```" + {[f"{self.player.playlist.index(song) + 1}) {song['title']} -------- {song['legnth']}\n" for song in self.player.playlist]} + "```"
 
-
-
+    def getPlaylistEmbed(self):
+        embed = discord.Embed(title="Up Next", description= self.getPlaylistStrirng())
+        embed.color = 7528669
+        return embed
+        
+    async def send(self):
+        await self.channel.send(embed= self.getPlaylistEmbed())
 
 
 

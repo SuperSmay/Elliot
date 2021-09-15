@@ -67,7 +67,12 @@ async def on_message(message: discord.Message):
     await play.attemptPlay()
   elif message.content.lower().startswith(prefix + " skip"):
     skip = Groovy.Skip(message)
-    await skip.skip()
+    skip.skip()
+    await skip.send()
+  elif message.content.lower().startswith(prefix + " playlist"):
+    playlist = Groovy.Playlist(message)
+    await playlist.send()
+  
 
 
   elif unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
