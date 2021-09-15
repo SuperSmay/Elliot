@@ -53,7 +53,7 @@ class MusicPlayer:
         else:
             guild = client.get_guild(self.guildID)
             guild.voice_client.stop()
-        if e:
+        if e != None:
             print(f"Exception occured: {e}")
 
     # async def guild(self):
