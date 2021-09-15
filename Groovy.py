@@ -111,11 +111,11 @@ class Play(MusicCommand):
             self.data = await self.getData()
             if "entries" not in self.data: 
                 self.player.playlist.insert(0, self.data)
-                if not self.guild.voice_client.is_playing:
-                    self.player.play()
-                    await self.message.reply(embed= self.getNowPlayingEmbed())
-                else:
-                    await self.message.reply(embed= self.getPlayingNextEmbed())
+                #if not self.guild.voice_client.is_playing:
+                self.player.play()
+                await self.message.reply(embed= self.getNowPlayingEmbed())
+                #else:
+                   # await self.message.reply(embed= self.getPlayingNextEmbed())
             else:
                 for entry in self.data["entries"]:
                     self.player.playlist.append(entry)
