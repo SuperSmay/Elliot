@@ -63,8 +63,11 @@ async def on_message(message: discord.Message):
     balance = Shop.BalanceMessage(message)
     await balance.send()
   elif message.content.lower().startswith(prefix + " play"):
-    player = Groovy.MusicCommands(message)
-    await player.play()
+    play = Groovy.Play(message)
+    await play.attemptPlay()
+  elif message.content.lower().startswith(prefix + " skip"):
+    skip = Groovy.Skip(message)
+    await skip.skip()
 
 
   elif unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
