@@ -1,8 +1,5 @@
 #Bot
 import discord
-from discord import embeds
-from discord import message
-from discord import channel
 from globalVariables import client, prefix, verifyChannel, unverifiedRole, joinChannel
 from activeMessages import activeMessages
 import Interaction
@@ -18,6 +15,7 @@ import Groovy
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
+## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 
 
 
@@ -28,12 +26,6 @@ async def on_ready():
   async for guild in client.fetch_guilds(limit=150):
     print(guild.name)
     client.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
-
-  #channel = await client.fetch_channel(866160840037236739)
-  #message = await channel.fetch_message(876938127636316242)
-  #vc = await client.fetch_channel(866160840037236740)
-  #await Groovy.Music.join(channel.guild, vc)
-  #await Groovy.Music.stream(message, "https://www.youtube.com/watch?v=W2TE0DjdNqI")
 
 @client.event
 async def on_message(message: discord.Message):
@@ -67,11 +59,14 @@ async def on_message(message: discord.Message):
     await playlist.send()
   elif message.content.lower().startswith(prefix + " play"):
     play = Groovy.Play(message)
-    await play.attemptPlay()
+    await message.reply(embed=await play.runCommand())
   elif message.content.lower().startswith(prefix + " skip"):
     skip = Groovy.Skip(message)
     skip.skip()
     await skip.send()
+  elif message.content.lower().startswith(prefix + " shuffle"):
+    shuffle = Groovy.Shuffle(message)
+    await message.reply(embed=shuffle.shuffle())
   
 
 
