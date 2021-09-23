@@ -13,9 +13,10 @@ import ImageScan
 import BumpReminder
 import Groovy
 
-TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+TOKEN = "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
 ## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
 
 
 
@@ -30,6 +31,8 @@ async def on_ready():
 @client.event
 async def on_message(message: discord.Message):
   if message.author.bot:
+    return
+  if client.user.id != 888964836715819009 and message.channel.guild.id == 866160840037236736:
     return
   elif message.content.lower().startswith(prefix + " cutie"):
     await message.channel.send("ur a cutie 2 ;3")
