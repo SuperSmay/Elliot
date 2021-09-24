@@ -19,7 +19,7 @@ async def startBumpReminderTask(guild):
     channel = await client.fetch_channel(bumpChannel[guild.id])
     #Find last "bump success" message
     def bumpMessageCheck(message):
-        return (message.author.id == 302050872383242240 and "Bump done :thumbsup:" in message.embeds[0].description)
+        return (message.author.id == 302050872383242240 and "Bump done! :thumbsup:" in message.embeds[0].description)
 
     def bumpRemindCheck(message):
         return (message.author.id == client.user.id and "Bump the server" in message.embeds[0].description)
