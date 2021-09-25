@@ -1,6 +1,7 @@
 #Bot
+from re import M
 import discord
-from globalVariables import client, prefix, verifyChannel, unverifiedRole, joinChannel
+from globalVariables import client, prefix, verifyChannel, unverifiedRole, joinChannel, musicPlayers
 from activeMessages import activeMessages
 import Interaction
 import datetime
@@ -13,7 +14,7 @@ import ImageScan
 import BumpReminder
 import Groovy
 
-TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+TOKEN = "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
 ## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
@@ -65,8 +66,17 @@ async def on_message(message: discord.Message):
     await message.reply(embed=await play.runCommand())
   elif message.content.lower().startswith(prefix + " skip"):
     skip = Groovy.Skip(message)
-    skip.skip()
+    await skip.skip()
     await skip.send()
+  elif message.content.lower().startswith(prefix + " pause"):
+    pause = Groovy.Pause(message)
+    await message.reply(embed=pause.pause())
+  elif message.content.lower().startswith(prefix + " dc"):
+    await message.channel.guild.voice_client.disconnect()
+    del(musicPlayers[message.channel.guild.id])
+  elif message.content.lower().startswith(prefix + " np"):
+    np = Groovy.NowPlaying(message)
+    await message.reply(embed=np.getNowPlayingEmbed())
   elif message.content.lower().startswith(prefix + " shuffle"):
     shuffle = Groovy.Shuffle(message)
     await message.reply(embed=shuffle.shuffle())
