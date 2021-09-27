@@ -1,7 +1,9 @@
 import asyncio
 import random
+import datetime
 import traceback
 import discord
+from discord import voice_client
 import youtube_dl
 import googleapiclient.discovery
 import spotipy
@@ -38,14 +40,217 @@ ffmpegOptions = {
 ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
 
 
-class YoutubeSong:
-    def __init__(self, data) -> None:
-        self.data = data
-        self.title = data['title']
-        self.duration = self.parseDuration(data['duration'])
 
+#Structure ref
+
+'''
+class Checkloop:
+    Attributes:
+        run loop:
+            bool
+    Functions:
+        loop starter:
+            Starts loop for bot
+
+        loop:
+            Checks each player in musicPlayers
+            If there are other users in vc:
+                set player time last member to current time
+            If there are not other users in vc
+                if time since last member is over 5 mins:
+                    disconnect
+                else:
+                    ignore
+
+class Player:
+    Attributes:
+        Playlist
+            List of `Song` objects
+        Unloaded Youtube Links:
+            List of youtube links
+        Current player
+            YTDLSource
+        Guild ID
+            int
+        Channel ID
+            int - the last channel a command was used in
+        Shuffle eneabled
+            bool
+        Time last member in vc
+            datetime
+        Send now playing:
+            bool
+
+    Functions:
+        PlayNext:
+            Plays next track in playlist
+        AfterPlay:
+            Runs after a track is completed
+            If there are more songs to play:
+                PlayNext
+            Else:
+                Stop
+            If error:
+                print traceback
+        Skip:
+            Returns and skips current track
+        Disconnect:
+            Leave vc and remove self from musicPlayers
+
+        Add to playlist:
+            Adds new `Song` to playlist, and plays it if nothing is playing
+            returns whether the song was played
+        
+class Song:
+    Attributes:
+        title
+            str
+        duration
+            str
+
+    Functions:
+        getData:
+            returns youtubedl data
+
+class MusicCommand:
+    Attributes:
+        guild, channel, message
+            Obvious
+        player
+            `Player` for given context (guild)
+
+    Functions:
+        get vc:
+            returns the voice channel the command author is connected to
+        get player:
+            returns the `Player` for guild
+        join
+            joins given vc
+        move
+            moves to given vc
+        get now playing embed
+            gets embed for current player in self.player
+
+class PlayCommand(MusicCommand):
+    Attributes:
+
+    Functions:
+        parse input(str):
+            returns a dict of normalized youtube/spotify links or a search term:
+                {youtubeLinks : [], youtubePlaylists : [], spotifyTrackLinks : [], spotifyAlbumLinks : [], spotifyPlaylistLinks : [],searchTerms : []}
+        
+        load songs(parsed dict):
+            loads the links from the dict:
+                gets spotify data for each link and adds it to playlist
+                puts youtube links into player unloaded youtube urls
+                searches youtube for search terms, then adds result to unloaded urls
+                starts loading unloaded urls
+                returns loaded count
+        
+        loadSpotifyTrack
+            returns data for given spotify track
+        
+        Ditto for albums and playlists
+
+        getYoutubePlaylist
+            returns list of links in playlist
+
+        loadYoutubeLink
+            returns youtubedl'ed given link
+
+        searchYoutube
+            searches youtube for given term and returns link
+
+        run command
+            makes sure vc is set up
+            returns error if user isn't in vc or can't talk etc
+            parses input then loads it
+            returns success message and loaded count
+'''
+
+class MusicPlayer:
+
+    def __init__(self, message):
+        self.guildID = message.guild.id
+        self.channelID = message.channel.id
+        self.playlist = []
+        self.currentPlayer = None
+        self.shuffle = False
+        self.sendNowPlaying = False
+        self.timeOfLastMember = datetime.datetime.utcnow()
+        
+        musicPlayers[self.guildID] = self
+
+    async def playNext(self):
+        index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
+        guild = await client.fetch_guild(self.guildID)
+        player = YTDLSource.from_url(YTDLSource, await self.playlist[index].getData(), loop=client.loop, stream=True)
+        del(self.playlist[index])
+        if guild.voice_client == None: return
+        if guild.voice_client.is_playing(): guild.voice_client.source = player
+        else: guild.voice_client.play(player, after= lambda e: client.loop.create_task(self.afterPlay(e)))
+        self.currentPlayer = player
+
+    async def afterPlay(self, e):
+        if len(self.playlist) > 0:
+            await self.playNext()
+        else:
+            guild = await client.fetch_guild(self.guildID)
+            guild.voice_client.stop()
+        if e != None:
+            print(f"Exception occured: {e}")
+    
+    async def skip(self):
+        player = self.currentPlayer
+        if len(self.playlist) > 0:
+            await self.playNext()
+            return player
+        else:
+            guild = await client.fetch_guild(self.guildID)
+            guild.voice_client.stop()
+        
+    async def disconnect(self):
+        guild = await client.fetch_guild(self.guildID)
+        await guild.voice_client.disconnect()
+        del(musicPlayers[guild.id])
+
+    async def addToPlaylist(self, track):
+        self.playlist.append(track)
+        if not (await client.fetch_guild(self.guildID)).voice_client.is_playing() and not (await client.fetch_guild(self.guildID)).voice_client.is_paused():
+            await self.playNext()
+            return True
+        return False
+
+class CheckLoop:
+
+    async def loop():
+        runLoop = True
+        while runLoop:
+            players = musicPlayers.values()
+            for player in players:
+                guild = await client.fetch_guild(player.guildID)
+                if guild.voice_client == None or guild.voice_client.channel == None: del(musicPlayers[guild.id])
+                vc = guild.voice_client.channel
+                if len(vc.members) > 1:
+                    player.timeOfLastMember = datetime.datetime.utcnow()
+                else:
+                    if (datetime.datetime.utcnow() - player.timeOfLastMember).total_seconds() > 300:
+                        channel = await client.fetch_channel(player.channelID)
+                        await channel.send(embed = discord.Embed(description="Leaving VC"))
+                        await guild.voice_client.disconnect()
+                        del(musicPlayers[guild.id])
+            await asyncio.sleep(30)
+
+# Songs
+
+class Song:
+    def __init__(self) -> None:
+        self.data
+        self.title
+        self.duration
+    
     async def getData(self):
-        return self.data
+        return None
 
     def parseDuration(self, duration: int):
         if duration > 0:
@@ -69,9 +274,16 @@ class YoutubeSong:
             value = "LIVE"
         
         return value
+class YoutubeSong(Song):
+    def __init__(self, data) -> None:
+        self.data = data
+        self.title = data['title']
+        self.duration = self.parseDuration(data['duration'])
 
+    async def getData(self):
+        return self.data
 
-class SpotifySong:
+class SpotifySong(Song):
     def __init__(self, track) -> None:
         self.title = f"{track['artists'][0]['name']} - {track['name']}"
         self.duration = self.parseDuration(track['duration_ms']/1000)
@@ -84,67 +296,7 @@ class SpotifySong:
         data = await client.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
         return data
 
-    def parseDuration(self, duration: int):
-        if duration > 0:
-            minutes, seconds = divmod(duration, 60)
-            hours, minutes = divmod(minutes, 60)
-            days, hours = divmod(hours, 24)
-
-            duration = []
-            if days > 0:
-                duration.append('{}'.format(days))
-            if hours > 0:
-                duration.append('{}'.format(hours))
-            if minutes > 0:
-                duration.append('{}'.format(minutes))
-            if seconds > 0:
-                duration.append('{}'.format(seconds))
-            
-            value = ':'.join(duration)
-        
-        elif duration == 0:
-            value = "LIVE"
-        
-        return value
-    
-
-    
-
-class MusicPlayer:
-
-    def __init__(self, message):
-        self.guildID = message.guild.id
-        self.playlist = []
-        self.currentPlayer = None
-        self.shuffle = False
-        self.unloadedURLs = []
-        musicPlayers[self.guildID] = self
-
-    async def playNextItem(self):
-        index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
-        guild = await client.fetch_guild(self.guildID)
-        player = YTDLSource.from_url(YTDLSource, await self.playlist[index].getData(), loop=client.loop, stream=True)
-        del(self.playlist[index])
-        if guild.voice_client == None: return
-        if guild.voice_client.is_playing(): guild.voice_client.source = player
-        else: guild.voice_client.play(player, after= lambda e: client.loop.create_task(self.afterPlay(e)))
-        self.currentPlayer = player
-
-    async def afterPlay(self, e):
-        if len(self.playlist) > 0:
-            await self.playNextItem()
-            self.playNextSong = False
-        else:
-            if len(self.unloadedURLs) > 0:
-                await asyncio.sleep(1)
-                await self.afterPlay(e)
-            else:
-                self.playNextSong = True
-                guild = await client.fetch_guild(self.guildID)
-                guild.voice_client.stop()
-        if e != None:
-            print(f"Exception occured: {e}")
-
+# Commands
 class MusicCommand:
     def __init__(self, message):
         self.message = message
@@ -175,98 +327,101 @@ class MusicCommand:
         
 class Play(MusicCommand):
 
-    def __init__(self, message):
-        super().__init__(message)
-        self.type = ''
-
-    async def loadInput(self):
-        input = self.message.content[len(prefix) + len("play") + 1:].strip()
-        try:
-            linkList = await self.parseInput(input)
-            if linkList != None:
-                embed = discord.Embed(description= f'Added {len(linkList)} songs')
-            else:
-                embed = discord.Embed(description= f'Unpaused Music')
-        except:
-            traceback.print_exc()
-            embed = None
-        return embed
-
-    async def getData(self, link):
-        data = await client.loop.run_in_executor(None, lambda: ytdl.extract_info(link, download=False))
-        return data
-
-    async def parseInput(self, input: str):
+    def parseInput(self, input: str):
+        returnDict = {'youtubeLinks' : [], 'youtubePlaylists' : [], 'spotifyTrackLinks' : [], 'spotifyAlbumLinks' : [], 'spotifyPlaylistLinks' : [],'searchTerms' : []}
         if input == "":
-            if self.guild.voice_client.is_paused():
-                self.guild.voice_client.resume()
-            return None
-        if input.startswith("www.") and not (input.startswith("https://") or input.startswith("http://")):
+            return returnDict
+        if input.startswith("www.") and not (input.startswith("https://") or input.startswith("http://") or input.startswith("//")):
             input = "//" + input
         parsedURL = urllib.parse.urlparse(input)
         website = parsedURL.netloc.removeprefix("www.").removesuffix(".com").removeprefix("open.")
         if website == "":
-            list = await self.handleYoutubeSearch(input)
-            self.player.unloadedURLs += list
+            returnDict['searchTerms'].append(input)
         elif website == "youtube":
-            list = await self.handleYoutubeLink(parsedURL)
-            self.player.unloadedURLs += list
+            tempDict = self.handleYoutubeLink(parsedURL)
+            returnDict.update(tempDict)
         if website == "youtu.be":
-            list = self.handleYoutubeShortLink(parsedURL) 
-            self.player.unloadedURLs += list
+            tempDict = self.handleYoutubeShortLink(parsedURL) 
+            returnDict.update(tempDict)
         elif website == "i2.ytimg" or website == "i.ytimg":
-            list = self.handleYoutubeImageLink(parsedURL)
+            tempDict = self.handleYoutubeImageLink(parsedURL)
+            returnDict.update(tempDict)
         elif website == "spotify":
-            list = self.handleSpotifyLink(parsedURL)
-            self.player.playlist += [SpotifySong(track) for track in list]
-        return list
+            tempDict = self.handleSpotifyLink(parsedURL)
+            returnDict.update(tempDict)
+        return returnDict
 
-    async def handleYoutubeLink(self, parsedURL):
-        self.type = 'youtube'
+    def handleYoutubeLink(self, parsedURL):
         query = urllib.parse.parse_qs(parsedURL.query, keep_blank_values=True)
         path = parsedURL.path
         if "v" in query:
-            return [f"https://www.youtube.com/watch?v={query['v'][0]}"]
+            return {'youtubeLinks' : [f"https://www.youtube.com/watch?v={query['v'][0]}"]}
         elif "list" in query:
-            return self.loadYoutubePlaylist(query)
+            return {'youtubePlaylistLinks' : [f"https://www.youtube.com/watch?list={query['list'][0]}"]}
         elif "url" in query:
-            return [query['url'][0]]
+            return {'youtubeLinks' : [query['url'][0]]}
         elif len(path) > 10:
-            return [f"https://www.youtube.com/watch?v={path[-11:]}"]
+            return {'youtubeLinks' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
         else:
-            return await self.handleYoutubeSearch(urllib.parse.urlunparse(parsedURL))
+            return {'searchTerms' : [urllib.parse.urlunparse(parsedURL)]}
 
     def handleYoutubeShortLink(self, parsedURL):
-        self.type = 'youtube'
         path = parsedURL.path
-        return [f"https://www.youtube.com/watch?v={path[-11:]}"]
+        return {'youtubeLinks' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
 
     def handleYoutubeImageLink(self, parsedURL):
-        self.type = 'youtube'
-        return [f"https://www.youtube.com/watch?v={parsedURL.path[4:15]}"]
+        return {'youtubeLinks' : [f"https://www.youtube.com/watch?v={parsedURL.path[4:15]}"]}
 
-    async def handleSpotifyLink(self, parsedURL):
-        self.type = 'spotify'
+    def handleSpotifyLink(self, parsedURL):
         url = urllib.parse.urlunparse(parsedURL)
         path = parsedURL.path
         if "playlist" in path:
-            return self.getTracksFromSpotifyPlaylist(url)
+            return {'spotifyPlaylistLinks' : [url]}
         elif "track" in path:
-            return self.getSpotifyTrack(url)
+            return {'spotifyTrackLinks' : [url]}
         elif "album" in path:
-            return []
+            return {'spotifyAlbumLinks' : [url]}
         else:
-            return await self.handleYoutubeSearch(url)
+            return {'searchTerms' : [url]}
 
-    async def handleYoutubeSearch(self, input):
-        self.type = 'youtube'
+    async def loadSongs(self, loadDict: dict):
+        # returnDict = {'youtubeLinks' : [], 'youtubePlaylists' : [], 'spotifyTrackLinks' : [], 'spotifyAlbumLinks' : [], 'spotifyPlaylistLinks' : [],'searchTerms' : []}
+        for key in loadDict.keys():
+            if key == 'youtubeLinks':
+                for link in loadDict[key]:
+                    await self.player.addToPlaylist(await self.loadYoutubeLink(link))
+            if key == 'youtubePlaylistLinks':
+                for playlistLink in loadDict[key]:
+                    for link in await self.getLinksFromYoutubePlaylist(playlistLink):
+                        await self.player.addToPlaylist(await self.loadYoutubeLink(link)) 
+            if key == 'spotifyTrackLinks':
+                for link in loadDict[key]:
+                    await self.player.addToPlaylist(await self.loadSpotifyTrack(link))
+            if key == 'spotifyAlbumLinks':
+                for link in loadDict[key]:
+                    for track in await self.loadTracksFromSpotifyAlbum(link):
+                        await self.player.addToPlaylist(track)
+            if key == 'spotifyPlaylistLinks':
+                for link in loadDict[key]:
+                    for track in await self.loadTracksFromSpotifyPlaylist(link):
+                        await self.player.addToPlaylist(track)
+            if key == 'searchTerms':
+                for term in loadDict[key]:
+                    link = await self.youtubeSearch(term)
+                    print(link)
+                    print(type(link))
+                    await self.player.addToPlaylist(await self.loadYoutubeLink(link))
+                     
+    async def youtubeSearch(self, input):
         videosSearch = VideosSearch(input, limit = 2)
         videosResult = await videosSearch.next()
         print(videosResult['result'][0]['link'])
-        return [videosResult['result'][0]['link']]
+        return videosResult['result'][0]['link']
 
-    def loadYoutubePlaylist(self, query):
+    async def getLinksFromYoutubePlaylist(self, link):
         #extract playlist id from url
+        parsedURL = urllib.parse.urlparse(link)
+        query = urllib.parse.parse_qs(parsedURL.query, keep_blank_values=True)
         playlist_id = query["list"][0]
 
         print(f'get all playlist items links from {playlist_id}')
@@ -286,92 +441,69 @@ class Play(MusicCommand):
 
         return [f'https://www.youtube.com/watch?v={t["snippet"]["resourceId"]["videoId"]}' for t in playlist_items]
 
-    def getTracksFromSpotifyPlaylist(self, URL):
+    async def loadTracksFromSpotifyPlaylist(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         playlist = sp.playlist(URL)
-        return [item['track'] for item in playlist['tracks']['items']]
+        return [SpotifySong(item['track']) for item in playlist['tracks']['items']]
 
-    def getSpotifyTrack(self, URL):
+    async def loadSpotifyTrack(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
-        song = sp.track(URL)
-        return [song]
+        track = sp.track(URL)
+        return SpotifySong(track)
 
-    def getTracksFromSpotifyAlbum(self, URL):
+    async def loadTracksFromSpotifyAlbum(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         album = sp.album(URL)
-        return [item['track'] for item in album['tracks']['items']]
-
-    async def playYoutubeInput(self):
-        if await self.shouldNotPlayOnLoad():
-            await self.loadLinkList()
-        else:
-            await self.playFirstInput()
-            await self.channel.send(embed=self.getNowPlayingEmbed())
-            await self.loadLinkList()
-
-    async def playSpotifyInput(self):
-        if await self.shouldNotPlayOnLoad():
-            pass
-        else:
-            await self.player.playNextItem()
-            await self.channel.send(embed=self.getNowPlayingEmbed())
-
-    async def shouldNotPlayOnLoad(self):
-        return (await client.fetch_guild(self.guild.id)).voice_client.is_playing() or (await client.fetch_guild(self.guild.id)).voice_client.is_paused()
-
-    async def playInput(self):
-        if self.type == 'youtube':
-            await self.playYoutubeInput()
-        elif self.type == 'spotify':
-            await self.playSpotifyInput()
+        return [SpotifySong(item['track']) for item in album['tracks']['items']]
 
     async def setupVC(self):
         if not self.message.author.voice: return discord.Embed(description="You need to join a vc")
         if self.guild.voice_client == None: 
             await self.join()
         elif self.guild.voice_client.channel == await self.getVC(): pass
-        elif self.moveToNewVC(): await self.move()
-
-    async def playFirstInput(self):
-        
-        data = await self.loadYoutubeLink(self.player.unloadedURLs.pop(0))
-        self.player.playlist.insert(0, data)
-        await self.player.playNextItem()
-        
-
-    async def loadLinkList(self):
-        while len(self.player.unloadedURLs) > 0:
-            self.player.playlist.append(await self.loadYoutubeLink(self.player.unloadedURLs.pop(0)))
-        print("Finished loading all songs")
+        elif self.moveToNewVC(): await self.move() 
 
     async def loadYoutubeLink(self, url):
-        return YoutubeSong(await client.loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False)))
+        return YoutubeSong(ytdl.extract_info(url, download=False))
 
     
     async def runCommand(self):
-        embed = discord.Embed(description= 'An error occured')
-        tempEmbed = await self.setupVC()
-        if tempEmbed != None: embed = tempEmbed
-        tempEmbed = await self.loadInput()
-        if tempEmbed != None: embed = tempEmbed
-        client.loop.create_task(self.playInput())
-        embed.color = 7528669
+    
+        embed = await self.setupVC()
+        if embed != None: return embed
+
+        input = self.message.content[len(prefix) + len("play") + 1:].strip()
+        if len(input) == 0:
+            pause = Pause(self.message)
+            pause.pause()
+        try:
+            loadDict = self.parseInput(input)
+            count = 0
+            for key in loadDict.keys():
+                count += len(loadDict[key])
+            client.loop.create_task(self.loadSongs(loadDict))
+            embed = discord.Embed(description= f'Successfully added')
+            embed.color = 7528669
+            return embed
+                
+        except:
+            traceback.print_exc()
+            embed = discord.Embed(description= f'An error occured')
         return embed
 
     def getPlayingNextEmbed(self):
         embed = discord.Embed(title="Playing Next", description= f"{self.player.playlist[0]['title']}")
         embed.color = 7528669
         return embed
-
 
 class Pause(MusicCommand):
     def pause(self):
@@ -396,24 +528,13 @@ class NowPlaying(MusicCommand):
     def __init__(self, message):
         super().__init__(message)
     
-
 class Skip(MusicCommand):
 
     async def skip(self):
-        if len(self.player.playlist) > 0:
-            await self.player.playNextItem()
-            # index = random.randint(0, len(self.player.playlist) - 1) if self.player.shuffle else 0
-            # player = YTDLSource.from_url(YTDLSource, await self.player.playlist[index].getData(), loop=client.loop, stream=True)
-            # del(self.player.playlist[index])
-            # self.player.currentPlayer = player
-            # self.guild.voice_client.source = player
-        else:
-            self.guild.voice_client.stop()
-
-    async def send(self):    
-        await self.channel.send(embed= self.getNowPlayingEmbed())
-
-
+        skippedTrack = await self.player.skip()
+        embed= discord.Embed(title='Reached the end of queue') if skippedTrack == None else self.getNowPlayingEmbed()
+        embed.set_footer(text=f'Skipped {skippedTrack.title}')
+        return embed
 
 class Playlist(MusicCommand):
 
@@ -422,11 +543,6 @@ class Playlist(MusicCommand):
         
     async def send(self):
         await self.message.reply(self.getPlaylistString())
-
-    
-
-
-
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
@@ -450,32 +566,3 @@ class YTDLSource(discord.PCMVolumeTransformer):
         source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
         return cls(source, data=data)
 
-
-
-class Music:
-
-    async def join(guild, channel: discord.VoiceChannel):
-        """Joins a voice channel"""
-
-        if guild.voice_client is not None:
-            return await guild.voice_client.move_to(channel)
-
-        await channel.connect()
-
-    async def yt(message, url):
-        """Plays from a url (almost anything youtube_dl supports)"""
-
-        async with message.channel.typing():
-            player = await YTDLSource.from_url(YTDLSource, url, loop=client.loop)
-            message.guild.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-
-        await message.reply(f'Now playing: {player.title}')
-
-    async def stream(message, url):
-        """Streams from a url (same as yt, but doesn't predownload)"""
-
-        async with message.channel.typing():
-            player = await YTDLSource.from_url(YTDLSource, url, loop=client.loop, stream=True)
-            message.guild.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-
-        await message.reply(f'Now playing: {player.title}')
