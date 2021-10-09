@@ -1,7 +1,7 @@
 #Bot
 from re import M
 import discord
-from globalVariables import client, prefix, verifyChannel, unverifiedRole, joinChannel, musicPlayers
+from globalVariables import client, prefix, unverifiedRole, joinChannel, musicPlayers
 from activeMessages import activeMessages
 import Interaction
 import datetime
@@ -46,7 +46,8 @@ async def on_message(message: discord.Message):
     interaction = Interaction.BaseInteraction(message, "test")
     await interaction.send()
   elif message.content.lower().startswith(prefix + " leaverboard") or message.content.lower().startswith(prefix + " leaderboard"):
-    if len(message.content.split(" ")) > 2 and message.content.split(" ")[2].startswith("week"):
+    messageList = message.content.split(" ")
+    if len(messageList) > 2 and messageList[2].startswith("week"):
       interaction = Leaderboard.weeklyTimeLeaderboard(message.author)
     else:
       interaction = Leaderboard.timeLeaderboard(message.author)

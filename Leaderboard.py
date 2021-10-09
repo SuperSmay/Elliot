@@ -2,7 +2,7 @@ import json
 import pathlib
 from typing import List
 import discord
-from discord import embeds
+import math
 from globalVariables import client, numberEmoteList, joinChannel
 import time
 
@@ -50,7 +50,7 @@ class Leaderboard:
         if not folderPath.exists():
             folderPath.mkdir()
         file = open(path, "w+")
-        leaderboard = self.emptyLeaderboard()
+        leaderboard = self.getEmptyLeaderboard()
         json.dump(leaderboard, file)
         file.close()
         return leaderboard
@@ -104,6 +104,7 @@ class Leaderboard:
             self.leaderboard.insert(self.getIndexToInsert(), self.entryDict())
             self.annouce = True
         elif not self.userOnLeaderboard():
+            self.indexToAnnounce = self.getIndexToInsert()
             self.leaderboard.insert(self.getIndexToInsert(), self.entryDict())
             self.annouce = True
     
@@ -117,7 +118,7 @@ class Leaderboard:
     
 
     #Get empty leaderboard
-    def emptyLeaderboard(self):
+    def getEmptyLeaderboard(self):
         return []
 
 
@@ -134,19 +135,20 @@ class Leaderboard:
             placement = f"{index + 1}nd place"
         elif index % 10 == 2:
             placement = f"{index + 1}rd place"
-        elif index == 11:
-            placement = "12th place"
-        elif index == 12:
-            placement = "13th place"
         else:
             placement = f"{index + 1}th place"
+        if index == 11:
+            placement = "12th place"
+        if index == 12:
+            placement = "13th place"
         return placement
 
     #Create leaderboard
-    async def getLeaderboardEmbed(self):
+    async def getLeaderboardEmbed(self, pageIndex = 0):
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.user.guild.name}'s {self.leaderboardName} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
-        embed.add_field(name= "**Leaderboard**", value= self.leaderboardString(await self.leaderboardList()))
+        embed.add_field(name= "**Leaderboard**", value= self.leaderboardString(await self.leaderboardList(pageIndex)))
         embed.set_thumbnail(url=client.user.avatar_url)
+        embed.set_footer(text=f'Page {pageIndex + 1} of {math.ceil(len(self.leaderboard) / 10)}')
         return embed
 
     def getPositionNumber(self, index):
@@ -154,8 +156,8 @@ class Leaderboard:
         except: return numberEmoteList[9]
 
         #List of users
-    async def leaderboardList(self):
-        leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard]
+    async def leaderboardList(self, pageIndex):
+        leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard[pageIndex * 10:(pageIndex + 1) * 10]]
         return leaderboardList[:10]
 
     def leaderboardString(self, leaderboardList):
