@@ -12,6 +12,10 @@ Password for 'https://SuperSmay@github.com': "
 send -- "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\r"
 expect eof
 
-spawn python3 /home/smay/Documents/ElliotBot/main.py
+
+
+spawn $env(SHELL)
+send "source Elliot/bin/activate\r"
+send "python3.9 /home/smay/Documents/ElliotBot/main.py\r"
 
 expect eof
