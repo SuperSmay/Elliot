@@ -18,7 +18,8 @@ class Verify:
         except discord.errors.Forbidden: await self.message.reply(content= f"You've been verified. Welcome to The Gayming Café!!", mention_author= False) 
 
     async def ageDeny(self):
-        await self.member.send("Sorry, The Gayming Café has an age limit of 20. If you chose the 21+ role accidentally, feel free to join again.")
+        try: await self.member.send("Sorry, The Gayming Café has an age limit of 20. If you chose the 21+ role accidentally, feel free to join again.")
+        except discord.errors.Forbidden: pass
         await self.guild.kick(user= self.member, reason= "Autokick - Over age limit")
         await self.logAction(f"Autokicked {self.member.mention} - Over age limit")
 
@@ -42,7 +43,7 @@ class Verify:
             error = error.replace("c:\\Users\\31415\\Dropbox\\AmesBot", "bot")
             error += f"\nVars:\nMessage: {self.message.content}"
             await self.message.reply(content= f"An error occured. If you're seeing this it means <@243759220057571328> is a big dummy. If you can reproduce this message DM reproduction steps to <@243759220057571328>", mention_author= False) 
-            smay = await client.fetch_user()
+            smay = await client.fetch_user(243759220057571328)
             smay.send(f"An error occured.\nMessage link: https://discord.com/channels/{self.message.guild.id}/{self.message.channel.id}/{self.message.id}\n```{error}```")
             traceback.print_exc()
             return
