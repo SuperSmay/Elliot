@@ -5,6 +5,7 @@ from fnmatch import fnmatch
 import traceback
 import pathlib
 import json
+import random
 
 import discord
 
@@ -41,7 +42,7 @@ class BaseInteraction:
     
     def getCountMessage(self):
         countMessage = f"{self.message.author.display_name} got tested {self.getReceiveCount(self.message.author.id)} times, and tested others {self.getGiveCount()} times." 
-        countMessage = countMessage.replace("1 times", "once")
+        countMessage = countMessage.replace(" 1 times", "once").replace("69", "69 hehe") if random.randint(0, 100) != 0 else countMessage.replace(" times", "**o**__n__c*é*")
         return countMessage
 
     def embed(self):  #Creates the embed to be sent
