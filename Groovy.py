@@ -231,9 +231,9 @@ class CheckLoop:
                 if guild.voice_client == None or guild.voice_client.channel == None: del(musicPlayers[guild.id])
                 vc = guild.voice_client.channel
                 if len(vc.members) > 1:
-                    player.timeOfLastMember = datetime.datetime.utcnow()
+                    player.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
                 else:
-                    if (datetime.datetime.utcnow() - player.timeOfLastMember).total_seconds() > 300:
+                    if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
                         channel = await bot.fetch_channel(player.channelID)
                         await channel.send(embed = discord.Embed(description="Leaving VC"))
                         await guild.voice_client.disconnect()

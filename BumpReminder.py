@@ -28,7 +28,7 @@ async def startBumpReminderTask(guild):
         return
 
     #Get time since last bump message
-    timeSinceBump = datetime.datetime.utcnow() - bumpMessage.created_at
+    timeSinceBump = datetime.datetime.now(datetime.timezone.utc) - bumpMessage.created_at
     print(f"Time since bump is {timeSinceBump}")
 
     #Get time unitl next bump
