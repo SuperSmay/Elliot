@@ -3,7 +3,7 @@ import pathlib
 from typing import List
 import discord
 import math
-from globalVariables import client, numberEmoteList, joinChannel
+from globalVariables import bot, numberEmoteList, joinChannel
 import time
 
 
@@ -147,7 +147,7 @@ class Leaderboard:
     async def getLeaderboardEmbed(self, pageIndex = 0):
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.user.guild.name}'s {self.leaderboardName} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
         embed.add_field(name= "**Leaderboard**", value= self.leaderboardString(await self.leaderboardList(pageIndex)))
-        embed.set_thumbnail(url=client.user.avatar_url)
+        embed.set_thumbnail(url=bot.user.avatar.url)
         embed.set_footer(text=f'Page {pageIndex + 1} of {math.ceil(len(self.leaderboard) / 10)}')
         return embed
 
@@ -157,7 +157,7 @@ class Leaderboard:
 
         #List of users
     async def leaderboardList(self, pageIndex):
-        leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard[pageIndex * 10:(pageIndex + 1) * 10]]
+        leaderboardList = [f"{self.getPositionNumber(self.leaderboard.index(position))} - {(await bot.fetch_user(position['userID'])).name} - {position['score']} seconds" for position in self.leaderboard[pageIndex * 10:(pageIndex + 1) * 10]]
         return leaderboardList[:10]
 
     def leaderboardString(self, leaderboardList):
@@ -290,14 +290,14 @@ class FetchLeaderboard:
     
     async def getLeaderboardEmbed(self):
         if self.isWeekly():
-            entry = f"**{(await client.fetch_user(self.leaderboard['weeklyLeaveTime']['userID'])).name} - {self.leaderboard['weeklyLeaveTime']['time']} seconds**"
+            entry = f"**{(await bot.fetch_user(self.leaderboard['weeklyLeaveTime']['userID'])).name} - {self.leaderboard['weeklyLeaveTime']['time']} seconds**"
             embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.message.guild.name}'s 7 Day Top Leaver☾∘∙⊱⋅•⋅", description= entry, color= 7528669)
-            embed.set_thumbnail(url=client.user.avatar_url)
+            embed.set_thumbnail(url=bot.user.avatar_url)
         else:
-            leadboardList = [f"{self.getPositionNumber(self.leaderboard['leaveTime'].index(position))} - {(await client.fetch_user(position['userID'])).name} - {position['time']} seconds" for position in self.leaderboard["leaveTime"]]
+            leadboardList = [f"{self.getPositionNumber(self.leaderboard['leaveTime'].index(position))} - {(await bot.fetch_user(position['userID'])).name} - {position['time']} seconds" for position in self.leaderboard["leaveTime"]]
             embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{self.message.guild.name}'s Leaver Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
             embed.add_field(name= "**Leaderboard**", value= "\n".join(leadboardList))
-            embed.set_thumbnail(url=client.user.avatar_url)
+            embed.set_thumbnail(url=bot.user.avatar_url)
         return embed
 
     def getPositionNumber(self, index):
