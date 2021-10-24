@@ -7,7 +7,7 @@ intents.members = True
 client = discord.Client(intents= intents)
 bot = commands.Bot(command_prefix='eli ', description="Test description", intents=intents)
 
-prefix = "eli"
+prefix = "eli "
 
 unverifiedRole = {
     811369107181666343 : 811453152061685760,

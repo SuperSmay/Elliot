@@ -13,7 +13,7 @@ import ImageScan
 import BumpReminder
 import Groovy
 
-TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+TOKEN = "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
 ## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
@@ -111,7 +111,7 @@ async def on_ready():
     bot.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
   print("Starting VC loop")
   bot.loop.create_task(Groovy.CheckLoop.loop())
-  await bot.register_application_commands(commands=commands, guild=bot.get_guild(866160840037236736))
+  await bot.register_application_commands(commands=commands)
 
 @bot.command(add_slash_command=False, name="cutie", description="you are a cutie")
 async def cutie(ctx):
