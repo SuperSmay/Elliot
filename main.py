@@ -1,7 +1,6 @@
 #Bot
-from re import M
 import discord
-from globalVariables import client, prefix, unverifiedRole, joinChannel, musicPlayers
+from globalVariables import bot, prefix, unverifiedRole, joinChannel, musicPlayers
 from activeMessages import activeMessages
 import Interaction
 import datetime
@@ -19,83 +18,181 @@ TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
 
-
-
-@client.event
+commands = [
+    discord.ApplicationCommand(
+        name="cutie",
+        description="youre a cutie"
+    ),
+    discord.ApplicationCommand(
+        name="hug",
+        description="Hugs a user!",
+        options= 
+        [
+          discord.ApplicationCommandOption(
+            name="user",
+            type=discord.ApplicationCommandOptionType.user,
+            required=False,
+            description='User to hug'
+            ),
+          discord.ApplicationCommandOption(
+            name="message",
+            type=discord.ApplicationCommandOptionType.string,
+            required=False,
+            description='Messsage to include'
+            )
+        ]
+    ),
+    discord.ApplicationCommand(
+        name="leaderboard",
+        description="Shows a leaderboard",
+        options= 
+        [
+          discord.ApplicationCommandOption(
+            name="leaderboard",
+            type=discord.ApplicationCommandOptionType.string,
+            required=True,
+            description='Which leaderboard to show',
+            )
+        ]
+    ),
+    discord.ApplicationCommand(
+        name="play",
+        description="Play a song in your voice channel",
+        options= 
+        [
+          discord.ApplicationCommandOption(
+            name="input",
+            type=discord.ApplicationCommandOptionType.string,
+            required=True,
+            description='A link or search term'
+            )
+        ]
+    ),
+    discord.ApplicationCommand(
+        name="pause",
+        description="Pause the music"
+    ),
+    discord.ApplicationCommand(
+        name="playlist",
+        description="Shows the current playlist"
+    ),
+    discord.ApplicationCommand(
+        name="skip",
+        description="Skips the song"
+    ),
+    discord.ApplicationCommand(
+        name="disconnect",
+        description="Leave the vc"
+    ),
+    discord.ApplicationCommand(
+        name="nowplaying",
+        description="Show the now playing song"
+    ),
+    discord.ApplicationCommand(
+        name="shuffle",
+        description="Toggle shuffle mode"
+    )
+]
+commands[2].options[0].choices = [discord.ApplicationCommandOptionChoice(
+                name='Leaver speed',
+                value='leaver'
+              ),
+              discord.ApplicationCommandOptionChoice(
+                name='Weekly leaver speed',
+                value='weekly'
+              )
+            ]
+@bot.event
 async def on_ready():
   print("I love coffee")
   
-  async for guild in client.fetch_guilds(limit=150):
+  async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
-    client.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
+    bot.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
   print("Starting VC loop")
-  client.loop.create_task(Groovy.CheckLoop.loop())
+  bot.loop.create_task(Groovy.CheckLoop.loop())
+  await bot.register_application_commands(commands=commands, guild=bot.get_guild(866160840037236736))
 
-@client.event
+@bot.command(add_slash_command=False, name="cutie", description="you are a cutie")
+async def cutie(ctx):
+  await ctx.send("ur a cutie 2 ;3")
+
+@bot.command(add_slash_command=False, name="hug", description="Hugs a user!")
+async def hug(ctx, *args, user=None, message=None):
+  if user != None: ctx.args.append(user)
+  print(message)
+  if message != None: ctx.args += message.split(' ')
+  interaction = Interaction.HugInteraction(ctx, "hug")
+  await interaction.send()
+
+@bot.command(add_slash_command=False, name="leaderboard", description="Shows a leaderboard")
+async def leaverboard(ctx, leaderboard='leaver'):
+  if leaderboard == 'weekly':
+    interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
+  elif leaderboard == 'leaver':
+    interaction = Leaderboard.timeLeaderboard(ctx.author)
+  try: await ctx.reply(embed= await interaction.getLeaderboardEmbed(), mention_author= False)
+  except: await ctx.send(embed= await interaction.getLeaderboardEmbed())
+
+@bot.command(add_slash_command=False, name="play", description="Plays a song/playlist from Youtube/Spotify")
+async def play(ctx, input):
+  play = Groovy.Play(ctx, input)
+  try: await ctx.reply(embed=await play.runCommand())
+  except: await ctx.send(embed=await play.runCommand())
+
+@bot.command(add_slash_command=False, name="playlist", description="Shows the current playlist")
+async def playlist(ctx):
+  playlist = Groovy.Playlist(ctx)
+  await playlist.send()
+
+@bot.command(add_slash_command=False, name="skip", description="Skips the song")
+async def skip(ctx):
+    skip = Groovy.Skip(ctx)
+    try: await ctx.reply(embed=await skip.skip())
+    except: await ctx.send(embed=await skip.skip())
+
+@bot.command(add_slash_command=False, name="pause", description="Pause the music")
+async def pause(ctx):
+  pause = Groovy.Pause(ctx)
+  try: await ctx.reply(embed=await pause.pause())
+  except: await ctx.send(embed=await pause.pause())
+
+@bot.command(add_slash_command=False, name="disconnect", description="Leave the vc")
+async def disconnect(ctx):
+  await ctx.guild.voice_client.disconnect()
+  del(musicPlayers[ctx.guild.id])
+
+@bot.command(add_slash_command=False, name="now playing", description="Show the now playing song")
+async def np(ctx):
+  np = Groovy.NowPlaying(ctx)
+  try: await ctx.reply(embed=np.getNowPlayingEmbed())
+  except: await ctx.send(embed=np.getNowPlayingEmbed())
+
+@bot.command(add_slash_command=False, name="shuffle", description="Toggle shuffle mode")
+async def cutie(ctx):
+  shuffle = Groovy.Shuffle(ctx)
+  try: await ctx.reply(embed=shuffle.shuffle())
+  except: await ctx.send(embed=shuffle.shuffle())
+
+
+@bot.event
 async def on_message(message: discord.Message):
-  if message.author.bot:
-    return
-  if client.user.id != 888964836715819009 and message.channel.guild.id == 866160840037236736:
-    return
-  elif message.content.lower().startswith(prefix + " cutie"):
-    await message.channel.send("ur a cutie 2 ;3")
-  elif message.content.lower().startswith(prefix + " hug"):
-    interaction = Interaction.HugInteraction(message, "hug")
-    await interaction.send()
-  elif message.content.lower().startswith(prefix + " test"):
-    interaction = Interaction.BaseInteraction(message, "test")
-    await interaction.send()
-  elif message.content.lower().startswith(prefix + " leaverboard") or message.content.lower().startswith(prefix + " leaderboard"):
-    messageList = message.content.split(" ")
-    if len(messageList) > 2 and messageList[2].startswith("week"):
-      interaction = Leaderboard.weeklyTimeLeaderboard(message.author)
-    else:
-      interaction = Leaderboard.timeLeaderboard(message.author)
-    await message.reply(embed= await interaction.getLeaderboardEmbed(), mention_author= False)
-  elif message.content.lower().startswith(prefix + " shop"):
-    shop = Shop.Shop(message)
-    await shop.send()
-  elif message.content.lower().startswith(prefix + " inv"):
-    inventory = Shop.InventoryMessage(message)
-    await inventory.send()
-  elif message.content.lower().startswith(prefix + " bal"):
-    balance = Shop.BalanceMessage(message)
-    await balance.send()
-  elif message.content.lower().startswith(prefix + " playlist"):
-    playlist = Groovy.Playlist(message)
-    await playlist.send()
-  elif message.content.lower().startswith(prefix + " play"):
-    play = Groovy.Play(message)
-    await message.reply(embed=await play.runCommand())
-  elif message.content.lower().startswith(prefix + " skip"):
-    skip = Groovy.Skip(message)
-    await message.reply(embed=await skip.skip())
-  elif message.content.lower().startswith(prefix + " pause"):
-    pause = Groovy.Pause(message)
-    await message.reply(embed=pause.pause())
-  elif message.content.lower().startswith(prefix + " dc"):
-    await message.channel.guild.voice_client.disconnect()
-    del(musicPlayers[message.channel.guild.id])
-  elif message.content.lower().startswith(prefix + " np"):
-    np = Groovy.NowPlaying(message)
-    await message.reply(embed=np.getNowPlayingEmbed())
-  elif message.content.lower().startswith(prefix + " shuffle"):
-    shuffle = Groovy.Shuffle(message)
-    await message.reply(embed=shuffle.shuffle())
-  
-
-
-  elif unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
+  if message.author.bot: return
+  if message.guild.id in unverifiedRole.keys() and unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
     verify = Verify.Verify(member= message.author, message= message)
     await verify.checkVerifyStatus()
 
-  if str(client.user.id) in message.content.lower():
+  if str(bot.user.id) in message.content:
     await message.add_reaction("<a:ping:866475995317534740>")
 
-  
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+  if payload.guild_id in unverifiedRole.keys() and unverifiedRole[payload.guild_id] in [role.id for role in payload.member.roles]:
+    verify = Verify.Verify(member= payload.member)
+    await verify.checkVerifyStatus()
 
 
-@client.event
+@bot.event
 async def on_member_remove(user):
   leave = Join.Leave(user)
   await leave.send()
@@ -106,7 +203,7 @@ async def on_member_remove(user):
     leaderboard.setScoreOnLeaderboard()
     leaderboard.saveLeaderboard()
     if leaderboard.indexToAnnounce < 10 and leaderboard.annouce:
-      channel = await client.fetch_channel(joinChannel[user.guild.id])
+      channel = await bot.fetch_channel(joinChannel[user.guild.id])
       await channel.send(leaderboard.positionAnnoucenment())
     
     weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(user)
@@ -114,30 +211,30 @@ async def on_member_remove(user):
     weeklyLeaderboard.setScoreOnLeaderboard()
     weeklyLeaderboard.saveLeaderboard()
     if weeklyLeaderboard.indexToAnnounce < 1 and weeklyLeaderboard.annouce:
-      channel = await client.fetch_channel(joinChannel[user.guild.id])
+      channel = await bot.fetch_channel(joinChannel[user.guild.id])
       await channel.send(weeklyLeaderboard.positionAnnoucenment())
     
 
-@client.event
+@bot.event
 async def on_member_join(user):
   join = Join.Join(user)
   await join.send()
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
 
-@client.event
-async def on_raw_reaction_add(payload):  #When reaction added
-  try:
-    emoji = payload.emoji  #Get emoji from the reaction payload
-    channel = await client.fetch_channel(payload.channel_id)  #Get channel from the reaction payload
-    message = await channel.fetch_message(payload.message_id)  #Get message from the reaction payload
-    user = await client.fetch_user(payload.user_id)  #Get user from the reaction payload
-    if message.id in activeMessages.keys():
-      await activeMessages[message.id].onReact(emoji, user)
-  except:
-    traceback.print_exc()
-    print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
+# @bot.event
+# async def on_raw_reaction_add(payload):  #When reaction added
+#   try:
+#     emoji = payload.emoji  #Get emoji from the reaction payload
+#     channel = await bot.fetch_channel(payload.channel_id)  #Get channel from the reaction payload
+#     message = await channel.fetch_message(payload.message_id)  #Get message from the reaction payload
+#     user = await bot.fetch_user(payload.user_id)  #Get user from the reaction payload
+#     if message.id in activeMessages.keys():
+#       await activeMessages[message.id].onReact(emoji, user)
+#   except:
+#     traceback.print_exc()
+#     print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
 
     
 
-client.run(TOKEN)
+bot.run(TOKEN)

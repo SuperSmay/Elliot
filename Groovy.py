@@ -3,14 +3,13 @@ import random
 import datetime
 import traceback
 import discord
-from discord import voice_client
 import youtube_dl
 import googleapiclient.discovery
 import spotipy
 import urllib
 from youtubesearchpython.__future__ import VideosSearch
 
-from globalVariables import client, musicPlayers, prefix
+from globalVariables import bot, musicPlayers, prefix
 
 # Suppress noise about console usage from errors
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -170,9 +169,9 @@ class PlayCommand(MusicCommand):
 
 class MusicPlayer:
 
-    def __init__(self, message):
-        self.guildID = message.guild.id
-        self.channelID = message.channel.id
+    def __init__(self, ctx):
+        self.guildID = ctx.guild.id
+        self.channelID = ctx.channel.id
         self.playlist = []
         self.currentPlayer = None
         self.shuffle = False
@@ -183,19 +182,19 @@ class MusicPlayer:
 
     async def playNext(self):
         index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
-        guild = await client.fetch_guild(self.guildID)
-        player = YTDLSource.from_url(YTDLSource, await self.playlist[index].getData(), loop=client.loop, stream=True)
+        guild = await bot.fetch_guild(self.guildID)
+        player = YTDLSource.from_url(YTDLSource, await self.playlist[index].getData(), loop=bot.loop, stream=True)
         del(self.playlist[index])
         if guild.voice_client == None: return
         if guild.voice_client.is_playing(): guild.voice_client.source = player
-        else: guild.voice_client.play(player, after= lambda e: client.loop.create_task(self.afterPlay(e)))
+        else: guild.voice_client.play(player, after= lambda e: bot.loop.create_task(self.afterPlay(e)))
         self.currentPlayer = player
 
     async def afterPlay(self, e):
         if len(self.playlist) > 0:
             await self.playNext()
         else:
-            guild = await client.fetch_guild(self.guildID)
+            guild = await bot.fetch_guild(self.guildID)
             guild.voice_client.stop()
         if e != None:
             print(f"Exception occured: {e}")
@@ -206,17 +205,17 @@ class MusicPlayer:
             await self.playNext()
             return player
         else:
-            guild = await client.fetch_guild(self.guildID)
+            guild = await bot.fetch_guild(self.guildID)
             guild.voice_client.stop()
         
     async def disconnect(self):
-        guild = await client.fetch_guild(self.guildID)
+        guild = await bot.fetch_guild(self.guildID)
         await guild.voice_client.disconnect()
         del(musicPlayers[guild.id])
 
     async def addToPlaylist(self, track):
         self.playlist.append(track)
-        if not (await client.fetch_guild(self.guildID)).voice_client.is_playing() and not (await client.fetch_guild(self.guildID)).voice_client.is_paused():
+        if not (await bot.fetch_guild(self.guildID)).voice_client.is_playing() and not (await bot.fetch_guild(self.guildID)).voice_client.is_paused():
             await self.playNext()
             return True
         return False
@@ -228,14 +227,14 @@ class CheckLoop:
         while runLoop:
             players = musicPlayers.values()
             for player in players:
-                guild = await client.fetch_guild(player.guildID)
+                guild = await bot.fetch_guild(player.guildID)
                 if guild.voice_client == None or guild.voice_client.channel == None: del(musicPlayers[guild.id])
                 vc = guild.voice_client.channel
                 if len(vc.members) > 1:
                     player.timeOfLastMember = datetime.datetime.utcnow()
                 else:
                     if (datetime.datetime.utcnow() - player.timeOfLastMember).total_seconds() > 300:
-                        channel = await client.fetch_channel(player.channelID)
+                        channel = await bot.fetch_channel(player.channelID)
                         await channel.send(embed = discord.Embed(description="Leaving VC"))
                         await guild.voice_client.disconnect()
                         del(musicPlayers[guild.id])
@@ -293,23 +292,24 @@ class SpotifySong(Song):
         videosResult = await videosSearch.next()
         print(videosResult['result'][0]['link'])
 
-        data = await client.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
+        data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
         return data
 
 # Commands
 class MusicCommand:
-    def __init__(self, message):
-        self.message = message
-        self.guild = message.guild
-        self.channel = message.channel
+    def __init__(self, ctx, input=None):
+        self.ctx = ctx
+        self.input = input
+        self.guild = ctx.guild
+        self.channel = ctx.channel
         self.player = self.getPlayer()
 
     async def getVC(self):
-        return self.message.author.voice.channel
+        return self.ctx.author.voice.channel
 
     def getPlayer(self):
         if self.guild.id in musicPlayers.keys(): return musicPlayers[self.guild.id]
-        else: return MusicPlayer(self.message)
+        else: return MusicPlayer(self.ctx)
 
     async def join(self):
         await (await self.getVC()).connect()
@@ -466,7 +466,7 @@ class Play(MusicCommand):
         return [SpotifySong(item['track']) for item in album['tracks']['items']]
 
     async def setupVC(self):
-        if not self.message.author.voice: return discord.Embed(description="You need to join a vc")
+        if not self.ctx.author.voice: return discord.Embed(description="You need to join a vc")
         if self.guild.voice_client == None: 
             await self.join()
         elif self.guild.voice_client.channel == await self.getVC(): pass
@@ -481,16 +481,15 @@ class Play(MusicCommand):
         embed = await self.setupVC()
         if embed != None: return embed
 
-        input = self.message.content[len(prefix) + len("play") + 1:].strip()
-        if len(input) == 0:
-            pause = Pause(self.message)
+        if len(self.input) == 0:
+            pause = Pause(self.ctx)
             pause.pause()
         try:
-            loadDict = self.parseInput(input)
+            loadDict = self.parseInput(self.input)
             count = 0
             for key in loadDict.keys():
                 count += len(loadDict[key])
-            client.loop.create_task(self.loadSongs(loadDict))
+            bot.loop.create_task(self.loadSongs(loadDict))
             embed = discord.Embed(description= f'Successfully added')
             embed.color = 7528669
             return embed
@@ -542,7 +541,8 @@ class Playlist(MusicCommand):
         return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title} ------------------- {song.duration}" for song in self.player.playlist] + [f"(Loading...) {url}" for url in self.player.unloadedURLs])[:21]) + "```"
         
     async def send(self):
-        await self.message.reply(self.getPlaylistString())
+        try: await self.ctx.reply(self.getPlaylistString())
+        except: await self.ctx.send(self.getPlaylistString())
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):

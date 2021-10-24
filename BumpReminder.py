@@ -1,11 +1,8 @@
-import pathlib
 import asyncio
 import datetime
-from attr import validate
 import discord
 
-from discord import embeds, message
-from globalVariables import client, bumpChannel, bumpRole
+from globalVariables import bot, bumpChannel, bumpRole
 
 bumpTasksEnabled = True
 
@@ -14,22 +11,20 @@ bumpReminderTasks = {
 }
 #Run on bot startup
 async def startBumpReminderTask(guild):
-    #Get channel
-    #print('Bump reminder starting...')
-    channel = await client.fetch_channel(bumpChannel[guild.id])
+
     #Find last "bump success" message
     def bumpMessageCheck(message):
-        return (message.author.id == 302050872383242240 and "Bump done! :thumbsup:" in message.embeds[0].description)
+        return (message.author.id == 302050872383242240 and hasattr(message, 'embeds') and "Bump done! :thumbsup:" in message.embeds[0].description)
 
     def bumpRemindCheck(message):
-        return (message.author.id == client.user.id and "Bump the server" in message.embeds[0].description)
+        return (message.author.id == bot.user.id and hasattr(message, 'embeds') and "Bump the server" in message.embeds[0].description)
 
     bumpMessage = await getMessage(guild, bumpMessageCheck)
     #print("Bump message found")
 
     if bumpMessage == None:
         print("Bump message was empty, reminding now")
-        client.loop.create_task(bumpReminderTask(0, guild))
+        bot.loop.create_task(bumpReminderTask(0, guild))
         return
 
     #Get time since last bump message
@@ -53,14 +48,14 @@ async def startBumpReminderTask(guild):
     
     #print("Creating new reminder sender task...")
     #Start async task waiting for time until next bump
-    client.loop.create_task(bumpReminderTask(timeUntilBump.total_seconds(), guild))
+    bot.loop.create_task(bumpReminderTask(timeUntilBump.total_seconds(), guild))
     #print("Reminder sender task created")
 
 
 async def getMessage(guild, search):
 
     #Get channel
-    channel = await client.fetch_channel(bumpChannel[guild.id])
+    channel = await bot.fetch_channel(bumpChannel[guild.id])
 
     message = await channel.history(limit=50).find(search)
     
@@ -78,7 +73,7 @@ async def getMessage(guild, search):
 #Make bump message
 def getReminderEmbed():
     embed = discord.Embed(title= "⋅•⋅⊰∙∘☽ Its bump time! ☾∘∙⊱⋅•⋅ <:be:876937712135983203><:ta:876937712022745119>", description= "Bump the server with `!d bump`!", color= 7528669)
-    embed.set_thumbnail(url=client.user.avatar_url)
+    embed.set_thumbnail(url=bot.user.avatar.url)
     return embed
 
 #Async tasks
@@ -88,7 +83,7 @@ async def bumpReminderTask(waitTime, guild):
     await asyncio.sleep(waitTime)
     #print("Bump reminder sender: Waking from sleep")
     #print("Bump reminder sender: Getting channel")
-    channel = await client.fetch_channel(bumpChannel[id])
+    channel = await bot.fetch_channel(bumpChannel[id])
     #print("Bump reminder sender: Channel got")
     #TEMPUser = await client.fetch_user(243759220057571328)
     #await TEMPUser.send(embed= getReminderEmbed(guild))
