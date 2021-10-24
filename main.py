@@ -113,6 +113,17 @@ async def on_ready():
   bot.loop.create_task(Groovy.CheckLoop.loop())
   await bot.register_application_commands(commands=commands)
 
+@bot.event
+async def on_message(message: discord.Message):
+  if message.author.bot: return
+  if message.guild.id in unverifiedRole.keys() and unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
+    verify = Verify.Verify(member= message.author, message= message)
+    await verify.checkVerifyStatus()
+
+  if str(bot.user.id) in message.content:
+    await message.add_reaction("<a:ping:866475995317534740>")
+  await bot.process_commands(message)
+
 @bot.command(add_slash_command=False, name="cutie", description="you are a cutie")
 async def cutie(ctx):
   await ctx.send("ur a cutie 2 ;3")
@@ -175,15 +186,7 @@ async def cutie(ctx):
   except: await ctx.send(embed=shuffle.shuffle())
 
 
-@bot.event
-async def on_message(message: discord.Message):
-  if message.author.bot: return
-  if message.guild.id in unverifiedRole.keys() and unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
-    verify = Verify.Verify(member= message.author, message= message)
-    await verify.checkVerifyStatus()
 
-  if str(bot.user.id) in message.content:
-    await message.add_reaction("<a:ping:866475995317534740>")
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
