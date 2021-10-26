@@ -1,15 +1,7 @@
-import asyncio
-import random
-import datetime
-import traceback
-import discord
-import youtube_dl
-import googleapiclient.discovery
-import spotipy
-import urllib
+import asyncio, random, datetime, traceback, discord, youtube_dl, googleapiclient.discovery, spotipy, urllib
 from youtubesearchpython.__future__ import VideosSearch
 
-from globalVariables import bot, musicPlayers, prefix
+from globalVariables import bot, musicPlayers
 
 # Suppress noise about console usage from errors
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -33,7 +25,7 @@ ytdlFormatOptions = {
 
 ffmpegOptions = {
     'options': '-vn',
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
 }
 
 ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
@@ -340,7 +332,7 @@ class Play(MusicCommand):
         elif website == "youtube":
             tempDict = self.handleYoutubeLink(parsedURL)
             returnDict.update(tempDict)
-        if website == "youtu.be":
+        elif website == "youtu.be":
             tempDict = self.handleYoutubeShortLink(parsedURL) 
             returnDict.update(tempDict)
         elif website == "i2.ytimg" or website == "i.ytimg":

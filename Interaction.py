@@ -1,8 +1,6 @@
 import random
 
-from discord import message
 import botGifs
-from globalVariables import prefix
 from fnmatch import fnmatch
 import traceback
 import pathlib

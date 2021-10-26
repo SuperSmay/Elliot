@@ -43,9 +43,9 @@ class Join:
     async def log(self):
         channel = self.guild.get_channel(logChannel[self.guild.id])
         embed = discord.Embed(title= "Member joined", description= f"User is {self.member.mention}", color= 15672122)
-        embed.set_author(name= self.member.display_name, url= self.member.avatar_url)
+        embed.set_author(name= self.member.display_name, url= self.member.avatar.url)
         embed.set_footer(text= f"ID: {self.member.id}")
-        embed.set_thumbnail(url= self.member.avatar_url)
+        embed.set_thumbnail(url= self.member.avatar.url)
         await channel.send(embed= embed)
 class Leave(Join):
 
