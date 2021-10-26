@@ -20,7 +20,7 @@ class MemberScanner:
 
     async def scanImage(self):
         params = {
-            'url': str(self.member.avatar_url),
+            'url': str(self.member.avatar.url),
             'models': 'offensive',
             'api_user': '308358527',
             'api_secret': 'T9crUizWPEcKL6BPHFLu'

@@ -35,7 +35,8 @@ class Join:
 
     async def send(self):
         if self.member.id == 812156805244911647: return  #Ignore alt
-        channel = self.guild.get_channel(welcomeChannel[self.guild.id])
+        try: channel = self.guild.get_channel(welcomeChannel[self.guild.id])
+        except: return
         await channel.send(f"{await self.getMessage()}")
         await channel.send(f"`There are now {self.getMemberCount()} customers here at {self.guild.name}.`")
         await self.log()
@@ -76,5 +77,5 @@ class Leave(Join):
         embed = discord.Embed(title= "Member leave", description= f"User is {self.member.mention}", color= 15672122)
         embed.set_author(name= self.member.display_name, url= self.member.avatar.url)
         embed.set_footer(text= f"ID: {self.member.id}")
-        embed.set_thumbnail(url= self.member.avatar_url)
+        embed.set_thumbnail(url= self.member.avatar.url)
         await channel.send(embed= embed)
