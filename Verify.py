@@ -1,5 +1,5 @@
 import discord
-from globalVariables import unverifiedRole, ageRoleList, pronounRoleList, tooOldRole, verifiedRole, logChannel, roleChannel, bot
+from globalVariables import unverifiedRole, ageRoleList, pronounRoleList, tooOldRole, verifiedRole, logChannel, roleChannel, welcomeChannel, bot
 import traceback
 
 class Verify:
@@ -15,7 +15,7 @@ class Verify:
         try: await self.logAction(f"Autoverified {self.member.mention}")
         except AttributeError: pass
         try: await self.member.send("You've been verified. Welcome to The Gayming Café!!")
-        except discord.errors.Forbidden: await self.message.reply(content= f"You've been verified. Welcome to The Gayming Café!!", mention_author= False) 
+        except discord.errors.Forbidden: await bot.get_channel(welcomeChannel[self.member.guild.id]).send(content= f"You've been verified. Welcome to The Gayming Café!!", mention_author= False) 
 
     async def ageDeny(self):
         try: await self.member.send(f"Sorry, {self.guild.name} has an age limit of 20. If you chose the 21+ role accidentally, feel free to join again.")

@@ -1,14 +1,14 @@
 #Bot
 import discord
-from globalVariables import bot, prefix, unverifiedRole, joinChannel, musicPlayers
+from discord import member
+from globalVariables import bot, unverifiedRole, joinChannel, musicPlayers
 from activeMessages import activeMessages
 import Interaction
 import datetime
 import Leaderboard
 import Verify
 import Join
-import Shop
-import traceback
+import asyncio
 import ImageScan
 import BumpReminder
 import Groovy
@@ -191,7 +191,8 @@ async def cutie(ctx):
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
   if payload.guild_id in unverifiedRole.keys() and unverifiedRole[payload.guild_id] in [role.id for role in payload.member.roles]:
-    verify = Verify.Verify(member= payload.member)
+    await asyncio.sleep(1)
+    verify = Verify.Verify(member= await payload.member.guild.fetch_member(payload.member.id))
     await verify.checkVerifyStatus()
 
 
