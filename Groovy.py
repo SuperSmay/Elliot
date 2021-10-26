@@ -530,7 +530,7 @@ class Skip(MusicCommand):
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
-        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title} ------------------- {song.duration}" for song in self.player.playlist] + [f"(Loading...) {url}" for url in self.player.unloadedURLs])[:21]) + "```"
+        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title} ------------------- {song.duration}" for song in self.player.playlist])[:21]) + "```"
         
     async def send(self):
         try: await self.ctx.reply(self.getPlaylistString())
