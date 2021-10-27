@@ -207,12 +207,14 @@ class MusicPlayer:
         del(musicPlayers[guild.id])
 
     async def loadingLoop(self):
-        while len(self.unloadedSongs) > 0:
-            await self.addToPlaylist(await self.unloadedSongs[0].getData())
-            del(self.unloadedSongs[0])
+        i = 0
+        while i < len(self.playlist):
+            if isinstance(self.playlist[i], UnloadedSong):
+                await self.addToPlaylist(i)
+            i += 1
 
-    async def addToPlaylist(self, track):
-        self.playlist.append(track)
+    async def addToPlaylist(self, i):
+        self.playlist[i] = await self.playlist[i].getData()
         if not (await bot.fetch_guild(self.guildID)).voice_client.is_playing() and not (await bot.fetch_guild(self.guildID)).voice_client.is_paused():
             await self.playNext()
             return True
@@ -280,6 +282,9 @@ class YoutubeSong(Song):
     async def getData(self):
         return self.data
 
+    def getTitle(self):
+        return f"{self.title} ------------------- {self.duration}"
+
 class SpotifySong(Song):
     def __init__(self, track) -> None:
         self.title = f"{track['artists'][0]['name']} - {track['name']}"
@@ -293,17 +298,20 @@ class SpotifySong(Song):
         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
         return data
 
-class UnloadedURL:
-    def __init__(self, url) -> None:
-        self.term = url
+class UnloadedSong:
+    def __init__(self, text) -> None:
+        self.term = text
+
+    def getTitle(self):
+        return f"Loading {self.term}..."
+
+class UnloadedURL(UnloadedSong):
 
     async def getData(self):
         return YoutubeSong(ytdl.extract_info(self.term, download=False))
 
-class UnloadedSerach:
-    def __init__(self, text) -> None:
-        self.term = text
-
+class UnloadedSerach(UnloadedSong):
+  
     async def getData(self):
         return YoutubeSong(ytdl.extract_info(self.term, download=False)['entries'][0])
     
@@ -402,30 +410,30 @@ class Play(MusicCommand):
         for key in loadDict.keys():
             if key == 'youtubeLinks':
                 for link in loadDict[key]:
-                    self.player.unloadedSongs.append(UnloadedURL(link))  # addToPlaylist(await self.loadYoutubeLink(link))
+                    self.player.playlist.append(UnloadedURL(link))  # addToPlaylist(await self.loadYoutubeLink(link))
                     count += 1
             if key == 'youtubePlaylistLinks':
                 for playlistLink in loadDict[key]:
                     for link in await self.getLinksFromYoutubePlaylist(playlistLink):
-                        self.player.unloadedSongs.append(UnloadedURL(link))
+                        self.player.playlist.append(UnloadedURL(link))
                         count += 1
             if key == 'spotifyTrackLinks':
                 for link in loadDict[key]:
-                    self.player.unloadedSongs.append(UnloadedSerach(await self.loadSpotifyTrackURL(link)))
+                    self.player.playlist.append(UnloadedSerach(await self.loadSpotifyTrackURL(link)))
                     count += 1
             if key == 'spotifyAlbumLinks':
                 for link in loadDict[key]:
                     for track in await self.loadTracksFromSpotifyAlbum(link):
-                        self.player.unloadedSongs.append(UnloadedSerach(self.loadSpotifyTrack(track)))
+                        self.player.playlist.append(UnloadedSerach(self.loadSpotifyTrack(track)))
                         count += 1
             if key == 'spotifyPlaylistLinks':
                 for link in loadDict[key]:
                     for track in await self.loadTracksFromSpotifyPlaylist(link):
-                        self.player.unloadedSongs.append(UnloadedSerach(self.loadSpotifyTrack(track)))
+                        self.player.playlist.append(UnloadedSerach(self.loadSpotifyTrack(track)))
                         count += 1
             if key == 'searchTerms':
                 for term in loadDict[key]:
-                    self.player.unloadedSongs.append(UnloadedSerach(term))
+                    self.player.playlist.append(UnloadedSerach(term))
                     count += 1
         return count
                     # link = await self.youtubeSearch(term)
@@ -511,9 +519,9 @@ class Play(MusicCommand):
         embed = await self.setupVC()
         if embed != None: return embed
 
-        if len(self.input) == 0:
+        if len(self.input.strip()) == 0:
             pause = Pause(self.ctx)
-            pause.pause()
+            return pause.pause()
         try:
             loadDict = self.parseInput(self.input)
             count = 0
@@ -569,7 +577,7 @@ class Skip(MusicCommand):
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
-        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title} ------------------- {song.duration}" for song in self.player.playlist] + [f"(Loading...) {song.term}" for song in self.player.unloadedSongs])[:21]) + "```"
+        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1} {song.getTitle()}" for song in self.player.playlist[:20]])) + "```" if len(self.player.playlist) > 0 else '```Nothing to play next```'
         
     async def send(self):
         try: await self.ctx.reply(self.getPlaylistString())

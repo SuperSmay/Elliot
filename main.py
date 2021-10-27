@@ -146,7 +146,7 @@ async def leaderboard(ctx, leaderboard='leaver'):
   except: await ctx.send(embed= await interaction.getLeaderboardEmbed())
 
 @bot.command(add_slash_command=False, name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
-async def play(ctx, input, *moreWords):
+async def play(ctx, input = '', *moreWords):
   play = Groovy.Play(ctx, input + ' ' + ' '.join(moreWords))
   try: await ctx.reply(embed=await play.runCommand())
   except: await ctx.send(embed=await play.runCommand())
