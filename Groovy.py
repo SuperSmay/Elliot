@@ -388,15 +388,15 @@ class Play(MusicCommand):
                         await self.player.addToPlaylist(await self.loadYoutubeLink(link)) 
             if key == 'spotifyTrackLinks':
                 for link in loadDict[key]:
-                    await self.player.addToPlaylist(await self.loadSpotifyTrack(link))
+                    await self.player.addToPlaylist(await self.loadSpotifyTrackURL(link))
             if key == 'spotifyAlbumLinks':
                 for link in loadDict[key]:
                     for track in await self.loadTracksFromSpotifyAlbum(link):
-                        await self.player.addToPlaylist(track)
+                        await self.player.addToPlaylist(await self.loadSpotifyTrack(track))
             if key == 'spotifyPlaylistLinks':
                 for link in loadDict[key]:
                     for track in await self.loadTracksFromSpotifyPlaylist(link):
-                        await self.player.addToPlaylist(track)
+                        await self.player.addToPlaylist(await self.loadSpotifyTrack(track))
             if key == 'searchTerms':
                 for term in loadDict[key]:
                     link = await self.youtubeSearch(term)
@@ -439,15 +439,22 @@ class Play(MusicCommand):
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         playlist = sp.playlist(URL)
-        return [SpotifySong(item['track']) for item in playlist['tracks']['items']]
+        # return [YoutubeSong(ytdl.extract_info(f"{item['track']['artists'][0]['name']} - {item['track']['name']}", download=False)['entries'][0]) for item in playlist['tracks']['items']]
+        return [item['track'] for item in playlist['tracks']['items']]
 
-    async def loadSpotifyTrack(self, URL):
+    async def loadSpotifyTrackURL(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         track = sp.track(URL)
-        return SpotifySong(track)
+        title = f"{track['artists'][0]['name']} - {track['name']}"
+        return YoutubeSong(ytdl.extract_info(title, download=False)['entries'][0])
+        # return SpotifySong(track)
+
+    async def loadSpotifyTrack(self, track):
+        title = f"{track['artists'][0]['name']} - {track['name']}"
+        return YoutubeSong(ytdl.extract_info(title, download=False)['entries'][0])
 
     async def loadTracksFromSpotifyAlbum(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
@@ -455,7 +462,7 @@ class Play(MusicCommand):
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         album = sp.album(URL)
-        return [SpotifySong(item['track']) for item in album['tracks']['items']]
+        return [item['track'] for item in album['tracks']['items']]
 
     async def setupVC(self):
         if not self.ctx.author.voice: return discord.Embed(description="You need to join a vc")

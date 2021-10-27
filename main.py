@@ -165,15 +165,15 @@ async def skip(ctx):
 @bot.command(add_slash_command=False, name="pause", description="Pause the music")
 async def pause(ctx):
   pause = Groovy.Pause(ctx)
-  try: await ctx.reply(embed=await pause.pause())
-  except: await ctx.send(embed=await pause.pause())
+  try: await ctx.reply(embed=pause.pause())
+  except: await ctx.send(embed=pause.pause())
 
 @bot.command(add_slash_command=False, name="disconnect", description="Leave the vc")
 async def disconnect(ctx):
   await ctx.guild.voice_client.disconnect()
   del(musicPlayers[ctx.guild.id])
 
-@bot.command(add_slash_command=False, name="now playing", description="Show the now playing song")
+@bot.command(add_slash_command=False, name="nowplaying", description="Show the now playing song")
 async def np(ctx):
   np = Groovy.NowPlaying(ctx)
   try: await ctx.reply(embed=np.getNowPlayingEmbed())
@@ -200,7 +200,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 async def on_member_remove(user):
   leave = Join.Leave(user)
   await leave.send()
-  timeSinceJoin = datetime.datetime.utcnow() - user.joined_at
+  timeSinceJoin = datetime.datetime.now(datetime.timezone.utc) - user.joined_at
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(user)
     leaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
