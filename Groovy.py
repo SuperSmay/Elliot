@@ -165,6 +165,7 @@ class MusicPlayer:
         self.guildID = ctx.guild.id
         self.channelID = ctx.channel.id
         self.playlist = []
+        self.unloadedSongs = []
         self.currentPlayer = None
         self.shuffle = False
         self.sendNowPlaying = False
@@ -204,6 +205,11 @@ class MusicPlayer:
         guild = await bot.fetch_guild(self.guildID)
         await guild.voice_client.disconnect()
         del(musicPlayers[guild.id])
+
+    async def loadingLoop(self):
+        while len(self.unloadedSongs) > 0:
+            await self.addToPlaylist(await self.unloadedSongs[0].getData())
+            del(self.unloadedSongs[0])
 
     async def addToPlaylist(self, track):
         self.playlist.append(track)
@@ -287,6 +293,20 @@ class SpotifySong(Song):
         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
         return data
 
+class UnloadedURL:
+    def __init__(self, url) -> None:
+        self.term = url
+
+    async def getData(self):
+        return YoutubeSong(ytdl.extract_info(self.term, download=False))
+
+class UnloadedSerach:
+    def __init__(self, text) -> None:
+        self.term = text
+
+    async def getData(self):
+        return YoutubeSong(ytdl.extract_info(self.term, download=False)['entries'][0])
+    
 # Commands
 class MusicCommand:
     def __init__(self, ctx, input=None):
@@ -376,33 +396,42 @@ class Play(MusicCommand):
         else:
             return {'searchTerms' : [url]}
 
-    async def loadSongs(self, loadDict: dict):
+    async def addUnloadedSongs(self, loadDict: dict):
         # returnDict = {'youtubeLinks' : [], 'youtubePlaylists' : [], 'spotifyTrackLinks' : [], 'spotifyAlbumLinks' : [], 'spotifyPlaylistLinks' : [],'searchTerms' : []}
+        count = 0
         for key in loadDict.keys():
             if key == 'youtubeLinks':
                 for link in loadDict[key]:
-                    await self.player.addToPlaylist(await self.loadYoutubeLink(link))
+                    self.player.unloadedSongs.append(UnloadedURL(link))  # addToPlaylist(await self.loadYoutubeLink(link))
+                    count += 1
             if key == 'youtubePlaylistLinks':
                 for playlistLink in loadDict[key]:
                     for link in await self.getLinksFromYoutubePlaylist(playlistLink):
-                        await self.player.addToPlaylist(await self.loadYoutubeLink(link)) 
+                        self.player.unloadedSongs.append(UnloadedURL(link))
+                        count += 1
             if key == 'spotifyTrackLinks':
                 for link in loadDict[key]:
-                    await self.player.addToPlaylist(await self.loadSpotifyTrackURL(link))
+                    self.player.unloadedSongs.append(UnloadedSerach(await self.loadSpotifyTrackURL(link)))
+                    count += 1
             if key == 'spotifyAlbumLinks':
                 for link in loadDict[key]:
                     for track in await self.loadTracksFromSpotifyAlbum(link):
-                        await self.player.addToPlaylist(await self.loadSpotifyTrack(track))
+                        self.player.unloadedSongs.append(UnloadedSerach(self.loadSpotifyTrack(track)))
+                        count += 1
             if key == 'spotifyPlaylistLinks':
                 for link in loadDict[key]:
                     for track in await self.loadTracksFromSpotifyPlaylist(link):
-                        await self.player.addToPlaylist(await self.loadSpotifyTrack(track))
+                        self.player.unloadedSongs.append(UnloadedSerach(self.loadSpotifyTrack(track)))
+                        count += 1
             if key == 'searchTerms':
                 for term in loadDict[key]:
-                    link = await self.youtubeSearch(term)
-                    print(link)
-                    print(type(link))
-                    await self.player.addToPlaylist(await self.loadYoutubeLink(link))
+                    self.player.unloadedSongs.append(UnloadedSerach(term))
+                    count += 1
+        return count
+                    # link = await self.youtubeSearch(term)
+                    # print(link)
+                    # print(type(link))
+                    # self.player.addToPlaylist(await self.loadYoutubeLink(link))
                      
     async def youtubeSearch(self, input):
         videosSearch = VideosSearch(input, limit = 2)
@@ -449,11 +478,13 @@ class Play(MusicCommand):
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         track = sp.track(URL)
         title = f"{track['artists'][0]['name']} - {track['name']}"
+        return title
         return YoutubeSong(ytdl.extract_info(title, download=False)['entries'][0])
         # return SpotifySong(track)
 
-    async def loadSpotifyTrack(self, track):
+    def loadSpotifyTrack(self, track):
         title = f"{track['artists'][0]['name']} - {track['name']}"
+        return title
         return YoutubeSong(ytdl.extract_info(title, download=False)['entries'][0])
 
     async def loadTracksFromSpotifyAlbum(self, URL):
@@ -488,8 +519,9 @@ class Play(MusicCommand):
             count = 0
             for key in loadDict.keys():
                 count += len(loadDict[key])
-            bot.loop.create_task(self.loadSongs(loadDict))
-            embed = discord.Embed(description= f'Successfully added')
+            count = await self.addUnloadedSongs(loadDict)
+            bot.loop.create_task(self.player.loadingLoop())
+            embed = discord.Embed(description= f'Successfully added {count} items')
             embed.color = 7528669
             return embed
                 
@@ -531,13 +563,13 @@ class Skip(MusicCommand):
     async def skip(self):
         skippedTrack = await self.player.skip()
         embed= discord.Embed(title='Reached the end of queue') if skippedTrack == None else self.getNowPlayingEmbed()
-        embed.set_footer(text=f'Skipped {skippedTrack.title}')
+        embed.set_footer(text= 'Add more with `/p`!' if skippedTrack == None else f'Skipped {skippedTrack.title}')
         return embed
 
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
-        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title} ------------------- {song.duration}" for song in self.player.playlist])[:21]) + "```"
+        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title} ------------------- {song.duration}" for song in self.player.playlist] + [f"(Loading...) {song.term}" for song in self.player.unloadedSongs])[:21]) + "```"
         
     async def send(self):
         try: await self.ctx.reply(self.getPlaylistString())

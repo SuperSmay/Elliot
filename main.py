@@ -136,8 +136,8 @@ async def hug(ctx, *args, user=None, message=None):
   interaction = Interaction.HugInteraction(ctx, "hug")
   await interaction.send()
 
-@bot.command(add_slash_command=False, name="leaderboard", description="Shows a leaderboard")
-async def leaverboard(ctx, leaderboard='leaver'):
+@bot.command(add_slash_command=False, name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
+async def leaderboard(ctx, leaderboard='leaver'):
   if leaderboard == 'weekly':
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
   elif leaderboard == 'leaver':
@@ -145,18 +145,18 @@ async def leaverboard(ctx, leaderboard='leaver'):
   try: await ctx.reply(embed= await interaction.getLeaderboardEmbed(), mention_author= False)
   except: await ctx.send(embed= await interaction.getLeaderboardEmbed())
 
-@bot.command(add_slash_command=False, name="play", description="Plays a song/playlist from Youtube/Spotify")
-async def play(ctx, input):
-  play = Groovy.Play(ctx, input)
+@bot.command(add_slash_command=False, name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
+async def play(ctx, input, *moreWords):
+  play = Groovy.Play(ctx, input + ' ' + ' '.join(moreWords))
   try: await ctx.reply(embed=await play.runCommand())
   except: await ctx.send(embed=await play.runCommand())
 
-@bot.command(add_slash_command=False, name="playlist", description="Shows the current playlist")
+@bot.command(add_slash_command=False, name="playlist", aliases=['pl'], description="Shows the current playlist")
 async def playlist(ctx):
   playlist = Groovy.Playlist(ctx)
   await playlist.send()
 
-@bot.command(add_slash_command=False, name="skip", description="Skips the song")
+@bot.command(add_slash_command=False, name="skip", aliases=['s'], description="Skips the song")
 async def skip(ctx):
     skip = Groovy.Skip(ctx)
     try: await ctx.reply(embed=await skip.skip())
@@ -168,18 +168,18 @@ async def pause(ctx):
   try: await ctx.reply(embed=pause.pause())
   except: await ctx.send(embed=pause.pause())
 
-@bot.command(add_slash_command=False, name="disconnect", description="Leave the vc")
+@bot.command(add_slash_command=False, aliases=['dc'], description="Leave the vc")
 async def disconnect(ctx):
   await ctx.guild.voice_client.disconnect()
   del(musicPlayers[ctx.guild.id])
 
-@bot.command(add_slash_command=False, name="nowplaying", description="Show the now playing song")
+@bot.command(add_slash_command=False, name="nowplaying", aliases=['np'], description="Show the now playing song")
 async def np(ctx):
   np = Groovy.NowPlaying(ctx)
   try: await ctx.reply(embed=np.getNowPlayingEmbed())
   except: await ctx.send(embed=np.getNowPlayingEmbed())
 
-@bot.command(add_slash_command=False, name="shuffle", description="Toggle shuffle mode")
+@bot.command(add_slash_command=False, name="shuffle", aliases=['sh'], description="Toggle shuffle mode")
 async def cutie(ctx):
   shuffle = Groovy.Shuffle(ctx)
   try: await ctx.reply(embed=shuffle.shuffle())
