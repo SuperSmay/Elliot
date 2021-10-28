@@ -48,7 +48,7 @@ class BaseInteraction:
     async def embed(self, userIDList, includedMessage):  #Creates the embed to be sent
         nameList = [(await self.ctx.guild.fetch_member(id)).display_name for id in userIDList]
         embedToReturn = discord.Embed(title= self.getEmbedTitle(nameList), description= includedMessage, color= self.getColor())
-        embedToReturn.set_image(url= self.getImageURL())
+        embedToReturn.set_image(url= self.getImageURL(nameList))
         embedToReturn.set_footer(text= f"{self.getCountMessage()} {self.footer}" )
         return embedToReturn
 
@@ -105,8 +105,8 @@ class BaseInteraction:
         id = ping.replace("<", "").replace(">", "").replace("@", "").replace("!", "").replace("&", "")
         return int(id)
 
-    def getImageURL(self):  #Gets the image for the embed from noPingImage and pingImage
-        if len(self.nameList) == 0:
+    def getImageURL(self, nameList):  #Gets the image for the embed from noPingImage and pingImage
+        if len(nameList) == 0:
             return self.noPingImage()
         return self.pingImage()
 
