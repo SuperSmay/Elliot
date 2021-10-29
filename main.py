@@ -12,6 +12,7 @@ import asyncio
 import ImageScan
 import BumpReminder
 import Groovy
+import CommandInterpreter
 
 TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
@@ -126,7 +127,9 @@ async def on_message(message: discord.Message):
 
 @bot.command(add_slash_command=False, name="cutie", description="you are a cutie")
 async def cutie(ctx):
-  await ctx.send("ur a cutie 2 ;3")
+  print(f"Cutie command started at {datetime.datetime.now()}")
+  await ctx.send(embed=discord.Embed(description="ur a cutie 2 ;3"))
+  print(f"Cutie command complete at {datetime.datetime.now()}")
 
 @bot.command(add_slash_command=False, name="hug", description="Hugs a user!")
 async def hug(ctx, *args, user=None, message=None):
@@ -147,9 +150,14 @@ async def leaderboard(ctx, leaderboard='leaver'):
 
 @bot.command(add_slash_command=False, name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
 async def play(ctx, input = '', *moreWords):
-  play = Groovy.Play(ctx, input + ' ' + ' '.join(moreWords))
-  try: await ctx.reply(embed=await play.runCommand())
-  except: await ctx.send(embed=await play.runCommand())
+  input += ' '.join(moreWords).strip()
+  embeds = await CommandInterpreter.playCommand(ctx, input)
+  print(f"embeds list created at {datetime.datetime.now()}")
+  await ctx.send(embed=embeds[0])
+  print(f"Embeds sent at {datetime.datetime.now()}")
+  # play = Groovy.Play(ctx, input + ' ' + ' '.join(moreWords))
+  # try: await ctx.reply(embed=await play.runCommand())
+  # except: await ctx.send(embed=await play.runCommand())
 
 @bot.command(add_slash_command=False, name="playlist", aliases=['pl'], description="Shows the current playlist")
 async def playlist(ctx):

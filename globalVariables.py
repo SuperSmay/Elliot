@@ -5,7 +5,7 @@ intents = discord.Intents().default()
 intents.members = True
 
 client = discord.Client(intents= intents)
-bot = commands.Bot(command_prefix='eli ', description="Test description", intents=intents)
+bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Test description", intents=intents)
 
 prefix = "eli "
 

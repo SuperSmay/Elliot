@@ -1,4 +1,4 @@
-import asyncio, random, datetime, traceback, discord, youtube_dl, googleapiclient.discovery, spotipy, urllib
+import asyncio, random, datetime, traceback, discord, youtube_dl, googleapiclient.discovery, spotipy, urllib, math, threading, concurrent.futures
 from youtubesearchpython.__future__ import VideosSearch
 
 from globalVariables import bot, musicPlayers
@@ -169,14 +169,14 @@ class MusicPlayer:
         self.currentPlayer = None
         self.shuffle = False
         self.sendNowPlaying = False
-        self.timeOfLastMember = datetime.datetime.utcnow()
+        self.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
         
         musicPlayers[self.guildID] = self
 
     async def playNext(self):
         index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
         guild = await bot.fetch_guild(self.guildID)
-        player = YTDLSource.from_url(YTDLSource, await self.playlist[index].getData(), loop=bot.loop, stream=True)
+        player = YTDLSource.from_url(YTDLSource, self.playlist[index].getData(), loop=bot.loop, stream=True)
         del(self.playlist[index])
         if guild.voice_client == None: return
         if guild.voice_client.is_playing(): guild.voice_client.source = player
@@ -207,18 +207,44 @@ class MusicPlayer:
         del(musicPlayers[guild.id])
 
     async def loadingLoop(self):
-        i = 0
-        while i < len(self.playlist):
-            if isinstance(self.playlist[i], UnloadedSong):
-                await self.addToPlaylist(i)
-            i += 1
+        self.playLock = threading.Lock()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            executor.map(self.loadDataInThread, range(0, len(self.playlist)))
 
-    async def addToPlaylist(self, i):
-        self.playlist[i] = await self.playlist[i].getData()
+            futures = []
+            for song in self.playlist:
+                futures.append(
+                    executor.submit(
+                        self.loadDataInThread, song
+                    )
+                )
+            for future in concurrent.futures.as_completed(futures):
+                await self.playIfNothingPlaying()
+        # i = 0
+        # while i < len(self.playlist):
+        #     if isinstance(self.playlist[i], UnloadedSong):
+        #         await self.addToPlaylist(i)
+        #     i += 1
+
+    # async def addToPlaylist(self, i):
+    #     x = threading.Thread(target=self.loadDataInThread, args=(i, self.on))
+    #     x.start()
+
+    def onThreadLoadComplete(self):
+        bot.loop.create_task()
+
+    async def playIfNothingPlaying(self):
         if not (await bot.fetch_guild(self.guildID)).voice_client.is_playing() and not (await bot.fetch_guild(self.guildID)).voice_client.is_paused():
             await self.playNext()
             return True
         return False
+
+    def loadDataInThread(self, song):
+        if isinstance(song, UnloadedSong):
+            data = song.loadData()
+            try: self.playlist[self.playlist.index(song)] = data
+            except IndexError: pass
+
 
 class CheckLoop:
 
@@ -229,15 +255,16 @@ class CheckLoop:
             for player in players:
                 guild = await bot.fetch_guild(player.guildID)
                 if guild.voice_client == None or guild.voice_client.channel == None: del(musicPlayers[guild.id])
-                vc = guild.voice_client.channel
-                if len(vc.members) > 1:
-                    player.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
                 else:
-                    if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
-                        channel = await bot.fetch_channel(player.channelID)
-                        await channel.send(embed = discord.Embed(description="Leaving VC"))
-                        await guild.voice_client.disconnect()
-                        del(musicPlayers[guild.id])
+                    vc = guild.voice_client.channel
+                    if len(vc.members) > 1:
+                        player.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
+                    else:
+                        if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
+                            channel = await bot.fetch_channel(player.channelID)
+                            await channel.send(embed = discord.Embed(description="Leaving VC"))
+                            await guild.voice_client.disconnect()
+                            del(musicPlayers[guild.id])
             await asyncio.sleep(30)
 
 # Songs
@@ -248,72 +275,96 @@ class Song:
         self.title
         self.duration
     
-    async def getData(self):
+    def getData(self):
         return None
 
-    def parseDuration(self, duration: int):
-        if duration > 0:
-            minutes, seconds = divmod(duration, 60)
-            hours, minutes = divmod(minutes, 60)
-            days, hours = divmod(hours, 24)
+    def parseDuration(self, duration):
+        '''
+        Converts a time, in seconds, to a string in the format hr:min:sec, or min:sec if less than one hour.
+    
+        @type  duration: int
+        @param duration: The time, in seconds
 
-            duration = []
-            if days > 0:
-                duration.append('{}'.format(days))
-            if hours > 0:
-                duration.append('{}'.format(hours))
-            if minutes > 0:
-                duration.append('{}'.format(minutes))
-            if seconds > 0:
-                duration.append('{}'.format(seconds))
-            
-            value = ':'.join(duration)
-        
-        elif duration == 0:
-            value = "LIVE"
-        
-        return value
+        @rtype:   string
+        @return:  The new time, hr:min:sec or min:sec
+        '''
+
+        #Divides everything into hours, minutes, and seconds
+        hours = math.floor(duration / 3600)
+        tempTime = duration % 3600 #Modulo takes the remainder of division, leaving the remaining minutes after all hours are taken out
+        minutes = math.floor(tempTime / 60)
+        seconds = tempTime % 60
+
+        #Formats time into a readable string
+        newTime = ""
+        if hours > 0: #Adds hours to string if hours are available; else this will just be blank
+            newTime += str(hours) + ":"
+
+        if minutes > 0:
+            if minutes < 10: #Adds a 0 to one-digit times
+                newTime += "0" + str(minutes) + ":"
+            else:
+                newTime += str(minutes) +":"
+        else: #If there are no minutes, the place still needs to be held
+            newTime += "00:"
+
+        if seconds > 0:
+            if seconds < 10: #Adds a 0 to one-digit times
+                newTime += "0" + str(seconds)
+            else:
+                newTime += str(seconds)
+        else:
+            newTime += "00"
+
+        return newTime
+
 class YoutubeSong(Song):
     def __init__(self, data) -> None:
         self.data = data
         self.title = data['title']
         self.duration = self.parseDuration(data['duration'])
 
-    async def getData(self):
+    def getData(self):
         return self.data
 
     def getTitle(self):
         return f"{self.title} ------------------- {self.duration}"
 
-class SpotifySong(Song):
-    def __init__(self, track) -> None:
-        self.title = f"{track['artists'][0]['name']} - {track['name']}"
-        self.duration = self.parseDuration(track['duration_ms']/1000)
+# class SpotifySong(Song):
+#     def __init__(self, track) -> None:
+#         self.title = f"{track['artists'][0]['name']} - {track['name']}"
+#         self.duration = self.parseDuration(track['duration_ms']/1000)
 
-    async def getData(self):
-        videosSearch = VideosSearch(self.title, limit = 2)
-        videosResult = await videosSearch.next()
-        print(videosResult['result'][0]['link'])
+#     async def getData(self):
+#         videosSearch = VideosSearch(self.title, limit = 2)
+#         videosResult = await videosSearch.next()
+#         print(videosResult['result'][0]['link'])
 
-        data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
-        return data
+#         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
+#         return data
 
 class UnloadedSong:
     def __init__(self, text) -> None:
         self.term = text
 
     def getTitle(self):
-        return f"Loading {self.term}..."
+        return f"Loading [{self.term}]..."
 
 class UnloadedURL(UnloadedSong):
 
-    async def getData(self):
+    def loadData(self):
         return YoutubeSong(ytdl.extract_info(self.term, download=False))
+
+    def getData(self):
+        return (self.loadData()).getData()
 
 class UnloadedSerach(UnloadedSong):
   
-    async def getData(self):
+    def loadData(self):
         return YoutubeSong(ytdl.extract_info(self.term, download=False)['entries'][0])
+
+    def getData(self):
+        return (self.loadData()).getData()
     
 # Commands
 class MusicCommand:
@@ -324,27 +375,24 @@ class MusicCommand:
         self.channel = ctx.channel
         self.player = self.getPlayer()
 
-    async def getVC(self):
-        return self.ctx.author.voice.channel
-
     def getPlayer(self):
         if self.guild.id in musicPlayers.keys(): return musicPlayers[self.guild.id]
         else: return MusicPlayer(self.ctx)
 
-    async def join(self):
-        await (await self.getVC()).connect()
+    async def join(self, vc):
+        await vc.connect()
 
-    async def move(self):
-        await self.guild.voice_client.move_to(await self.getVC)
+    async def move(self, vc):
+        await self.guild.voice_client.move_to(vc)
 
-    def moveToNewVC(self):
-        return True
+    async def shouldMoveToNewVC(self):
+        return not (self.guild.voice_client.is_playing() or self.guild.voice_client.is_paused())
 
     def getNowPlayingEmbed(self):
         embed = discord.Embed(title="Now Playing", description= f"{self.player.currentPlayer.title}")
         embed.color = 7528669
         return embed
-        
+
 class Play(MusicCommand):
 
     def parseInput(self, input: str):
@@ -503,40 +551,20 @@ class Play(MusicCommand):
         album = sp.album(URL)
         return [item['track'] for item in album['tracks']['items']]
 
-    async def setupVC(self):
-        if not self.ctx.author.voice: return discord.Embed(description="You need to join a vc")
-        if self.guild.voice_client == None: 
-            await self.join()
-        elif self.guild.voice_client.channel == await self.getVC(): pass
-        elif self.moveToNewVC(): await self.move() 
+    async def setupVC(self):  #Attempts to set up VC. Returns exit status
+        if not self.ctx.author.voice: return 'userNotInVoice'
+        elif self.guild.voice_client == None: 
+            await self.join(self.ctx.author.voice.channel)
+            return 'joinedVoice'
+        elif self.guild.voice_client.channel == self.ctx.author.voice.channel: return 'noChange'
+        elif await self.shouldMoveToNewVC(): 
+            await self.move(self.ctx.author.voice.channel)
+            return 'movedToNewVoice'
+        else: return 'alreadyPlayingInOtherVoice'
 
     async def loadYoutubeLink(self, url):
         return YoutubeSong(ytdl.extract_info(url, download=False))
 
-    
-    async def runCommand(self):
-    
-        embed = await self.setupVC()
-        if embed != None: return embed
-
-        if len(self.input.strip()) == 0:
-            pause = Pause(self.ctx)
-            return pause.pause()
-        try:
-            loadDict = self.parseInput(self.input)
-            count = 0
-            for key in loadDict.keys():
-                count += len(loadDict[key])
-            count = await self.addUnloadedSongs(loadDict)
-            bot.loop.create_task(self.player.loadingLoop())
-            embed = discord.Embed(description= f'Successfully added {count} items')
-            embed.color = 7528669
-            return embed
-                
-        except:
-            traceback.print_exc()
-            embed = discord.Embed(description= f'An error occured')
-        return embed
 
     def getPlayingNextEmbed(self):
         embed = discord.Embed(title="Playing Next", description= f"{self.player.playlist[0]['title']}")
@@ -577,7 +605,7 @@ class Skip(MusicCommand):
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
-        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1} {song.getTitle()}" for song in self.player.playlist[:20]])) + "```" if len(self.player.playlist) > 0 else '```Nothing to play next```'
+        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.getTitle()}" for song in self.player.playlist[:20]])) + "```" if len(self.player.playlist) > 0 else '```Nothing to play next```'
         
     async def send(self):
         try: await self.ctx.reply(self.getPlaylistString())
