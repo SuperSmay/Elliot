@@ -7,28 +7,20 @@ from globalVariables import bot
 
 async def playCommand(ctx, input):  #Runs the play command and returns a response embed
     embeds=[]
-    print(f"Start command at {datetime.datetime.now()}")
     try: 
         if len(input) == 0:  #If the input is empty, just unpause the music
             pause = Groovy.Pause(ctx)
             return [pause.pause()]
-        print(f"Check for pause at {datetime.datetime.now()}")
         play = Groovy.Play(ctx, input)
-        print(f"Create play object at {datetime.datetime.now()}")
         exitCode = await play.setupVC()
-        print(f"VC setup complete at {datetime.datetime.now()}")
         if exitCode=='joinedVoice' or exitCode=='noChange': pass
         elif exitCode=='userNotInVoice': return [discord.Embed(description="You need to join a vc")]
         elif exitCode=='movedToNewVoice': embeds.append(discord.Embed(description="Switched to your voice chat"))
         elif exitCode=='alreadyPlayingInOtherVoice': return [discord.Embed(description="I'm already playing music elsewhere")]
-        print(f"VC exit code parsed at {datetime.datetime.now()}")
         loadDict = play.parseInput(play.input)
-        print(f"Loaddict created at {datetime.datetime.now()}")
         count = await play.addUnloadedSongs(loadDict)
-        print(f"Unloaded songs added at {datetime.datetime.now()}")
-        bot.loop.create_task(play.player.loadingLoop())
-        print(f"Loading loop started at {datetime.datetime.now()}")
-        embed = discord.Embed(description= f'Successfully added {count} items')
+        bot.loop.create_task(play.player.loadingLoop(playCommandCallback))
+        embed = discord.Embed(description= f'Adding {count} items...')
         embed.color = 7528669
         embeds.append(embed)
 
@@ -41,3 +33,15 @@ async def playCommand(ctx, input):  #Runs the play command and returns a respons
 
         return embeds
 
+async def playCommandCallback(player, count, title = None):
+    if count == 1:
+        embed = discord.Embed(description = f'Successfully added {title}')
+        embed.color = 7528669
+        channel = await bot.fetch_channel(player.channelID)
+        await channel.send(embed=embed)
+    elif count != 0:
+        embed = discord.Embed(description = f'Successfully added {count} items')
+        embed.color = 7528669
+        channel = await bot.fetch_channel(player.channelID)
+        await channel.send(embed=embed)
+    

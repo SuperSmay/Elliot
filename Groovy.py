@@ -176,12 +176,19 @@ class MusicPlayer:
     async def playNext(self):
         index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
         guild = await bot.fetch_guild(self.guildID)
-        player = YTDLSource.from_url(YTDLSource, self.playlist[index].getData(), loop=bot.loop, stream=True)
-        del(self.playlist[index])
-        if guild.voice_client == None: return
-        if guild.voice_client.is_playing(): guild.voice_client.source = player
-        else: guild.voice_client.play(player, after= lambda e: bot.loop.create_task(self.afterPlay(e)))
-        self.currentPlayer = player
+        try: 
+            player = YTDLSource.from_url(YTDLSource, self.playlist[index].getData(), loop=bot.loop, stream=True)
+            del(self.playlist[index])
+            if guild.voice_client == None: return
+            if guild.voice_client.is_playing(): guild.voice_client.source = player
+            else: guild.voice_client.play(player, after= lambda e: bot.loop.create_task(self.afterPlay(e)))
+            self.currentPlayer = player
+        except youtube_dl.DownloadError:
+            await self.sendDownloadError(self.playlist[index])
+            del(self.playlist[index])
+            if len(self.playlist) > 0:
+                await self.playNext()
+            
 
     async def afterPlay(self, e):
         if len(self.playlist) > 0:
@@ -206,9 +213,10 @@ class MusicPlayer:
         await guild.voice_client.disconnect()
         del(musicPlayers[guild.id])
 
-    async def loadingLoop(self):
+    async def loadingLoop(self, callback):
         self.playLock = threading.Lock()
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        count = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             executor.map(self.loadDataInThread, range(0, len(self.playlist)))
 
             futures = []
@@ -219,16 +227,14 @@ class MusicPlayer:
                     )
                 )
             for future in concurrent.futures.as_completed(futures):
+                title, status = (future.result())
+                print(title)
+                print(status)
+                if status == 'success':
+                    count += 1
                 await self.playIfNothingPlaying()
-        # i = 0
-        # while i < len(self.playlist):
-        #     if isinstance(self.playlist[i], UnloadedSong):
-        #         await self.addToPlaylist(i)
-        #     i += 1
-
-    # async def addToPlaylist(self, i):
-    #     x = threading.Thread(target=self.loadDataInThread, args=(i, self.on))
-    #     x.start()
+        await callback(self, count, title)
+        
 
     def onThreadLoadComplete(self):
         bot.loop.create_task()
@@ -241,9 +247,15 @@ class MusicPlayer:
 
     def loadDataInThread(self, song):
         if isinstance(song, UnloadedSong):
-            data = song.loadData()
+            try: data = song.loadData()
+            except youtube_dl.DownloadError: return None, 'downloadError'
             try: self.playlist[self.playlist.index(song)] = data
-            except IndexError: pass
+            except IndexError: return data.getTitle(), 'songNotInPlaylist'
+            return data.getTitle(), 'success'
+        
+    async def sendDownloadError(self, unloadedSong):
+        channel = bot.get_channel(self.channelID)
+        await channel.send(embed=discord.Embed(description=f'Failed to load {unloadedSong.term}'))
 
 
 class CheckLoop:
@@ -329,6 +341,7 @@ class YoutubeSong(Song):
 
     def getTitle(self):
         return f"{self.title} ------------------- {self.duration}"
+
 
 # class SpotifySong(Song):
 #     def __init__(self, track) -> None:
