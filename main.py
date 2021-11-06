@@ -84,6 +84,19 @@ commands = [
         ]
     ),
     discord.ApplicationCommand(
+        name="add",
+        description="Adds a song to the queue",
+        options= 
+        [
+          discord.ApplicationCommandOption(
+            name="input",
+            type=discord.ApplicationCommandOptionType.string,
+            required=True,
+            description='A link or search term'
+            )
+        ]
+    ),
+    discord.ApplicationCommand(
         name="pause",
         description="Pause the music"
     ),
@@ -109,15 +122,6 @@ commands = [
     )
 ]
 commands[2].options[0].choices = [discord.ApplicationCommandOptionChoice(
-                name='Leaver speed',
-                value='leaver'
-              ),
-              discord.ApplicationCommandOptionChoice(
-                name='Weekly leaver speed',
-                value='weekly'
-              )
-            ]
-commands[3].options[0].choices = [discord.ApplicationCommandOptionChoice(
                 name='Leaver speed',
                 value='leaver'
               ),
@@ -176,6 +180,14 @@ async def leaderboard(ctx, leaderboard='leaver'):
 async def play(ctx, input = '', *moreWords):
   input += ' '.join(moreWords).strip()
   embeds = await CommandInterpreter.playCommand(ctx, input)
+  for embed in embeds:
+    try: await ctx.reply(embed=embed, mention_author= False)
+    except: await ctx.send(embed=embed)
+
+@bot.command(add_slash_command=False, name="add", aliases=['a'], description="Adds a song/playlist to the queue from Youtube/Spotify")
+async def add(ctx, input = '', *moreWords):
+  input += ' '.join(moreWords).strip()
+  embeds = await CommandInterpreter.addCommand(ctx, input)
   for embed in embeds:
     try: await ctx.reply(embed=embed, mention_author= False)
     except: await ctx.send(embed=embed)

@@ -129,9 +129,9 @@ class LoadingComplete:
     def removeCallback(guildID, callback):
         if not guildID in loadingCompleteCallbacks.keys(): return
         loadingCompleteCallbacks[guildID].remove(callback)
-    async def call(player, guildID, count, title, ctx=None):
+    async def call(player, guildID, count, title, playThisNext=False, ctx=None):
         if not guildID in loadingCompleteCallbacks.keys(): return
         for callback in loadingCompleteCallbacks[guildID]:
             if callable(callback):
-                if inspect.iscoroutinefunction(callback): await callback(player, count, title, ctx)
-                else: callback(player, count, title, ctx)
+                if inspect.iscoroutinefunction(callback): await callback(player, count, playThisNext=playThisNext, title=title, ctx=ctx)
+                else: callback(player, count, playThisNext=playThisNext, title=title, ctx=ctx)

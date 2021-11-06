@@ -4,7 +4,7 @@ import traceback
 from globalVariables import bot
 
 
-async def playCommand(ctx, input):  #Runs the play command and returns a response embed
+async def playCommand(ctx, input, playSingleFirst=True):  #Runs the play command and returns a response embed
     embeds=[]
     try: 
         if len(input) == 0:  #If the input is empty, just unpause the music
@@ -20,7 +20,9 @@ async def playCommand(ctx, input):  #Runs the play command and returns a respons
         elif exitCode=='alreadyPlayingInOtherVoice': return [discord.Embed(description="Sorry, I'm already playing music elsewhere in this server")]
         loadDict = play.parseInput(play.input)
         count = await play.addUnloadedSongs(loadDict)
-        bot.loop.create_task(play.player.loadingLoop())
+        if count == 1 and playSingleFirst:
+            play.player.playThisNext = play.player.playlist[-1]
+        bot.loop.create_task(play.player.loadingLoop(playSingleFirst))
         embed = discord.Embed(description= f'Adding {count} items...')
         embed.color = 7528669
         embeds.append(embed)
@@ -58,4 +60,5 @@ async def searchCommand(ctx, input):
 
         return embeds
 
-    
+async def addCommand(ctx, input):
+    return (await playCommand(ctx, input, playSingleFirst=False))

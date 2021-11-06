@@ -172,15 +172,22 @@ class MusicPlayer:
         self.sendNowPlaying = False
         self.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
         self.lastSearch = None
+        self.playThisNext = None
         
         musicPlayers[self.guildID] = self
         EventHandlers.registerCallbacks(self.guildID)
 
     async def playNext(self):
         index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
+        if self.playThisNext != None: 
+            try:
+                index = self.playlist.index(self.playThisNext)
+                self.playThisNext = None
+            except ValueError:
+                index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
         try: 
             guild = await bot.fetch_guild(self.guildID)
-            player = YTDLSource.from_url(YTDLSource, self.playlist[index].getData(), loop=bot.loop, stream=True)
+            player = YTDLSource.from_url(YTDLSource, self.playlist[index].data, loop=bot.loop, stream=True)
             del(self.playlist[index])
             if guild.voice_client == None: return
             if guild.voice_client.is_playing(): guild.voice_client.source = player
@@ -227,7 +234,7 @@ class MusicPlayer:
         del(musicPlayers[guild.id])
         await Events.Disconnect.call(self, self.guildID, ctx)
 
-    async def loadingLoop(self, ctx=None):
+    async def loadingLoop(self, playThisNext=False, ctx=None):
         self.playLock = threading.Lock()
         count = 0
         title = ''
@@ -246,11 +253,7 @@ class MusicPlayer:
                 if status == 'success':
                     count += 1
                 await self.playIfNothingPlaying()
-        await Events.LoadingComplete.call(self, self.guildID, count, title, ctx)
-        
-
-    def onThreadLoadComplete(self):
-        bot.loop.create_task()
+        await Events.LoadingComplete.call(self, self.guildID, count, playThisNext=playThisNext, title=title, ctx=ctx)
 
     async def playIfNothingPlaying(self):
         guild = await bot.fetch_guild(self.guildID)
@@ -260,12 +263,15 @@ class MusicPlayer:
         return False
 
     def loadDataInThread(self, song):
-        if isinstance(song, UnloadedSong):
-            try: data = song.loadData()
+        if isinstance(song, UnloadedURL):
+            try: data = song.data
             except youtube_dl.DownloadError: return None, 'downloadError'
-            try: self.playlist[self.playlist.index(song)] = data
-            except IndexError: return data.getTitle(), 'songNotInPlaylist'
-            return data.getTitle(), 'success'
+            try: 
+                self.playlist[self.playlist.index(song)] = data
+                if self.playThisNext == song: self.playThisNext = data
+            except IndexError: return data.title, 'songNotInPlaylist'
+            return data.title, 'success'
+        return None, None
 
 class EventHandlers:
 
@@ -317,11 +323,21 @@ class EventHandlers:
     async def _sendShuffleDisable(player, ctx):
         await EventHandlers._sendGeneric(player, "Disabled Shuffle", ctx)
     
-    async def _loadingComplete(player, count, title=None, ctx=None):
+    async def _loadingComplete(player, count, playThisNext=False, title=None, ctx=None):
         if count == 1:
-            await EventHandlers._sendGeneric(player, f'Successfully added {title}', ctx, color=7528669)
+            embed= discord.Embed(description=f'Successfully added {title}', color=7528669)
+            if playThisNext:
+                embed= discord.Embed(description=f'{title} will play next', color=7528669)
         elif count != 0:
-            await EventHandlers._sendGeneric(player, f'Successfully added {count} items', ctx, color=7528669)
+            embed= discord.Embed(description=f'Successfully added {count} items', color=7528669)
+        
+        if ctx == None: 
+            channel = bot.get_channel(player.channelID)
+            await channel.send(embed=embed)
+        else:
+            try: await ctx.reply(embed=embed)
+            except: await ctx.send(embed=embed)
+
 
     def registerCallbacks(guildID):
         Events.DownloadError.addCallback(guildID, EventHandlers._sendDownloadError)
@@ -338,7 +354,6 @@ class EventHandlers:
 
 
 class CheckLoop:
-
     async def loop():
         runLoop = True
         while runLoop:
@@ -355,14 +370,12 @@ class CheckLoop:
                         if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
                             await player.disconnect()
             await asyncio.sleep(30)
-class Song:
-    def __init__(self) -> None:
-        self.data
-        self.title
-        self.duration
-    
-    def getData(self):
-        return None
+
+class LoadedSong():
+    def __init__(self, ytdlData) -> None:
+        self.data = ytdlData
+        self.title = ytdlData['title']
+        self.duration = self.parseDuration(ytdlData['duration'])
 
     def parseDuration(self, duration):
         '''
@@ -404,40 +417,22 @@ class Song:
 
         return newTime
 
-class YoutubeSong(Song):
-    def __init__(self, data) -> None:
-        self.data = data
-        self.title = data['title']
-        self.duration = self.parseDuration(data['duration'])
-
-    def getData(self):
-        return self.data
-
-    def getTitle(self):
-        return f"{self.title} ------------------- {self.duration}"
-
-class UnloadedSong:
+class UnloadedURL():
     def __init__(self, text) -> None:
-        self.term = text
+        self.text = text
+        self.title = f"Loading {self.text}..."
 
-    def getTitle(self):
-        return f"Loading [{self.term}]..."
+    @property
+    def data(self):
+        return (self._loadData())
 
-class UnloadedURL(UnloadedSong):
+    def _loadData(self):
+        return LoadedSong(ytdl.extract_info(self.text, download=False))
 
-    def loadData(self):
-        return YoutubeSong(ytdl.extract_info(self.term, download=False))
-
-    def getData(self):
-        return (self.loadData()).getData()
-
-class UnloadedSerach(UnloadedSong):
+class UnloadedSearch(UnloadedURL):
   
-    def loadData(self):
-        return YoutubeSong(ytdl.extract_info(self.term, download=False)['entries'][0])
-
-    def getData(self):
-        return (self.loadData()).getData()
+    def _loadData(self):
+        return LoadedSong(ytdl.extract_info(self.text, download=False)['entries'][0])
     
 # Commands
 class MusicCommand:
@@ -547,35 +542,30 @@ class Play(MusicCommand):
                     count += 1
             if key == 'youtubePlaylistLinks':
                 for playlistLink in loadDict[key]:
-                    for link in await self.getLinksFromYoutubePlaylist(playlistLink):
+                    for link in self.getLinksFromYoutubePlaylist(playlistLink):
                         self.player.playlist.append(UnloadedURL(link))
                         count += 1
             if key == 'spotifyTrackLinks':
                 for link in loadDict[key]:
-                    self.player.playlist.append(UnloadedSerach(await self.loadSpotifyTrackURL(link)))
+                    self.player.playlist.append(UnloadedSearch(self.loadSpotifyTrackURL(link)))
                     count += 1
             if key == 'spotifyAlbumLinks':
                 for link in loadDict[key]:
-                    for track in await self.loadTracksFromSpotifyAlbum(link):
-                        self.player.playlist.append(UnloadedSerach(self.loadSpotifyTrack(track)))
+                    for track in self.loadTracksFromSpotifyAlbum(link):
+                        self.player.playlist.append(UnloadedSearch(self.loadSpotifyTrack(track)))
                         count += 1
             if key == 'spotifyPlaylistLinks':
                 for link in loadDict[key]:
-                    for track in await self.loadTracksFromSpotifyPlaylist(link):
-                        self.player.playlist.append(UnloadedSerach(self.loadSpotifyTrack(track)))
+                    for track in self.loadTracksFromSpotifyPlaylist(link):
+                        self.player.playlist.append(UnloadedSearch(self.loadSpotifyTrack(track)))
                         count += 1
             if key == 'searchTerms':
                 for term in loadDict[key]:
-                    self.player.playlist.append(UnloadedSerach(term))
+                    self.player.playlist.append(UnloadedSearch(term))
                     count += 1
         return count
-                    
-    async def youtubeSearch(self, input):
-        videosSearch = VideosSearch(input, limit = 1)
-        videosResult = await videosSearch.next()
-        return videosResult['result'][0]['link']
 
-    async def getLinksFromYoutubePlaylist(self, link):
+    def getLinksFromYoutubePlaylist(self, link):
         #extract playlist id from url
         parsedURL = urllib.parse.urlparse(link)
         query = urllib.parse.parse_qs(parsedURL.query, keep_blank_values=True)
@@ -597,7 +587,7 @@ class Play(MusicCommand):
 
         return [f'https://www.youtube.com/watch?v={t["snippet"]["resourceId"]["videoId"]}' for t in playlist_items]
 
-    async def loadTracksFromSpotifyPlaylist(self, URL):
+    def loadTracksFromSpotifyPlaylist(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
@@ -605,7 +595,7 @@ class Play(MusicCommand):
         playlist = sp.playlist(URL)
         return [item['track'] for item in playlist['tracks']['items']]
 
-    async def loadSpotifyTrackURL(self, URL):
+    def loadSpotifyTrackURL(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
@@ -618,16 +608,13 @@ class Play(MusicCommand):
         title = f"{track['artists'][0]['name']} - {track['name']}"
         return title
 
-    async def loadTracksFromSpotifyAlbum(self, URL):
+    def loadTracksFromSpotifyAlbum(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
         client_secret = "034fe6ec5ad945de82dfbe1938224523"
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         album = sp.album(URL)
         return [item['track'] for item in album['tracks']['items']]
-
-    async def loadYoutubeLink(self, url):
-        return YoutubeSong(ytdl.extract_info(url, download=False))
 
     def getPlayingNextEmbed(self):
         embed = discord.Embed(title="Playing Next", description= f"{self.player.playlist[0]['title']}")
@@ -670,9 +657,7 @@ class Playlist(MusicCommand):
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
         super().__init__(source, volume)
-
         self.data = data
-
         self.title = data.get('title')
         self.url = data.get('url')
 
