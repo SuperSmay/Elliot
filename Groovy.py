@@ -342,7 +342,8 @@ class CheckLoop:
     async def loop():
         runLoop = True
         while runLoop:
-            players = musicPlayers.values()
+            musicPlayersCopy = musicPlayers.copy()
+            players = musicPlayersCopy.values()
             for player in players:
                 guild = await bot.fetch_guild(player.guildID)
                 if guild.voice_client == None or guild.voice_client.channel == None: del(musicPlayers[guild.id])
