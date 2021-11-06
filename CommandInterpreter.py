@@ -25,18 +25,14 @@ async def playCommand(ctx, input):  #Runs the play command and returns a respons
         embed.color = 7528669
         embeds.append(embed)
 
-        for embed in embeds:
-            try: await ctx.reply(embed=embed)
-            except: await ctx.send(embed=embed)
+        return embeds
 
     except:
         traceback.print_exc()
         embed = discord.Embed(description= f'An error occured')
         embeds.append(embed)
 
-        for embed in embeds:
-            try: await ctx.reply(embed=embed)
-            except: await ctx.send(embed=embed)
+        return embeds
 
 async def searchCommand(ctx, input):
     embeds = []
@@ -54,16 +50,12 @@ async def searchCommand(ctx, input):
         embed.set_footer(text='Use `eli play {number}` to play one of these songs')
         embeds.append(embed)
 
-        for embed in embeds:
-            try: await ctx.reply(embed=embed)
-            except: await ctx.send(embed=embed)
+        return embeds
     except:
         traceback.print_exc()
         embed = discord.Embed(description= f'An error occured')
         embeds.append(embed)
 
-        for embed in embeds:
-            try: await ctx.reply(embed=embed)
-            except: await ctx.send(embed=embed)
+        return embeds
 
     

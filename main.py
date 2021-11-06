@@ -1,6 +1,7 @@
 #Bot
 import discord
 from discord import member
+from discord import embeds
 from globalVariables import bot, unverifiedRole, joinChannel, musicPlayers
 from activeMessages import activeMessages
 import Interaction
@@ -167,16 +168,17 @@ async def leaderboard(ctx, leaderboard='leaver'):
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
   elif leaderboard == 'leaver':
     interaction = Leaderboard.timeLeaderboard(ctx.author)
-  try: await ctx.reply(embed= await interaction.getLeaderboardEmbed(), mention_author= False)
-  except: await ctx.send(embed= await interaction.getLeaderboardEmbed())
+  embed = await interaction.getLeaderboardEmbed()
+  try: await ctx.reply(embed=embed, mention_author= False)
+  except: await ctx.send(embed=embed)
 
 @bot.command(add_slash_command=False, name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
 async def play(ctx, input = '', *moreWords):
   input += ' '.join(moreWords).strip()
-  await CommandInterpreter.playCommand(ctx, input)
-  # play = Groovy.Play(ctx, input + ' ' + ' '.join(moreWords))
-  # try: await ctx.reply(embed=await play.runCommand())
-  # except: await ctx.send(embed=await play.runCommand())
+  embeds = await CommandInterpreter.playCommand(ctx, input)
+  for embed in embeds:
+    try: await ctx.reply(embed=embed, mention_author= False)
+    except: await ctx.send(embed=embed)
 
 @bot.command(add_slash_command=False, name="playlist", aliases=['pl'], description="Shows the current playlist")
 async def playlist(ctx):
@@ -212,7 +214,10 @@ async def shuffle(ctx):
 @bot.command(add_slash_command=False, name="search", description="Search youtube for something to play")
 async def play(ctx, input = '', *moreWords):
   input = (input + ' ' + ' '.join(moreWords)).strip()
-  await CommandInterpreter.searchCommand(ctx, input)
+  embeds = await CommandInterpreter.searchCommand(ctx, input)
+  for embed in embeds:
+    try: await ctx.reply(embed=embed, mention_author= False)
+    except: await ctx.send(embed=embed)
 
 
 @bot.event
