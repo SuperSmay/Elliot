@@ -1,7 +1,9 @@
 import asyncio, random, datetime, traceback, discord, youtube_dl, googleapiclient.discovery, spotipy, urllib, math, threading, concurrent.futures
+from discord import guild
 from youtubesearchpython.__future__ import VideosSearch
 
 from globalVariables import bot, musicPlayers
+import Events
 
 # Suppress noise about console usage from errors
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -172,50 +174,63 @@ class MusicPlayer:
         self.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
         
         musicPlayers[self.guildID] = self
+        EventHandlers.registerCallbacks(self.guildID)
 
     async def playNext(self):
         index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
-        guild = await bot.fetch_guild(self.guildID)
         try: 
+            guild = await bot.fetch_guild(self.guildID)
             player = YTDLSource.from_url(YTDLSource, self.playlist[index].getData(), loop=bot.loop, stream=True)
             del(self.playlist[index])
             if guild.voice_client == None: return
             if guild.voice_client.is_playing(): guild.voice_client.source = player
-            else: guild.voice_client.play(player, after= lambda e: bot.loop.create_task(self.afterPlay(e)))
+            else: guild.voice_client.play(player, after= lambda e: bot.loop.create_task(Events.SongEnd.call(self, self.guildID, e)))
             self.currentPlayer = player
+            await Events.SongPlaybackStart.call(self, self.guildID, player)
         except youtube_dl.DownloadError:
-            await self.sendDownloadError(self.playlist[index])
+            unloadedSong = self.playlist[index]
             del(self.playlist[index])
             if len(self.playlist) > 0:
                 await self.playNext()
+            await Events.DownloadError.call(self, self.guildID, unloadedSong)
             
-
-    async def afterPlay(self, e):
+    async def skip(self, ctx=None):
+        player = None
         if len(self.playlist) > 0:
+            player = self.currentPlayer
             await self.playNext()
         else:
             guild = await bot.fetch_guild(self.guildID)
             guild.voice_client.stop()
-        if e != None:
-            print(f"Exception occured: {e}")
-    
-    async def skip(self):
-        player = self.currentPlayer
-        if len(self.playlist) > 0:
-            await self.playNext()
-            return player
-        else:
-            guild = await bot.fetch_guild(self.guildID)
-            guild.voice_client.stop()
+        await Events.SongSkip.call(self, self.guildID, player, ctx)
         
-    async def disconnect(self):
+    async def pause(self, ctx=None):
+        guild = await bot.fetch_guild(self.guildID)
+        if guild.voice_client.is_paused():
+            guild.voice_client.resume()
+            await Events.Unpause.call(self, self.guildID, ctx)
+        else:
+            guild.voice_client.pause()
+            await Events.Pause.call(self, self.guildID, ctx)
+
+    async def toggleShuffle(self, ctx=None):
+        if self.shuffle:
+            self.shuffle = False
+            await Events.ShuffleDisable.call(self, self.guildID, ctx)
+        else:
+            self.shuffle = True
+            await Events.ShuffleEnable.call(self, self.guildID, ctx)
+
+    async def disconnect(self, ctx=None):
         guild = await bot.fetch_guild(self.guildID)
         await guild.voice_client.disconnect()
         del(musicPlayers[guild.id])
+        await Events.Disconnect.call(self, self.guildID, ctx)
 
-    async def loadingLoop(self, callback):
+    async def loadingLoop(self, ctx=None):
         self.playLock = threading.Lock()
         count = 0
+        title = ''
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             executor.map(self.loadDataInThread, range(0, len(self.playlist)))
 
@@ -228,19 +243,18 @@ class MusicPlayer:
                 )
             for future in concurrent.futures.as_completed(futures):
                 title, status = (future.result())
-                print(title)
-                print(status)
                 if status == 'success':
                     count += 1
                 await self.playIfNothingPlaying()
-        await callback(self, count, title)
+        await Events.LoadingComplete.call(self, self.guildID, count, title, ctx)
         
 
     def onThreadLoadComplete(self):
         bot.loop.create_task()
 
     async def playIfNothingPlaying(self):
-        if not (await bot.fetch_guild(self.guildID)).voice_client.is_playing() and not (await bot.fetch_guild(self.guildID)).voice_client.is_paused():
+        guild = await bot.fetch_guild(self.guildID)
+        if not guild.voice_client.is_playing() and not guild.voice_client.is_paused():
             await self.playNext()
             return True
         return False
@@ -252,10 +266,83 @@ class MusicPlayer:
             try: self.playlist[self.playlist.index(song)] = data
             except IndexError: return data.getTitle(), 'songNotInPlaylist'
             return data.getTitle(), 'success'
-        
-    async def sendDownloadError(self, unloadedSong):
-        channel = bot.get_channel(self.channelID)
-        await channel.send(embed=discord.Embed(description=f'Failed to load {unloadedSong.term}'))
+
+
+
+class EventHandlers:
+
+    async def _sendGeneric(player, text, ctx, color=None):
+        embed = discord.Embed(description=text)
+        if color != None: embed.color = color
+        if ctx == None:
+            channel = await bot.fetch_channel(player.channelID)
+            await channel.send(embed=embed)
+        else:
+            try: await ctx.reply(embed=embed)
+            except: await ctx.send(embed=embed)
+
+    async def _sendDownloadError(player, unloadedSong, ctx):
+        await EventHandlers._sendGeneric(player, f'Failed to load {unloadedSong.term}', ctx)
+
+    async def _songEnd(player, e):
+        if len(player.playlist) > 0:
+            await player.playNext()
+        else:
+            guild = await bot.fetch_guild(player.guildID)
+            if guild.voice_client != None: guild.voice_client.stop()
+        if e != None:
+            print(f"Exception occured: {e}")
+
+    async def _sendSkipSong(player, oldPlayer, ctx):
+        embed= discord.Embed(title='Reached the end of queue') if oldPlayer == None else discord.Embed(title="Now Playing", description= f"{player.currentPlayer.title}")
+        embed.set_footer(text= 'Add more with `/p`!' if oldPlayer == None else f'Skipped {oldPlayer.title}')
+        embed.color = 7528669
+        if ctx == None: 
+            channel = bot.get_channel(player.channelID)
+            await channel.send(embed=embed)
+        else:
+            try: await ctx.reply(embed=embed)
+            except: await ctx.send(embed=embed)
+
+    async def _sendDisconnect(player, ctx):
+        await EventHandlers._sendGeneric(player, "Leaving VC", ctx)
+
+    async def _sendPause(player, ctx):
+        await EventHandlers._sendGeneric(player, "Paused Music", ctx)
+
+    async def _sendUnpause(player, ctx):
+        await EventHandlers._sendGeneric(player, 'Unpaused Music', ctx)
+
+    async def _sendShuffleEnable(player, ctx):
+        await EventHandlers._sendGeneric(player, "Enabled Shuffle", ctx)
+
+    async def _sendShuffleDisable(player, ctx):
+        await EventHandlers._sendGeneric(player, "Disabled Shuffle", ctx)
+    
+    async def _loadingComplete(player, count, title=None, ctx=None):
+        if count == 1:
+            await EventHandlers._sendGeneric(player, f'Successfully added {title}', ctx, color=7528669)
+        elif count != 0:
+            await EventHandlers._sendGeneric(player, f'Successfully added {count} items', ctx, color=7528669)
+
+    def registerCallbacks(guildID):
+        Events.DownloadError.addCallback(guildID, EventHandlers._sendDownloadError)
+        Events.SongEnd.addCallback(guildID, EventHandlers._songEnd)
+        Events.SongSkip.addCallback(guildID, EventHandlers._sendSkipSong)
+        Events.Disconnect.addCallback(guildID, EventHandlers._sendDisconnect)
+        Events.Pause.addCallback(guildID, EventHandlers._sendPause)
+        Events.Unpause.addCallback(guildID, EventHandlers._sendUnpause)
+        Events.ShuffleEnable.addCallback(guildID, EventHandlers._sendShuffleEnable)
+        Events.ShuffleDisable.addCallback(guildID, EventHandlers._sendShuffleDisable)
+        Events.LoadingComplete.addCallback(guildID, EventHandlers._loadingComplete)
+
+
+
+
+
+
+
+
 
 
 class CheckLoop:
@@ -273,10 +360,7 @@ class CheckLoop:
                         player.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
                     else:
                         if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
-                            channel = await bot.fetch_channel(player.channelID)
-                            await channel.send(embed = discord.Embed(description="Leaving VC"))
-                            await guild.voice_client.disconnect()
-                            del(musicPlayers[guild.id])
+                            await player.disconnect()
             await asyncio.sleep(30)
 
 # Songs
@@ -401,11 +485,6 @@ class MusicCommand:
     async def shouldMoveToNewVC(self):
         return not (self.guild.voice_client.is_playing() or self.guild.voice_client.is_paused())
 
-    def getNowPlayingEmbed(self):
-        embed = discord.Embed(title="Now Playing", description= f"{self.player.currentPlayer.title}")
-        embed.color = 7528669
-        return embed
-
 class Play(MusicCommand):
 
     def parseInput(self, input: str):
@@ -505,7 +584,6 @@ class Play(MusicCommand):
     async def youtubeSearch(self, input):
         videosSearch = VideosSearch(input, limit = 2)
         videosResult = await videosSearch.next()
-        print(videosResult['result'][0]['link'])
         return videosResult['result'][0]['link']
 
     async def getLinksFromYoutubePlaylist(self, link):
@@ -514,7 +592,6 @@ class Play(MusicCommand):
         query = urllib.parse.parse_qs(parsedURL.query, keep_blank_values=True)
         playlist_id = query["list"][0]
 
-        print(f'get all playlist items links from {playlist_id}')
         youtube = googleapiclient.discovery.build("youtube", "v3", developerKey = "AIzaSyBT0Ihv9c2ijSrzZxp3EX3MHiTnoKvZpf8")
 
         request = youtube.playlistItems().list(
@@ -584,37 +661,15 @@ class Play(MusicCommand):
         embed.color = 7528669
         return embed
 
-class Pause(MusicCommand):
-    def pause(self):
-        if self.guild.voice_client.is_paused():
-            self.guild.voice_client.resume()
-            return discord.Embed(description='Unpaused Music')
-        else:
-            self.guild.voice_client.pause()
-            return discord.Embed(description='Paused Music')
-
-class Shuffle(MusicCommand):
-    
-    def shuffle(self):
-        if self.player.shuffle:
-            self.player.shuffle = False
-            return discord.Embed(description="Disabled Shuffle")
-        else:
-            self.player.shuffle = True
-            return discord.Embed(description="Enable Shuffle")
 
 class NowPlaying(MusicCommand):
     def __init__(self, message):
         super().__init__(message)
-    
-class Skip(MusicCommand):
 
-    async def skip(self):
-        skippedTrack = await self.player.skip()
-        embed= discord.Embed(title='Reached the end of queue') if skippedTrack == None else self.getNowPlayingEmbed()
-        embed.set_footer(text= 'Add more with `/p`!' if skippedTrack == None else f'Skipped {skippedTrack.title}')
+    def getNowPlayingEmbed(self):
+        embed = discord.Embed(title="Now Playing", description= f"{self.player.currentPlayer.title}")
+        embed.color = 7528669
         return embed
-
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
