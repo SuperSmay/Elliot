@@ -33,7 +33,6 @@ ffmpegOptions = {
 ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
 
 
-
 #Structure ref
 
 '''
@@ -172,6 +171,7 @@ class MusicPlayer:
         self.shuffle = False
         self.sendNowPlaying = False
         self.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
+        self.lastSearch = None
         
         musicPlayers[self.guildID] = self
         EventHandlers.registerCallbacks(self.guildID)
@@ -267,8 +267,6 @@ class MusicPlayer:
             except IndexError: return data.getTitle(), 'songNotInPlaylist'
             return data.getTitle(), 'success'
 
-
-
 class EventHandlers:
 
     async def _sendGeneric(player, text, ctx, color=None):
@@ -339,12 +337,6 @@ class EventHandlers:
 
 
 
-
-
-
-
-
-
 class CheckLoop:
 
     async def loop():
@@ -362,9 +354,6 @@ class CheckLoop:
                         if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
                             await player.disconnect()
             await asyncio.sleep(30)
-
-# Songs
-
 class Song:
     def __init__(self) -> None:
         self.data
@@ -425,20 +414,6 @@ class YoutubeSong(Song):
 
     def getTitle(self):
         return f"{self.title} ------------------- {self.duration}"
-
-
-# class SpotifySong(Song):
-#     def __init__(self, track) -> None:
-#         self.title = f"{track['artists'][0]['name']} - {track['name']}"
-#         self.duration = self.parseDuration(track['duration_ms']/1000)
-
-#     async def getData(self):
-#         videosSearch = VideosSearch(self.title, limit = 2)
-#         videosResult = await videosSearch.next()
-#         print(videosResult['result'][0]['link'])
-
-#         data = await bot.loop.run_in_executor(None, lambda: ytdl.extract_info(videosResult['result'][0]['link'], download=False))
-#         return data
 
 class UnloadedSong:
     def __init__(self, text) -> None:
@@ -550,7 +525,7 @@ class Play(MusicCommand):
         for key in loadDict.keys():
             if key == 'youtubeLinks':
                 for link in loadDict[key]:
-                    self.player.playlist.append(UnloadedURL(link))  # addToPlaylist(await self.loadYoutubeLink(link))
+                    self.player.playlist.append(UnloadedURL(link))
                     count += 1
             if key == 'youtubePlaylistLinks':
                 for playlistLink in loadDict[key]:
@@ -576,11 +551,7 @@ class Play(MusicCommand):
                     self.player.playlist.append(UnloadedSerach(term))
                     count += 1
         return count
-                    # link = await self.youtubeSearch(term)
-                    # print(link)
-                    # print(type(link))
-                    # self.player.addToPlaylist(await self.loadYoutubeLink(link))
-                     
+                    
     async def youtubeSearch(self, input):
         videosSearch = VideosSearch(input, limit = 2)
         videosResult = await videosSearch.next()
@@ -614,7 +585,6 @@ class Play(MusicCommand):
         client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
         sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
         playlist = sp.playlist(URL)
-        # return [YoutubeSong(ytdl.extract_info(f"{item['track']['artists'][0]['name']} - {item['track']['name']}", download=False)['entries'][0]) for item in playlist['tracks']['items']]
         return [item['track'] for item in playlist['tracks']['items']]
 
     async def loadSpotifyTrackURL(self, URL):
@@ -625,13 +595,10 @@ class Play(MusicCommand):
         track = sp.track(URL)
         title = f"{track['artists'][0]['name']} - {track['name']}"
         return title
-        return YoutubeSong(ytdl.extract_info(title, download=False)['entries'][0])
-        # return SpotifySong(track)
 
     def loadSpotifyTrack(self, track):
         title = f"{track['artists'][0]['name']} - {track['name']}"
         return title
-        return YoutubeSong(ytdl.extract_info(title, download=False)['entries'][0])
 
     async def loadTracksFromSpotifyAlbum(self, URL):
         client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
@@ -661,7 +628,6 @@ class Play(MusicCommand):
         embed.color = 7528669
         return embed
 
-
 class NowPlaying(MusicCommand):
     def __init__(self, message):
         super().__init__(message)
@@ -681,7 +647,6 @@ class Playlist(MusicCommand):
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
-        #source = discord.FFmpegPCMAudio(data['url'], **ffmpegOptions)
         super().__init__(source, volume)
 
         self.data = data
@@ -691,12 +656,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
     def from_url(cls, data, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
-        #data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-        #print(data)
-        #if 'entries' in data:
-            # take first item from a playlist
-            #data = data['entries'][0]
-
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
         return cls(source, data=data)
