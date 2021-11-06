@@ -14,7 +14,7 @@ import BumpReminder
 import Groovy
 import CommandInterpreter
 
-TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
+TOKEN = "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
 ## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
@@ -151,10 +151,7 @@ async def leaderboard(ctx, leaderboard='leaver'):
 @bot.command(add_slash_command=False, name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
 async def play(ctx, input = '', *moreWords):
   input += ' '.join(moreWords).strip()
-  embeds = await CommandInterpreter.playCommand(ctx, input)
-  print(f"embeds list created at {datetime.datetime.now()}")
-  await ctx.send(embed=embeds[0])
-  print(f"Embeds sent at {datetime.datetime.now()}")
+  await CommandInterpreter.playCommand(ctx, input)
   # play = Groovy.Play(ctx, input + ' ' + ' '.join(moreWords))
   # try: await ctx.reply(embed=await play.runCommand())
   # except: await ctx.send(embed=await play.runCommand())
@@ -166,20 +163,18 @@ async def playlist(ctx):
 
 @bot.command(add_slash_command=False, name="skip", aliases=['s'], description="Skips the song")
 async def skip(ctx):
-    skip = Groovy.Skip(ctx)
-    try: await ctx.reply(embed=await skip.skip())
-    except: await ctx.send(embed=await skip.skip())
+  command = Groovy.MusicCommand(ctx)
+  await command.player.skip(ctx)
 
 @bot.command(add_slash_command=False, name="pause", description="Pause the music")
 async def pause(ctx):
-  pause = Groovy.Pause(ctx)
-  try: await ctx.reply(embed=pause.pause())
-  except: await ctx.send(embed=pause.pause())
+  command = Groovy.MusicCommand(ctx)
+  await command.player.pause(ctx)
 
 @bot.command(add_slash_command=False, aliases=['dc'], description="Leave the vc")
 async def disconnect(ctx):
-  await ctx.guild.voice_client.disconnect()
-  del(musicPlayers[ctx.guild.id])
+  command = Groovy.MusicCommand(ctx)
+  await command.player.disconnect(ctx)
 
 @bot.command(add_slash_command=False, name="nowplaying", aliases=['np'], description="Show the now playing song")
 async def np(ctx):
@@ -188,10 +183,9 @@ async def np(ctx):
   except: await ctx.send(embed=np.getNowPlayingEmbed())
 
 @bot.command(add_slash_command=False, name="shuffle", aliases=['sh'], description="Toggle shuffle mode")
-async def cutie(ctx):
-  shuffle = Groovy.Shuffle(ctx)
-  try: await ctx.reply(embed=shuffle.shuffle())
-  except: await ctx.send(embed=shuffle.shuffle())
+async def shuffle(ctx):
+  command = Groovy.MusicCommand(ctx)
+  await command.player.toggleShuffle(ctx)
 
 
 
@@ -246,7 +240,5 @@ async def on_member_join(user):
 #   except:
 #     traceback.print_exc()
 #     print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
-
-    
 
 bot.run(TOKEN)
