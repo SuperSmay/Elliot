@@ -14,7 +14,7 @@ import BumpReminder
 import Groovy
 import CommandInterpreter
 
-TOKEN = "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
+TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
 ## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
 ## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
@@ -70,6 +70,19 @@ commands = [
         ]
     ),
     discord.ApplicationCommand(
+        name="search",
+        description="Search youtube for something to play",
+        options= 
+        [
+          discord.ApplicationCommandOption(
+            name="input",
+            type=discord.ApplicationCommandOptionType.string,
+            required=True,
+            description='A search term'
+            )
+        ]
+    ),
+    discord.ApplicationCommand(
         name="pause",
         description="Pause the music"
     ),
@@ -95,6 +108,15 @@ commands = [
     )
 ]
 commands[2].options[0].choices = [discord.ApplicationCommandOptionChoice(
+                name='Leaver speed',
+                value='leaver'
+              ),
+              discord.ApplicationCommandOptionChoice(
+                name='Weekly leaver speed',
+                value='weekly'
+              )
+            ]
+commands[3].options[0].choices = [discord.ApplicationCommandOptionChoice(
                 name='Leaver speed',
                 value='leaver'
               ),
@@ -187,7 +209,10 @@ async def shuffle(ctx):
   command = Groovy.MusicCommand(ctx)
   await command.player.toggleShuffle(ctx)
 
-
+@bot.command(add_slash_command=False, name="search", description="Search youtube for something to play")
+async def play(ctx, input = '', *moreWords):
+  input = (input + ' ' + ' '.join(moreWords)).strip()
+  await CommandInterpreter.searchCommand(ctx, input)
 
 
 @bot.event

@@ -38,5 +38,32 @@ async def playCommand(ctx, input):  #Runs the play command and returns a respons
             try: await ctx.reply(embed=embed)
             except: await ctx.send(embed=embed)
 
+async def searchCommand(ctx, input):
+    embeds = []
+    try:
+        search = Groovy.Search(ctx, input)
+        search.player.channelID = ctx.channel.id
+        exitCode = await search.setupVC()
+        if exitCode=='joinedVoice' or exitCode=='noChange': pass
+        elif exitCode=='userNotInVoice': return [discord.Embed(description="You need to join a vc")]
+        elif exitCode=='movedToNewVoice': embeds.append(discord.Embed(description="Switched to your voice chat"))
+        elif exitCode=='alreadyPlayingInOtherVoice': return [discord.Embed(description="Sorry, I'm already playing music elsewhere in this server")]
+        resultString = await search.youtubeSearch()
+        embed = discord.Embed(title=f'Youtube seach for \"{input}\"', description=f"```{resultString}```")
+        embed.color = 7528669
+        embed.set_footer(text='Use `eli play {number}` to play one of these songs')
+        embeds.append(embed)
+
+        for embed in embeds:
+            try: await ctx.reply(embed=embed)
+            except: await ctx.send(embed=embed)
+    except:
+        traceback.print_exc()
+        embed = discord.Embed(description= f'An error occured')
+        embeds.append(embed)
+
+        for embed in embeds:
+            try: await ctx.reply(embed=embed)
+            except: await ctx.send(embed=embed)
 
     

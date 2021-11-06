@@ -460,6 +460,17 @@ class MusicCommand:
     async def shouldMoveToNewVC(self):
         return not (self.guild.voice_client.is_playing() or self.guild.voice_client.is_paused())
 
+    async def setupVC(self):  #Attempts to set up VC. Returns exit status
+        if not self.ctx.author.voice: return 'userNotInVoice'
+        elif self.guild.voice_client == None: 
+            await self.join(self.ctx.author.voice.channel)
+            return 'joinedVoice'
+        elif self.guild.voice_client.channel == self.ctx.author.voice.channel: return 'noChange'
+        elif await self.shouldMoveToNewVC(): 
+            await self.move(self.ctx.author.voice.channel)
+            return 'movedToNewVoice'
+        else: return 'alreadyPlayingInOtherVoice'
+
 class Play(MusicCommand):
 
     def parseInput(self, input: str):
@@ -471,7 +482,13 @@ class Play(MusicCommand):
         parsedURL = urllib.parse.urlparse(input)
         website = parsedURL.netloc.removeprefix("www.").removesuffix(".com").removeprefix("open.")
         if website == "":
-            returnDict['searchTerms'].append(input)
+            try: 
+                input = int(input)
+                if input <= 10 and input > 0 and self.player.lastSearch != None:
+                    returnDict['youtubeLinks'].append(self.player.lastSearch['result'][input-1]['link'])
+                input = ''
+            except ValueError:
+                returnDict['searchTerms'].append(input)
         elif website == "youtube":
             tempDict = self.handleYoutubeLink(parsedURL)
             returnDict.update(tempDict)
@@ -553,7 +570,7 @@ class Play(MusicCommand):
         return count
                     
     async def youtubeSearch(self, input):
-        videosSearch = VideosSearch(input, limit = 2)
+        videosSearch = VideosSearch(input, limit = 1)
         videosResult = await videosSearch.next()
         return videosResult['result'][0]['link']
 
@@ -608,25 +625,29 @@ class Play(MusicCommand):
         album = sp.album(URL)
         return [item['track'] for item in album['tracks']['items']]
 
-    async def setupVC(self):  #Attempts to set up VC. Returns exit status
-        if not self.ctx.author.voice: return 'userNotInVoice'
-        elif self.guild.voice_client == None: 
-            await self.join(self.ctx.author.voice.channel)
-            return 'joinedVoice'
-        elif self.guild.voice_client.channel == self.ctx.author.voice.channel: return 'noChange'
-        elif await self.shouldMoveToNewVC(): 
-            await self.move(self.ctx.author.voice.channel)
-            return 'movedToNewVoice'
-        else: return 'alreadyPlayingInOtherVoice'
-
     async def loadYoutubeLink(self, url):
         return YoutubeSong(ytdl.extract_info(url, download=False))
-
 
     def getPlayingNextEmbed(self):
         embed = discord.Embed(title="Playing Next", description= f"{self.player.playlist[0]['title']}")
         embed.color = 7528669
         return embed
+
+class Search(MusicCommand):
+    def __init__(self, ctx, input):
+        super().__init__(ctx, input)
+    
+    async def youtubeSearch(self):
+        videosSearch = VideosSearch(self.input, limit = 10)
+        videosResult = await videosSearch.next()
+        self.player.lastSearch = videosResult
+        return self.formatSearch(videosResult)
+
+    def formatSearch(self, videosResult):
+        return '\n'.join([
+            f"{videosResult['result'].index(item) + 1}) {item['title']} -------- {item['duration']}"
+            for item in videosResult['result']
+        ])
 
 class NowPlaying(MusicCommand):
     def __init__(self, message):
