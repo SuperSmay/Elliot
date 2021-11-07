@@ -1,11 +1,9 @@
 #Bot
 import discord
-from discord import member
-from discord import embeds
-from globalVariables import bot, unverifiedRole, joinChannel, musicPlayers
-from activeMessages import activeMessages
+from globalVariables import bot, unverifiedRole, joinChannel
 import Interaction
 import datetime
+from pathlib import Path
 import Leaderboard
 import Verify
 import Join
@@ -15,10 +13,8 @@ import BumpReminder
 import Groovy
 import CommandInterpreter
 
-TOKEN = "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
-## Uno2 - "NzM2NDE4MDkwNjI3MjM1OTUx.Xxugyg.dBM5qCUAdp3F4ALd7dvqdRh7mHQ"
-## Elliot - "ODQyOTkwODM4NDg1MDkwMzA2.YJ9WZQ.DnjiA1kxmS4YvErwNdWy7Vsfho0"
-## Speakers - "ODg4OTY0ODM2NzE1ODE5MDA5.YUaXBQ.mD8g16yaJmWpjxl0NowGQCun_a0"
+tokenFile = open(Path('token'), 'r')
+TOKEN = tokenFile.read()
 
 commands = [
     discord.ApplicationCommand(
