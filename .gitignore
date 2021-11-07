@@ -4,6 +4,7 @@ Leaderboard
 InteractionCount
 Inventory
 script.exp
+start.sh
 bin
 Elliot
 include
@@ -12,3 +13,4 @@ lib64
 .cache
 token
 extratokens
+test*.py
