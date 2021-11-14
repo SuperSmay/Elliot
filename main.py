@@ -146,6 +146,11 @@ async def on_message(message: discord.Message):
 
   if str(bot.user.id) in message.content:
     await message.add_reaction("<a:ping:866475995317534740>")
+
+  if (message.content.lower().startswith('scoot.boot()')):
+    embeds = await CommandInterpreter.joinCommand(await bot.get_context(message))
+    for embed in embeds:
+      await message.reply(embed=embed, mention_author= False)
   await bot.process_commands(message)
 
 @bot.command(add_slash_command=False, name="cutie", description="you are a cutie")

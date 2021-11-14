@@ -6,11 +6,7 @@ from globalVariables import bot
 
 async def playCommand(ctx, input, playSingleFirst=True):  #Runs the play command and returns a response embed
     embeds=[]
-    try: 
-        if len(input) == 0:  #If the input is empty, just unpause the music
-            command = Groovy.MusicCommand(ctx)
-            await command.player.pause(ctx)
-            return
+    try:
         play = Groovy.Play(ctx, input)
         play.player.channelID = ctx.channel.id
         exitCode = await play.setupVC()
@@ -18,6 +14,10 @@ async def playCommand(ctx, input, playSingleFirst=True):  #Runs the play command
         elif exitCode=='userNotInVoice': return [discord.Embed(description="You need to join a vc")]
         elif exitCode=='movedToNewVoice': embeds.append(discord.Embed(description="Switched to your voice chat"))
         elif exitCode=='alreadyPlayingInOtherVoice': return [discord.Embed(description="Sorry, I'm already playing music elsewhere in this server")]
+        if len(input) == 0:  #If the input is empty, just unpause the music
+            command = Groovy.MusicCommand(ctx)
+            await command.player.pause(ctx)
+            return embeds
         loadDict = play.parseInput(play.input)
         count = await play.addUnloadedSongs(loadDict)
         if count == 1 and playSingleFirst:
@@ -35,6 +35,23 @@ async def playCommand(ctx, input, playSingleFirst=True):  #Runs the play command
         embeds.append(embed)
 
         return embeds
+
+async def joinCommand(ctx):
+    embeds=[]
+    try:
+        play = Groovy.Play(ctx, input)
+        play.player.channelID = ctx.channel.id
+        exitCode = await play.setupVC()
+        if exitCode=='joinedVoice' or exitCode=='noChange': pass
+        elif exitCode=='userNotInVoice': return [discord.Embed(description="You need to join a vc")]
+        elif exitCode=='movedToNewVoice': embeds.append(discord.Embed(description="Switched to your voice chat"))
+        elif exitCode=='alreadyPlayingInOtherVoice': return [discord.Embed(description="Sorry, I'm already playing music elsewhere in this server")]
+    except:
+        traceback.print_exc()
+        embed = discord.Embed(description= f'An error occured')
+        embeds.append(embed)
+
+    return embeds
 
 async def searchCommand(ctx, input):
     embeds = []

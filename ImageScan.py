@@ -32,7 +32,7 @@ class MemberScanner:
 
     async def hasBadPfp(self):
         output = await self.scanImage()
-        if output['offensive']['prob'] > 0.5:
+        if output['offensive']['prob'] > 0.5 and len([box["label"] for box in self.output["offensive"]["boxes"] if box["prob"] > 0.5 and box["label"] != 'middlefinger']) > 0:
             return True
         return False
         
@@ -45,5 +45,5 @@ class MemberScanner:
 
     async def takeAction(self):
         channel = self.guild.get_channel(logChannel[self.guild.id])
-        await channel.send(f"<@243759220057571328> Suspicious profile picture containing `{self.getReasons()}` from {self.member.mention}")
+        await channel.send(f"<@811369189658591233>, <@811376322584641606>, <@811441753194233856>: New user {self.member.mention} has a profile picture containing `{self.getReasons()}`")
         # <@811369189658591233>, <@811376322584641606>, <@811441753194233856> Mod role pings
