@@ -178,6 +178,10 @@ class MusicPlayer:
         EventHandlers.registerCallbacks(self.guildID)
 
     async def playNext(self):
+        if len(self.playlist) == 0:
+            guild = await bot.fetch_guild(self.guildID)
+            if guild.voice_client != None: guild.voice_client.stop()
+            return
         index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
         if self.playThisNext != None: 
             try:
@@ -185,6 +189,9 @@ class MusicPlayer:
                 self.playThisNext = None
             except ValueError:
                 index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
+        while (not isinstance(self.playlist[index], LoadedSong)):
+            index = random.randint(0, len(self.playlist) - 1) if self.shuffle else 0
+            await asyncio.sleep(1)
         try: 
             guild = await bot.fetch_guild(self.guildID)
             player = YTDLSource.from_url(YTDLSource, self.playlist[index].data, loop=bot.loop, stream=True)
@@ -200,6 +207,10 @@ class MusicPlayer:
             if len(self.playlist) > 0:
                 await self.playNext()
             await Events.DownloadError.call(self, self.guildID, unloadedSong)
+        except:
+            del(self.playlist[index])
+            if len(self.playlist) > 0:
+                await self.playNext()
             
     async def skip(self, ctx=None):
         player = None
@@ -289,11 +300,7 @@ class EventHandlers:
         await EventHandlers._sendGeneric(player, f'Failed to load {unloadedSong.term}', ctx)
 
     async def _songEnd(player, e):
-        if len(player.playlist) > 0:
-            await player.playNext()
-        else:
-            guild = await bot.fetch_guild(player.guildID)
-            if guild.voice_client != None: guild.voice_client.stop()
+        await player.playNext()
         if e != None:
             print(f"Exception occured: {e}")
 
@@ -648,7 +655,7 @@ class NowPlaying(MusicCommand):
 class Playlist(MusicCommand):
 
     def getPlaylistString(self):
-        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.getTitle()}" for song in self.player.playlist[:20]])) + "```" if len(self.player.playlist) > 0 else '```Nothing to play next```'
+        return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title}" for song in self.player.playlist[:20]])) + "```" if len(self.player.playlist) > 0 else '```Nothing to play next```'
         
     async def send(self):
         try: await self.ctx.reply(self.getPlaylistString())
