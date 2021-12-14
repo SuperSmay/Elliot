@@ -33,12 +33,12 @@ class DownloadError:
     def removeCallback(guildID, callback):
         if not guildID in downloadErrorCallbacks.keys(): return
         downloadErrorCallbacks[guildID].remove(callback)
-    async def call(player, guildID, unloadedSong, ctx = None):
+    async def call(player, guildID, unloadedSong, e, ctx = None):
         if not guildID in downloadErrorCallbacks.keys(): return
         for callback in downloadErrorCallbacks[guildID]:
             if callable(callback):
-                if inspect.iscoroutinefunction(callback, ctx): await callback(player, unloadedSong)   
-                else: callback(player, unloadedSong, ctx)
+                if inspect.iscoroutinefunction(callback): await callback(player, unloadedSong, e, ctx)   
+                else: callback(player, unloadedSong, e, ctx)
 
 class SongPlaybackStart:
     def addCallback(guildID, callback):

@@ -201,16 +201,18 @@ class MusicPlayer:
             else: guild.voice_client.play(player, after= lambda e: bot.loop.create_task(Events.SongEnd.call(self, self.guildID, e)))
             self.currentPlayer = player
             await Events.SongPlaybackStart.call(self, self.guildID, player)
-        except youtube_dl.DownloadError:
+        except youtube_dl.DownloadError as e:
             unloadedSong = self.playlist[index]
-            del(self.playlist[index])
             if len(self.playlist) > 0:
                 await self.playNext()
-            await Events.DownloadError.call(self, self.guildID, unloadedSong)
+            await Events.DownloadError.call(self, self.guildID, unloadedSong, e)
+            del(self.playlist[index])
         except:
-            del(self.playlist[index])
+            unloadedSong = self.playlist[index]
             if len(self.playlist) > 0:
                 await self.playNext()
+            await Events.DownloadError.call(self, self.guildID, unloadedSong, 'Unknown')
+            del(self.playlist[index])
             
     async def skip(self, ctx=None):
         player = None
@@ -263,6 +265,8 @@ class MusicPlayer:
                 title, status = (future.result())
                 if status == 'success':
                     count += 1
+                else:
+                    await Events.DownloadError.call(self, self.guildID, song, status)
                 await self.playIfNothingPlaying()
         await Events.LoadingComplete.call(self, self.guildID, count, playThisNext=playThisNext, title=title, ctx=ctx)
 
@@ -276,7 +280,9 @@ class MusicPlayer:
     def loadDataInThread(self, song):
         if isinstance(song, UnloadedURL):
             try: data = song.data
-            except youtube_dl.DownloadError: return None, 'downloadError'
+            except youtube_dl.DownloadError as e:
+                del(self.playlist[self.playlist.index(song)])
+                return song.title, e
             try: 
                 self.playlist[self.playlist.index(song)] = data
                 if self.playThisNext == song: self.playThisNext = data
@@ -296,8 +302,8 @@ class EventHandlers:
             try: await ctx.reply(embed=embed)
             except: await ctx.send(embed=embed)
 
-    async def _sendDownloadError(player, unloadedSong, ctx):
-        await EventHandlers._sendGeneric(player, f'Failed to load {unloadedSong.term}', ctx)
+    async def _sendDownloadError(player, unloadedSong, e, ctx):
+        await EventHandlers._sendGeneric(player, f'Failed to load {unloadedSong.text}. `{e}`', ctx)
 
     async def _songEnd(player, e):
         await player.playNext()
@@ -337,6 +343,8 @@ class EventHandlers:
                 embed= discord.Embed(description=f'{title} will play next', color=7528669)
         elif count != 0:
             embed= discord.Embed(description=f'Successfully added {count} items', color=7528669)
+        elif count == 0:
+            return
         
         if ctx == None: 
             channel = bot.get_channel(player.channelID)
