@@ -12,27 +12,26 @@ import discord.ext.commands
 
 class BaseInteraction:
 
-    def __init__(self, ctx:discord.ext.commands.Context, interaction):
+    def __init__(self, ctx:discord.ext.commands.Context, args, interaction):
         self.ctx = ctx
         self.interaction = interaction
-        self.arguments = ctx.args[1:]
+        self.arguments = args
         self.nameList = []
         self.includedMessage = ""
         self.footer = ""
 
-    async def send(self):  #Replys with the embed or an error
+    async def run(self):  #Replys with the embed or an error
         try:
             userIDList, includedMessage = self.splitIntoIDsAndMessage()
             self.updateCounts(userIDList)
-            try: await self.ctx.reply(embed= await self.embed(userIDList, includedMessage), mention_author= False)
-            except: await self.ctx.send(embed= await self.embed(userIDList, includedMessage))
+            return [await self.embed(userIDList, includedMessage)]
         except:
             error = traceback.format_exc()
             error = error.replace("c:\\Users\\31415\\Dropbox\\AmesBot", "bot")
             error += f"\nVars:\nInteraction: {self.interaction}\nArguments: {self.arguments}\nnameList: {self.nameList}\nincludedMessage: {self.includedMessage}"
-            await self.ctx.send(content= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
+            embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
             traceback.print_exc()
-            return
+            return [embed]
    
     def updateCounts(self, userIDList):
         if len(userIDList) > 0:
@@ -96,10 +95,6 @@ class BaseInteraction:
     
     def getColor(self):
         return random.choice(botGifs.colors)
-
-    # def getArguments(self):
-    #     argString = self.message.content[len(prefix) + len(self.interaction) + 1:].strip()  #Remove the prefix and interaction by cutting the string by the length of those two combined
-    #     return argString.split(" ")
 
     def getIDFromPing(self, ping):
         id = ping.replace("<", "").replace(">", "").replace("@", "").replace("!", "").replace("&", "")

@@ -1,6 +1,9 @@
 #Bot
+from os import name
 import pathlib
 import discord
+from discord.commands import Option
+from discord.commands import OptionChoice
 from globalVariables import bot, unverifiedRole, joinChannel
 import Interaction
 import datetime
@@ -19,116 +22,116 @@ use_dev_mode = pathlib.Path.exists(Path('use-dev-mode')) and open(Path('use-dev-
 tokenFile = open(Path('token'), 'r') if not use_dev_mode else open(Path('token-dev'), 'r')
 TOKEN = tokenFile.read()
 
-commands = [
-    discord.ApplicationCommand(
-        name="cutie",
-        description="youre a cutie"
-    ),
-    discord.ApplicationCommand(
-        name="hug",
-        description="Hugs a user!",
-        options= 
-        [
-          discord.ApplicationCommandOption(
-            name="user",
-            type=discord.ApplicationCommandOptionType.user,
-            required=False,
-            description='User to hug'
-            ),
-          discord.ApplicationCommandOption(
-            name="message",
-            type=discord.ApplicationCommandOptionType.string,
-            required=False,
-            description='Messsage to include'
-            )
-        ]
-    ),
-    discord.ApplicationCommand(
-        name="leaderboard",
-        description="Shows a leaderboard",
-        options= 
-        [
-          discord.ApplicationCommandOption(
-            name="leaderboard",
-            type=discord.ApplicationCommandOptionType.string,
-            required=True,
-            description='Which leaderboard to show',
-            )
-        ]
-    ),
-    discord.ApplicationCommand(
-        name="play",
-        description="Play a song in your voice channel",
-        options= 
-        [
-          discord.ApplicationCommandOption(
-            name="input",
-            type=discord.ApplicationCommandOptionType.string,
-            required=True,
-            description='A link or search term'
-            )
-        ]
-    ),
-    discord.ApplicationCommand(
-        name="search",
-        description="Search youtube for something to play",
-        options= 
-        [
-          discord.ApplicationCommandOption(
-            name="input",
-            type=discord.ApplicationCommandOptionType.string,
-            required=True,
-            description='A search term'
-            )
-        ]
-    ),
-    discord.ApplicationCommand(
-        name="add",
-        description="Adds a song to the queue",
-        options= 
-        [
-          discord.ApplicationCommandOption(
-            name="input",
-            type=discord.ApplicationCommandOptionType.string,
-            required=True,
-            description='A link or search term'
-            )
-        ]
-    ),
-    discord.ApplicationCommand(
-        name="pause",
-        description="Pause the music"
-    ),
-    discord.ApplicationCommand(
-        name="playlist",
-        description="Shows the current playlist"
-    ),
-    discord.ApplicationCommand(
-        name="skip",
-        description="Skips the song"
-    ),
-    discord.ApplicationCommand(
-        name="disconnect",
-        description="Leave the vc"
-    ),
-    discord.ApplicationCommand(
-        name="nowplaying",
-        description="Show the now playing song"
-    ),
-    discord.ApplicationCommand(
-        name="shuffle",
-        description="Toggle shuffle mode"
-    )
-]
-commands[2].options[0].choices = [discord.ApplicationCommandOptionChoice(
-                name='Leaver speed',
-                value='leaver'
-              ),
-              discord.ApplicationCommandOptionChoice(
-                name='Weekly leaver speed',
-                value='weekly'
-              )
-            ]
+# commands = [
+#     discord.ApplicationCommand(
+#         name="cutie",
+#         description="youre a cutie"
+#     ),
+#     discord.ApplicationCommand(
+#         name="hug",
+#         description="Hugs a user!",
+#         options= 
+#         [
+#           discord.ApplicationCommandOption(
+#             name="user",
+#             type=discord.ApplicationCommandOptionType.user,
+#             required=False,
+#             description='User to hug'
+#             ),
+#           discord.ApplicationCommandOption(
+#             name="message",
+#             type=discord.ApplicationCommandOptionType.string,
+#             required=False,
+#             description='Messsage to include'
+#             )
+#         ]
+#     ),
+#     discord.ApplicationCommand(
+#         name="leaderboard",
+#         description="Shows a leaderboard",
+#         options= 
+#         [
+#           discord.ApplicationCommandOption(
+#             name="leaderboard",
+#             type=discord.ApplicationCommandOptionType.string,
+#             required=True,
+#             description='Which leaderboard to show',
+#             )
+#         ]
+#     ),
+#     discord.ApplicationCommand(
+#         name="play",
+#         description="Play a song in your voice channel",
+#         options= 
+#         [
+#           discord.ApplicationCommandOption(
+#             name="input",
+#             type=discord.ApplicationCommandOptionType.string,
+#             required=True,
+#             description='A link or search term'
+#             )
+#         ]
+#     ),
+#     discord.ApplicationCommand(
+#         name="search",
+#         description="Search youtube for something to play",
+#         options= 
+#         [
+#           discord.ApplicationCommandOption(
+#             name="input",
+#             type=discord.ApplicationCommandOptionType.string,
+#             required=True,
+#             description='A search term'
+#             )
+#         ]
+#     ),
+#     discord.ApplicationCommand(
+#         name="add",
+#         description="Adds a song to the queue",
+#         options= 
+#         [
+#           discord.ApplicationCommandOption(
+#             name="input",
+#             type=discord.ApplicationCommandOptionType.string,
+#             required=True,
+#             description='A link or search term'
+#             )
+#         ]
+#     ),
+#     discord.ApplicationCommand(
+#         name="pause",
+#         description="Pause the music"
+#     ),
+#     discord.ApplicationCommand(
+#         name="playlist",
+#         description="Shows the current playlist"
+#     ),
+#     discord.ApplicationCommand(
+#         name="skip",
+#         description="Skips the song"
+#     ),
+#     discord.ApplicationCommand(
+#         name="disconnect",
+#         description="Leave the vc"
+#     ),
+#     discord.ApplicationCommand(
+#         name="nowplaying",
+#         description="Show the now playing song"
+#     ),
+#     discord.ApplicationCommand(
+#         name="shuffle",
+#         description="Toggle shuffle mode"
+#     )
+# ]
+# commands[2].options[0].choices = [discord.ApplicationCommandOptionChoice(
+#                 name='Leaver speed',
+#                 value='leaver'
+#               ),
+#               discord.ApplicationCommandOptionChoice(
+#                 name='Weekly leaver speed',
+#                 value='weekly'
+#               )
+#             ]
 @bot.event
 async def on_ready():
   print("I love coffee")
@@ -138,7 +141,6 @@ async def on_ready():
     bot.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
   print("Starting VC loop")
   bot.loop.create_task(Groovy.CheckLoop.loop())
-  await bot.register_application_commands(commands=commands)
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -156,85 +158,152 @@ async def on_message(message: discord.Message):
       await message.reply(embed=embed, mention_author= False)
   await bot.process_commands(message)
 
-@bot.command(add_slash_command=False, name="cutie", description="you are a cutie")
+@bot.slash_command(name="cutie", description="you are a cutie", guild_ids=[866160840037236736])
 async def cutie(ctx):
-  print(f"Cutie command started at {datetime.datetime.now()}")
-  await ctx.send(embed=discord.Embed(description="ur a cutie 2 ;3"))
-  print(f"Cutie command complete at {datetime.datetime.now()}")
+  await ctx.respond(embed=discord.Embed(description="ur a cutie 2 ;3"))
 
-@bot.command(add_slash_command=False, name="hug", description="Hugs a user!")
-async def hug(ctx, *args, user=None, message=None):
-  if user != None: ctx.args.append(user)
-  print(message)
-  if message != None: ctx.args += message.split(' ')
-  interaction = Interaction.HugInteraction(ctx, "hug")
-  await interaction.send()
+@bot.command(name="cutie", description="you are a cutie")
+async def cutie(ctx):
+  await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
-@bot.command(add_slash_command=False, name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
+@bot.slash_command(name="hug", description="Hugs a user!", guild_ids=[866160840037236736])
+async def hug(ctx, user:Option(discord.Member, description='User to hug', required=False), message:Option(str, description='Message to include', required=False)):
+  args = []
+  if user != None: args.append(user.mention)
+  if message != None: args += message.split(' ')
+  interaction = Interaction.HugInteraction(ctx, args, "hug")
+  for embed in await interaction.run():
+    await ctx.respond(embed=embed)
+
+@bot.command(name="hug", description="Hugs a user!")
+async def hug(ctx, *args):
+  interaction = Interaction.HugInteraction(ctx, list(args[:1]), "hug")
+  for embed in await interaction.run():
+    await ctx.reply(embed=embed, mention_author=False)
+
+@bot.slash_command(name="leaderboard", description="Shows a leaderboard", guild_ids=[866160840037236736])
+async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
+  if leaderboard == 'weekly':
+    interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
+  elif leaderboard == 'leaver':
+    interaction = Leaderboard.timeLeaderboard(ctx.author)
+  embed = await interaction.getLeaderboardEmbed()
+  await ctx.respond(embed=embed)
+
+@bot.command(name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
 async def leaderboard(ctx, leaderboard='leaver'):
   if leaderboard == 'weekly':
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
   elif leaderboard == 'leaver':
     interaction = Leaderboard.timeLeaderboard(ctx.author)
   embed = await interaction.getLeaderboardEmbed()
-  try: await ctx.reply(embed=embed, mention_author= False)
-  except: await ctx.send(embed=embed)
+  await ctx.reply(embed=embed, mention_author= False)
 
-@bot.command(add_slash_command=False, name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
-async def play(ctx, input = '', *moreWords):
-  input += ' '.join(moreWords).strip()
+@bot.slash_command(name="play", description="Plays a song/playlist from Youtube/Spotify", guild_ids=[866160840037236736])
+async def play(ctx, input:Option(str, description='A link or search term', required=False, default='')):
+  await ctx.defer()
   embeds = await CommandInterpreter.playCommand(ctx, input)
   for embed in embeds:
-    try: await ctx.reply(embed=embed, mention_author= False)
-    except: await ctx.send(embed=embed)
+    await ctx.respond(embed=embed)
 
-@bot.command(add_slash_command=False, name="add", aliases=['a'], description="Adds a song/playlist to the queue from Youtube/Spotify")
-async def add(ctx, input = '', *moreWords):
-  input += ' '.join(moreWords).strip()
+@bot.command(name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
+async def play(ctx, input = '', *moreWords):
+  input = input + ' ' + ' '.join(moreWords).strip()
+  embeds = await CommandInterpreter.playCommand(ctx, input)
+  for embed in embeds:
+    await ctx.reply(embed=embed, mention_author= False)
+
+@bot.slash_command(name="add", description="Adds a song/playlist to the queue from Youtube/Spotify", guild_ids=[866160840037236736])
+async def add(ctx, input:Option(str, description='A link or search term', required=False, default='')):
+  await ctx.defer()
   embeds = await CommandInterpreter.addCommand(ctx, input)
   for embed in embeds:
-    try: await ctx.reply(embed=embed, mention_author= False)
-    except: await ctx.send(embed=embed)
+    await ctx.respond(embed=embed)
 
-@bot.command(add_slash_command=False, name="playlist", aliases=['pl'], description="Shows the current playlist")
+@bot.command(name="add", aliases=['a'], description="Adds a song/playlist to the queue from Youtube/Spotify")
+async def add(ctx, input = '', *moreWords):
+  input = input + ' ' + ' '.join(moreWords).strip()
+  embeds = await CommandInterpreter.addCommand(ctx, input)
+  for embed in embeds:
+    await ctx.reply(embed=embed, mention_author= False)
+
+@bot.slash_command(name="playlist", description="Shows the current playlist", guild_ids=[866160840037236736])
+async def playlist(ctx):
+  await ctx.defer()
+  playlist = Groovy.Playlist(ctx)
+  await ctx.respond(playlist.run())
+
+@bot.command(name="playlist", aliases=['pl'], description="Shows the current playlist")
 async def playlist(ctx):
   playlist = Groovy.Playlist(ctx)
-  await playlist.send()
+  await ctx.reply(playlist.run(),  mention_author=False)
 
-@bot.command(add_slash_command=False, name="skip", aliases=['s'], description="Skips the song")
+@bot.slash_command(name="skip", description="Skips the song", guild_ids=[866160840037236736])
 async def skip(ctx):
-  command = Groovy.MusicCommand(ctx)
-  await command.player.skip(ctx)
+  await ctx.defer()
+  command = Groovy.Skip(ctx)
+  await ctx.respond(embed=await command.skip())
 
-@bot.command(add_slash_command=False, name="pause", description="Pause the music")
+@bot.command(name="skip", aliases=['s'], description="Skips the song")
+async def skip(ctx):
+  command = Groovy.Skip(ctx)
+  await ctx.reply(embed=await command.skip(), mention_author=False)
+
+@bot.slash_command(name="pause", description="Pause/Unpause the music", guild_ids=[866160840037236736])
 async def pause(ctx):
-  command = Groovy.MusicCommand(ctx)
-  await command.player.pause(ctx)
+  command = Groovy.Pause(ctx)
+  await ctx.respond(embed=await command.pause())
 
-@bot.command(add_slash_command=False, aliases=['dc'], description="Leave the vc")
+@bot.command(name="pause", description="Pause/Unpause the music")
+async def pause(ctx):
+  command = Groovy.Pause(ctx)
+  await ctx.reply(embed=await command.pause(), mention_author=False)
+
+@bot.slash_command(name='disconnect', description="Leave the vc", guild_ids=[866160840037236736])
 async def disconnect(ctx):
   command = Groovy.MusicCommand(ctx)
   await command.player.disconnect(ctx)
 
-@bot.command(add_slash_command=False, name="nowplaying", aliases=['np'], description="Show the now playing song")
+@bot.command(aliases=['dc'], description="Leave the vc")
+async def disconnect(ctx):
+  command = Groovy.MusicCommand(ctx)
+  await command.player.disconnect(ctx)
+
+@bot.slash_command(name="nowplaying", description="Show the now playing song", guild_ids=[866160840037236736])
+async def np(ctx):
+  await ctx.defer()
+  np = Groovy.NowPlaying(ctx)
+  await ctx.respond(embed=np.getNowPlayingEmbed())
+
+@bot.command(name="nowplaying", aliases=['np'], description="Show the now playing song")
 async def np(ctx):
   np = Groovy.NowPlaying(ctx)
-  try: await ctx.reply(embed=np.getNowPlayingEmbed())
-  except: await ctx.send(embed=np.getNowPlayingEmbed())
+  await ctx.reply(embed=np.getNowPlayingEmbed(), mention_author=False)
 
-@bot.command(add_slash_command=False, name="shuffle", aliases=['sh'], description="Toggle shuffle mode")
+@bot.slash_command(name="shuffle", description="Toggle shuffle mode", guild_ids=[866160840037236736])
 async def shuffle(ctx):
-  command = Groovy.MusicCommand(ctx)
-  await command.player.toggleShuffle(ctx)
+  await ctx.defer()
+  command = Groovy.Shuffle(ctx)
+  await ctx.respond(embed=await command.shuffle())
 
-@bot.command(add_slash_command=False, name="search", description="Search youtube for something to play")
+@bot.command(name="shuffle", aliases=['sh'], description="Toggle shuffle mode")
+async def shuffle(ctx):
+  command = Groovy.Shuffle(ctx)
+  await ctx.reply(embed=await command.shuffle(), mention_author=False)
+
+@bot.slash_command(name="search", description="Search youtube for something to play", guild_ids=[866160840037236736])
+async def play(ctx, input:Option(str, description='Search term', required=True)):
+  await ctx.defer()
+  embeds = await CommandInterpreter.searchCommand(ctx, input)
+  for embed in embeds:
+    await ctx.respond(embed=embed)
+
+@bot.command(name="search", description="Search youtube for something to play")
 async def play(ctx, input = '', *moreWords):
   input = (input + ' ' + ' '.join(moreWords)).strip()
   embeds = await CommandInterpreter.searchCommand(ctx, input)
   for embed in embeds:
-    try: await ctx.reply(embed=embed, mention_author= False)
-    except: await ctx.send(embed=embed)
-
+    await ctx.reply(embed=embed, mention_author= False)
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):

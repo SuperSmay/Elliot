@@ -16,9 +16,9 @@ class Generic:
     def addCallback(guildID, callback, callbackDict):
         if not guildID in callbackDict.keys(): callbackDict[guildID] = []
         callbackDict[guildID].append(callback)
-    def removeCallback(guildID, callback, callbackDict):
+    def removeCallbacks(guildID, callbackDict):
         if not guildID in callbackDict.keys(): return
-        callbackDict[guildID].remove(callback)
+        callbackDict[guildID] = []
     async def call(player, guildID, callbackDict, ctx=None):
         if not guildID in callbackDict.keys(): return
         for callback in callbackDict[guildID]:
@@ -30,9 +30,9 @@ class DownloadError:
     def addCallback(guildID, callback):
         if not guildID in downloadErrorCallbacks.keys(): downloadErrorCallbacks[guildID] = []
         downloadErrorCallbacks[guildID].append(callback)
-    def removeCallback(guildID, callback):
+    def removeCallbacks(guildID):
         if not guildID in downloadErrorCallbacks.keys(): return
-        downloadErrorCallbacks[guildID].remove(callback)
+        downloadErrorCallbacks[guildID] = []
     async def call(player, guildID, unloadedSong, e, ctx = None):
         if not guildID in downloadErrorCallbacks.keys(): return
         for callback in downloadErrorCallbacks[guildID]:
@@ -44,9 +44,9 @@ class SongPlaybackStart:
     def addCallback(guildID, callback):
         if not guildID in songPlayedCallbacks.keys(): songPlayedCallbacks[guildID] = []
         songPlayedCallbacks[guildID].append(callback)
-    def removeCallback(guildID, callback):
+    def removeCallbacks(guildID):
         if not guildID in songPlayedCallbacks.keys(): return
-        songPlayedCallbacks[guildID].remove(callback)
+        songPlayedCallbacks[guildID] = []
     async def call(player, guildID, songPlayer):
         if not guildID in songPlayedCallbacks.keys(): return
         for callback in songPlayedCallbacks[guildID]:
@@ -58,9 +58,9 @@ class SongEnd:
     def addCallback(guildID, callback):
         if not guildID in songEndCallbacks.keys(): songEndCallbacks[guildID] = []
         songEndCallbacks[guildID].append(callback)
-    def removeCallback(guildID, callback):
+    def removeCallbacks(guildID):
         if not guildID in songEndCallbacks.keys(): return
-        songEndCallbacks[guildID].remove(callback)
+        songEndCallbacks[guildID] = []
     async def call(player, guildID, e):
         if not guildID in songEndCallbacks.keys(): return
         for callback in songEndCallbacks[guildID]:
@@ -72,9 +72,9 @@ class SongSkip:
     def addCallback(guildID, callback):
         if not guildID in songSkipCallbacks.keys(): songSkipCallbacks[guildID] = []
         songSkipCallbacks[guildID].append(callback)
-    def removeCallback(guildID, callback):
+    def removeCallbacks(guildID):
         if not guildID in songSkipCallbacks.keys(): return
-        songSkipCallbacks[guildID].remove(callback)
+        songSkipCallbacks[guildID] = []
     async def call(player, guildID, oldPlayer, ctx=None):
         if not guildID in songSkipCallbacks.keys(): return
         for callback in songSkipCallbacks[guildID]:
@@ -85,40 +85,40 @@ class SongSkip:
 class Disconnect:
     def addCallback(guildID, callback):
         Generic.addCallback(guildID, callback, disconnectCallbacks)
-    def removeCallback(guildID, callback):
-        Generic.removeCallback(guildID, callback, disconnectCallbacks)
+    def removeCallbacks(guildID):
+        Generic.removeCallbacks(guildID, disconnectCallbacks)
     async def call(player, guildID, ctx=None):
         await Generic.call(player, guildID, disconnectCallbacks, ctx)
 
 class Pause:
     def addCallback(guildID, callback):
         Generic.addCallback(guildID, callback, pauseCallbacks)
-    def removeCallback(guildID, callback):
-        Generic.removeCallback(guildID, callback, pauseCallbacks)
+    def removeCallbacks(guildID):
+        Generic.removeCallbacks(guildID, pauseCallbacks)
     async def call(player, guildID, ctx=None):
         await Generic.call(player, guildID, pauseCallbacks, ctx)
 
 class Unpause:
     def addCallback(guildID, callback):
         Generic.addCallback(guildID, callback, unpauseCallbacks)
-    def removeCallback(guildID, callback):
-        Generic.removeCallback(guildID, callback, unpauseCallbacks)
+    def removeCallbacks(guildID):
+        Generic.removeCallbacks(guildID, unpauseCallbacks)
     async def call(player, guildID, ctx=None):
         await Generic.call(player, guildID, unpauseCallbacks, ctx)
 
 class ShuffleEnable:
     def addCallback(guildID, callback):
         Generic.addCallback(guildID, callback, shuffleEnableCallbacks)
-    def removeCallback(guildID, callback):
-        Generic.removeCallback(guildID, callback, shuffleEnableCallbacks)
+    def removeCallbacks(guildID):
+        Generic.removeCallbacks(guildID, shuffleEnableCallbacks)
     async def call(player, guildID, ctx=None):
         await Generic.call(player, guildID, shuffleEnableCallbacks, ctx)
 
 class ShuffleDisable:
     def addCallback(guildID, callback):
         Generic.addCallback(guildID, callback, shuffleDisableCallbacks)
-    def removeCallback(guildID, callback):
-        Generic.removeCallback(guildID, callback, shuffleDisableCallbacks)
+    def removeCallbacks(guildID):
+        Generic.removeCallbacks(guildID, shuffleDisableCallbacks)
     async def call(player, guildID, ctx=None):
         await Generic.call(player, guildID, shuffleDisableCallbacks, ctx)
 
@@ -126,9 +126,9 @@ class LoadingComplete:
     def addCallback(guildID, callback):
         if not guildID in loadingCompleteCallbacks.keys(): loadingCompleteCallbacks[guildID] = []
         loadingCompleteCallbacks[guildID].append(callback)
-    def removeCallback(guildID, callback):
+    def removeCallbacks(guildID):
         if not guildID in loadingCompleteCallbacks.keys(): return
-        loadingCompleteCallbacks[guildID].remove(callback)
+        loadingCompleteCallbacks[guildID] = []
     async def call(player, guildID, count, title, playThisNext=False, ctx=None):
         if not guildID in loadingCompleteCallbacks.keys(): return
         for callback in loadingCompleteCallbacks[guildID]:
