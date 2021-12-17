@@ -158,7 +158,7 @@ async def on_message(message: discord.Message):
       await message.reply(embed=embed, mention_author= False)
   await bot.process_commands(message)
 
-@bot.slash_command(name="cutie", description="you are a cutie", guild_ids=[866160840037236736])
+@bot.slash_command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
   await ctx.respond(embed=discord.Embed(description="ur a cutie 2 ;3"))
 
@@ -166,7 +166,7 @@ async def cutie(ctx):
 async def cutie(ctx):
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
-@bot.slash_command(name="hug", description="Hugs a user!", guild_ids=[866160840037236736])
+@bot.slash_command(name="hug", description="Hugs a user!")
 async def hug(ctx, user:Option(discord.Member, description='User to hug', required=False), message:Option(str, description='Message to include', required=False)):
   args = []
   if user != None: args.append(user.mention)
@@ -181,7 +181,7 @@ async def hug(ctx, *args):
   for embed in await interaction.run():
     await ctx.reply(embed=embed, mention_author=False)
 
-@bot.slash_command(name="leaderboard", description="Shows a leaderboard", guild_ids=[866160840037236736])
+@bot.slash_command(name="leaderboard", description="Shows a leaderboard")
 async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
   if leaderboard == 'weekly':
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
@@ -199,7 +199,7 @@ async def leaderboard(ctx, leaderboard='leaver'):
   embed = await interaction.getLeaderboardEmbed()
   await ctx.reply(embed=embed, mention_author= False)
 
-@bot.slash_command(name="play", description="Plays a song/playlist from Youtube/Spotify", guild_ids=[866160840037236736])
+@bot.slash_command(name="play", description="Plays a song/playlist from Youtube/Spotify")
 async def play(ctx, input:Option(str, description='A link or search term', required=False, default='')):
   await ctx.defer()
   embeds = await CommandInterpreter.playCommand(ctx, input)
@@ -213,7 +213,7 @@ async def play(ctx, input = '', *moreWords):
   for embed in embeds:
     await ctx.reply(embed=embed, mention_author= False)
 
-@bot.slash_command(name="add", description="Adds a song/playlist to the queue from Youtube/Spotify", guild_ids=[866160840037236736])
+@bot.slash_command(name="add", description="Adds a song/playlist to the queue from Youtube/Spotify")
 async def add(ctx, input:Option(str, description='A link or search term', required=False, default='')):
   await ctx.defer()
   embeds = await CommandInterpreter.addCommand(ctx, input)
@@ -227,7 +227,7 @@ async def add(ctx, input = '', *moreWords):
   for embed in embeds:
     await ctx.reply(embed=embed, mention_author= False)
 
-@bot.slash_command(name="playlist", description="Shows the current playlist", guild_ids=[866160840037236736])
+@bot.slash_command(name="playlist", description="Shows the current playlist")
 async def playlist(ctx):
   await ctx.defer()
   playlist = Groovy.Playlist(ctx)
@@ -238,7 +238,7 @@ async def playlist(ctx):
   playlist = Groovy.Playlist(ctx)
   await ctx.reply(playlist.run(),  mention_author=False)
 
-@bot.slash_command(name="skip", description="Skips the song", guild_ids=[866160840037236736])
+@bot.slash_command(name="skip", description="Skips the song")
 async def skip(ctx):
   await ctx.defer()
   command = Groovy.Skip(ctx)
@@ -249,7 +249,7 @@ async def skip(ctx):
   command = Groovy.Skip(ctx)
   await ctx.reply(embed=await command.skip(), mention_author=False)
 
-@bot.slash_command(name="pause", description="Pause/Unpause the music", guild_ids=[866160840037236736])
+@bot.slash_command(name="pause", description="Pause/Unpause the music")
 async def pause(ctx):
   command = Groovy.Pause(ctx)
   await ctx.respond(embed=await command.pause())
@@ -259,7 +259,7 @@ async def pause(ctx):
   command = Groovy.Pause(ctx)
   await ctx.reply(embed=await command.pause(), mention_author=False)
 
-@bot.slash_command(name='disconnect', description="Leave the vc", guild_ids=[866160840037236736])
+@bot.slash_command(name='disconnect', description="Leave the vc")
 async def disconnect(ctx):
   command = Groovy.MusicCommand(ctx)
   await command.player.disconnect(ctx)
@@ -269,7 +269,7 @@ async def disconnect(ctx):
   command = Groovy.MusicCommand(ctx)
   await command.player.disconnect(ctx)
 
-@bot.slash_command(name="nowplaying", description="Show the now playing song", guild_ids=[866160840037236736])
+@bot.slash_command(name="nowplaying", description="Show the now playing song")
 async def np(ctx):
   await ctx.defer()
   np = Groovy.NowPlaying(ctx)
@@ -280,7 +280,7 @@ async def np(ctx):
   np = Groovy.NowPlaying(ctx)
   await ctx.reply(embed=np.getNowPlayingEmbed(), mention_author=False)
 
-@bot.slash_command(name="shuffle", description="Toggle shuffle mode", guild_ids=[866160840037236736])
+@bot.slash_command(name="shuffle", description="Toggle shuffle mode")
 async def shuffle(ctx):
   await ctx.defer()
   command = Groovy.Shuffle(ctx)
@@ -291,7 +291,7 @@ async def shuffle(ctx):
   command = Groovy.Shuffle(ctx)
   await ctx.reply(embed=await command.shuffle(), mention_author=False)
 
-@bot.slash_command(name="search", description="Search youtube for something to play", guild_ids=[866160840037236736])
+@bot.slash_command(name="search", description="Search youtube for something to play")
 async def play(ctx, input:Option(str, description='Search term', required=True)):
   await ctx.defer()
   embeds = await CommandInterpreter.searchCommand(ctx, input)
