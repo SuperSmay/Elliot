@@ -1,4 +1,5 @@
 #Bot
+import pathlib
 import discord
 from globalVariables import bot, unverifiedRole, joinChannel
 import Interaction
@@ -13,7 +14,9 @@ import BumpReminder
 import Groovy
 import CommandInterpreter
 
-tokenFile = open(Path('token'), 'r')
+use_dev_mode = pathlib.Path.exists(Path('use-dev-mode')) and open(Path('use-dev-mode'), 'r').read().lower() == 'true'
+
+tokenFile = open(Path('token'), 'r') if not use_dev_mode else open(Path('token-dev'), 'r')
 TOKEN = tokenFile.read()
 
 commands = [

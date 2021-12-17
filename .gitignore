@@ -11,6 +11,7 @@ include
 lib
 lib64
 .cache
-token
+token*
 extratokens
 test*.py
+use-dev-mode
