@@ -223,6 +223,7 @@ class MusicPlayer:
             guild = await bot.fetch_guild(self.guildID)
             guild.voice_client.stop()
         await Events.SongSkip.call(self, self.guildID, player, ctx)
+        return player
         
     async def pause(self, ctx=None):
         guild = await bot.fetch_guild(self.guildID)
@@ -232,6 +233,7 @@ class MusicPlayer:
         else:
             guild.voice_client.pause()
             await Events.Pause.call(self, self.guildID, ctx)
+        return guild.voice_client.is_paused()
 
     async def toggleShuffle(self, ctx=None):
         if self.shuffle:
@@ -240,10 +242,15 @@ class MusicPlayer:
         else:
             self.shuffle = True
             await Events.ShuffleEnable.call(self, self.guildID, ctx)
+        return self.shuffle
 
     async def disconnect(self, ctx=None):
         guild = await bot.fetch_guild(self.guildID)
         await guild.voice_client.disconnect()
+        Events.DownloadError.removeCallbacks(self.guildID)
+        Events.SongEnd.removeCallbacks(self.guildID)
+        Events.Disconnect.removeCallbacks(self.guildID)
+        Events.LoadingComplete.removeCallbacks(self.guildID)
         del(musicPlayers[guild.id])
         await Events.Disconnect.call(self, self.guildID, ctx)
 
@@ -310,31 +317,8 @@ class EventHandlers:
         if e != None:
             print(f"Exception occured: {e}")
 
-    async def _sendSkipSong(player, oldPlayer, ctx):
-        embed= discord.Embed(title='Reached the end of queue') if oldPlayer == None else discord.Embed(title="Now Playing", description= f"{player.currentPlayer.title}")
-        embed.set_footer(text= 'Add more with `/p`!' if oldPlayer == None else f'Skipped {oldPlayer.title}')
-        embed.color = 7528669
-        if ctx == None: 
-            channel = bot.get_channel(player.channelID)
-            await channel.send(embed=embed)
-        else:
-            try: await ctx.reply(embed=embed)
-            except: await ctx.send(embed=embed)
-
     async def _sendDisconnect(player, ctx):
         await EventHandlers._sendGeneric(player, "Leaving VC", ctx)
-
-    async def _sendPause(player, ctx):
-        await EventHandlers._sendGeneric(player, "Paused Music", ctx)
-
-    async def _sendUnpause(player, ctx):
-        await EventHandlers._sendGeneric(player, 'Unpaused Music', ctx)
-
-    async def _sendShuffleEnable(player, ctx):
-        await EventHandlers._sendGeneric(player, "Enabled Shuffle", ctx)
-
-    async def _sendShuffleDisable(player, ctx):
-        await EventHandlers._sendGeneric(player, "Disabled Shuffle", ctx)
     
     async def _loadingComplete(player, count, playThisNext=False, title=None, ctx=None):
         if count == 1:
@@ -357,12 +341,7 @@ class EventHandlers:
     def registerCallbacks(guildID):
         Events.DownloadError.addCallback(guildID, EventHandlers._sendDownloadError)
         Events.SongEnd.addCallback(guildID, EventHandlers._songEnd)
-        Events.SongSkip.addCallback(guildID, EventHandlers._sendSkipSong)
         Events.Disconnect.addCallback(guildID, EventHandlers._sendDisconnect)
-        Events.Pause.addCallback(guildID, EventHandlers._sendPause)
-        Events.Unpause.addCallback(guildID, EventHandlers._sendUnpause)
-        Events.ShuffleEnable.addCallback(guildID, EventHandlers._sendShuffleEnable)
-        Events.ShuffleDisable.addCallback(guildID, EventHandlers._sendShuffleDisable)
         Events.LoadingComplete.addCallback(guildID, EventHandlers._loadingComplete)
 
 
@@ -665,10 +644,30 @@ class Playlist(MusicCommand):
     def getPlaylistString(self):
         return "```" + "\n".join(([f"{self.player.playlist.index(song) + 1}) {song.title}" for song in self.player.playlist[:20]])) + "```" if len(self.player.playlist) > 0 else '```Nothing to play next```'
         
-    async def send(self):
-        try: await self.ctx.reply(self.getPlaylistString())
-        except: await self.ctx.send(self.getPlaylistString())
+    def run(self):
+        return self.getPlaylistString()
 
+class Skip(MusicCommand):
+    async def skip(self):
+        oldPlayer = await self.player.skip()
+        embed= discord.Embed(title='Reached the end of queue') if oldPlayer == None else discord.Embed(title="Now Playing", description= f"{self.player.currentPlayer.title}")
+        embed.set_footer(text= 'Add more with `/p`!' if oldPlayer == None else f'Skipped {oldPlayer.title}')
+        embed.color = 7528669
+        return embed
+
+class Pause(MusicCommand):
+    async def pause(self):
+        newPauseState = await self.player.pause()
+        if newPauseState: embed = discord.Embed(description='Paused music')
+        else: embed = discord.Embed(description='Unpaused music')
+        return embed
+            
+class Shuffle(MusicCommand):
+    async def shuffle(self):
+        newPauseState = await self.player.toggleShuffle()
+        if newPauseState: embed = discord.Embed(description='Enabled shuffle')
+        else: embed = discord.Embed(description='Disabled shuffle')
+        return embed
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
         super().__init__(source, volume)
