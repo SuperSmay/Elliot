@@ -22,116 +22,6 @@ use_dev_mode = pathlib.Path.exists(Path('use-dev-mode')) and open(Path('use-dev-
 tokenFile = open(Path('token'), 'r') if not use_dev_mode else open(Path('token-dev'), 'r')
 TOKEN = tokenFile.read()
 
-# commands = [
-#     discord.ApplicationCommand(
-#         name="cutie",
-#         description="youre a cutie"
-#     ),
-#     discord.ApplicationCommand(
-#         name="hug",
-#         description="Hugs a user!",
-#         options= 
-#         [
-#           discord.ApplicationCommandOption(
-#             name="user",
-#             type=discord.ApplicationCommandOptionType.user,
-#             required=False,
-#             description='User to hug'
-#             ),
-#           discord.ApplicationCommandOption(
-#             name="message",
-#             type=discord.ApplicationCommandOptionType.string,
-#             required=False,
-#             description='Messsage to include'
-#             )
-#         ]
-#     ),
-#     discord.ApplicationCommand(
-#         name="leaderboard",
-#         description="Shows a leaderboard",
-#         options= 
-#         [
-#           discord.ApplicationCommandOption(
-#             name="leaderboard",
-#             type=discord.ApplicationCommandOptionType.string,
-#             required=True,
-#             description='Which leaderboard to show',
-#             )
-#         ]
-#     ),
-#     discord.ApplicationCommand(
-#         name="play",
-#         description="Play a song in your voice channel",
-#         options= 
-#         [
-#           discord.ApplicationCommandOption(
-#             name="input",
-#             type=discord.ApplicationCommandOptionType.string,
-#             required=True,
-#             description='A link or search term'
-#             )
-#         ]
-#     ),
-#     discord.ApplicationCommand(
-#         name="search",
-#         description="Search youtube for something to play",
-#         options= 
-#         [
-#           discord.ApplicationCommandOption(
-#             name="input",
-#             type=discord.ApplicationCommandOptionType.string,
-#             required=True,
-#             description='A search term'
-#             )
-#         ]
-#     ),
-#     discord.ApplicationCommand(
-#         name="add",
-#         description="Adds a song to the queue",
-#         options= 
-#         [
-#           discord.ApplicationCommandOption(
-#             name="input",
-#             type=discord.ApplicationCommandOptionType.string,
-#             required=True,
-#             description='A link or search term'
-#             )
-#         ]
-#     ),
-#     discord.ApplicationCommand(
-#         name="pause",
-#         description="Pause the music"
-#     ),
-#     discord.ApplicationCommand(
-#         name="playlist",
-#         description="Shows the current playlist"
-#     ),
-#     discord.ApplicationCommand(
-#         name="skip",
-#         description="Skips the song"
-#     ),
-#     discord.ApplicationCommand(
-#         name="disconnect",
-#         description="Leave the vc"
-#     ),
-#     discord.ApplicationCommand(
-#         name="nowplaying",
-#         description="Show the now playing song"
-#     ),
-#     discord.ApplicationCommand(
-#         name="shuffle",
-#         description="Toggle shuffle mode"
-#     )
-# ]
-# commands[2].options[0].choices = [discord.ApplicationCommandOptionChoice(
-#                 name='Leaver speed',
-#                 value='leaver'
-#               ),
-#               discord.ApplicationCommandOptionChoice(
-#                 name='Weekly leaver speed',
-#                 value='weekly'
-#               )
-#             ]
 @bot.event
 async def on_ready():
   print("I love coffee")
@@ -182,7 +72,7 @@ async def hug(ctx, *args):
     await ctx.reply(embed=embed, mention_author=False)
 
 @bot.slash_command(name="leaderboard", description="Shows a leaderboard")
-async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
+async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver time', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
   if leaderboard == 'weekly':
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
   elif leaderboard == 'leaver':
