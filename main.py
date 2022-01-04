@@ -50,6 +50,11 @@ async def on_message(message: discord.Message):
       await message.reply(embed=embed, mention_author= False)
   await bot.process_commands(message)
 
+@bot.event
+async def on_message_edit(oldMessage, newMessage: discord.Message):
+  if newMessage.author.bot: return
+  await bot.process_commands(newMessage)
+
 @bot.slash_command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
   await ctx.respond(embed=discord.Embed(description="ur a cutie 2 ;3"))
