@@ -1,10 +1,10 @@
 #Bot
-from os import name
 import pathlib
 import discord
 from discord.commands import Option
 from discord.commands import OptionChoice
 from globalVariables import bot, unverifiedRole, joinChannel
+import globalFiles
 import Interaction
 import datetime
 from pathlib import Path
@@ -29,9 +29,11 @@ async def on_ready():
   async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
     bot.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
-  print("Starting VC loop")
+  print("Starting VC Loop...")
   bot.loop.create_task(Groovy.CheckLoop.loop())
-
+  print("Starting File Save Loop...")
+  bot.loop.create_task(globalFiles.saveLoop())
+  
 @bot.event
 async def on_message(message: discord.Message):
   if message.author.bot: return
@@ -246,4 +248,12 @@ async def on_member_join(user):
 #     traceback.print_exc()
 #     print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
 
-bot.run(TOKEN)
+try:
+    bot.loop.run_until_complete(bot.start(token=TOKEN))
+except KeyboardInterrupt:
+    bot.loop.run_until_complete(bot.close())
+    print("Closing up, have a nice day!")
+    globalFiles.save()
+    # cancel all tasks lingering
+finally:
+    bot.loop.close()

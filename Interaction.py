@@ -5,10 +5,11 @@ from fnmatch import fnmatch
 import traceback
 import pathlib
 import json
-import random
 
 import discord
 import discord.ext.commands
+
+from globalFiles import interactionDict
 
 class BaseInteraction:
 
@@ -112,71 +113,47 @@ class BaseInteraction:
         return "https://images-ext-1.discordapp.net/external/jdZsQ2YnpjXowNPa42l7p52SKfc-iddn1YlpN_BXt3M/https/c.tenor.com/UhcyGsGpLNIAAAAM/hug-anime.gif"
     
     def getGiveCount(self, userID):
-        path = pathlib.Path(f"InteractionCount/{userID}")
-        if path.exists():
-            file = open(path, "r")
-            countDict = json.load(file)
-            file.close()
+        if str(userID) in interactionDict.keys():
+            countDict = interactionDict[str(userID)]
             if self.interaction in countDict.keys():
                 return countDict[self.interaction]["give"]
         return 0
     
     def addGiveCount(self, userID):
-        path = pathlib.Path(f"InteractionCount/{userID}")
-        if path.exists():
-            file = open(path, "r")
-            countDict = json.load(file)
-            file.close()
+        if str(userID) in interactionDict.keys():
+            countDict = interactionDict[str(userID)]
             if self.interaction in countDict.keys():
                 countDict[self.interaction]["give"] += 1
             else:
                 countDict[self.interaction] = {"give" : 0, "receive" : 0}
                 countDict[self.interaction]["give"] += 1
-            file = open(path, "w")
-            json.dump(countDict, file)
-            file.close()
             return countDict[self.interaction]["give"]
         else:
             countDict = {}
             countDict[self.interaction] = {"give" : 0, "receive" : 0}
             countDict[self.interaction]["give"] += 1
-            file = open(path, "w+")
-            json.dump(countDict, file)
-            file.close()
             return countDict[self.interaction]["give"]
 
     def getReceiveCount(self, userID):
-        path = pathlib.Path(f"InteractionCount/{userID}")
-        if path.exists():
-            file = open(path, "r")
-            countDict = json.load(file)
-            file.close()
+        if str(userID) in interactionDict.keys():
+            countDict = interactionDict[str(userID)]
             if self.interaction in countDict.keys():
                 return countDict[self.interaction]["receive"]
         return 0
     
     def addReceiveCount(self, userID):
-        path = pathlib.Path(f"InteractionCount/{userID}")
-        if path.exists():
-            file = open(path, "r")
-            countDict = json.load(file)
-            file.close()
+        if str(userID) in interactionDict.keys():
+            countDict = interactionDict[str(userID)]
             if self.interaction in countDict.keys():
                 countDict[self.interaction]["receive"] += 1
             else:
                 countDict[self.interaction] = {"give" : 0, "receive" : 0}
                 countDict[self.interaction]["receive"] += 1
-            file = open(path, "w")
-            json.dump(countDict, file)
-            file.close()
             return countDict[self.interaction]["receive"]
         else:
             countDict = {}
             countDict[self.interaction] = {"give" : 0, "receive" : 0}
             countDict[self.interaction]["receive"] += 1
-            file = open(path, "w+")
-            json.dump(countDict, file)
-            file.close()
             return countDict[self.interaction]["receive"]
 
 class HugInteraction(BaseInteraction):
