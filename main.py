@@ -74,7 +74,7 @@ async def hug(ctx, user:Option(discord.Member, description='User to hug', requir
 
 @bot.command(name="hug", description="Hugs a user!")
 async def hug(ctx, *args):
-  interaction = Interaction.HugInteraction(ctx, list(args[:1]), "hug")
+  interaction = Interaction.HugInteraction(ctx, list(args), "hug")
   for embed in await interaction.run():
     await ctx.reply(embed=embed, mention_author=False)
 

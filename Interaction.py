@@ -80,15 +80,16 @@ class BaseInteraction:
 
         userIDList = []
         messageList = []
-        while 0 < len(self.arguments):
-            if fnmatch(self.arguments[0], f"<@*{self.ctx.author.id}>") or self.arguments[0] == str(self.ctx.author.id):  #If the user that sent the message pinged themselves, skip adding it to the ping list
-                del self.arguments[0]
-            elif self.checkIfPingOrID(self.arguments[0]):  #If the argument is a ping or valid id of a user in the channel, add it to the ID list
-                userIDList.append(self.getIDFromPing(self.arguments[0]))
-                del self.arguments[0]
+        tempArgs = self.arguments.copy()
+        while 0 < len(tempArgs):
+            if fnmatch(tempArgs[0], f"<@*{self.ctx.author.id}>") or tempArgs[0] == str(self.ctx.author.id):  #If the user that sent the message pinged themselves, skip adding it to the ping list
+                del tempArgs[0]
+            elif self.checkIfPingOrID(tempArgs[0]) and not self.getIDFromPing(tempArgs[0]) in userIDList:  #If the argument is a ping or valid id of a user in the channel, and isn't already in the ID list, add it to the ID list
+                userIDList.append(self.getIDFromPing(tempArgs[0]))
+                del tempArgs[0]
             else:
-                messageList.append(self.arguments[0])
-                del self.arguments[0]
+                messageList.append(tempArgs[0])
+                del tempArgs[0]
 
         includedMessage = " ".join(messageList)
 
