@@ -267,5 +267,3 @@ except KeyboardInterrupt:
     # cancel all tasks lingering
 finally:
     bot.loop.close()
-    sleep(1)
-    exit()
