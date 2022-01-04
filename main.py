@@ -263,8 +263,9 @@ try:
 except KeyboardInterrupt:
     bot.loop.run_until_complete(bot.close())
     globalFiles.save()
-    sleep(1)
+    
     # cancel all tasks lingering
 finally:
     bot.loop.close()
+    sleep(1)
     print("Closing up, have a nice day!")
