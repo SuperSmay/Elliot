@@ -1,5 +1,6 @@
 #Bot
 import pathlib
+from time import sleep
 import discord
 from discord.commands import Option
 from discord.commands import OptionChoice
@@ -266,4 +267,5 @@ except KeyboardInterrupt:
     # cancel all tasks lingering
 finally:
     bot.loop.close()
+    sleep(1)
     exit()
