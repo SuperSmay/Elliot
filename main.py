@@ -48,6 +48,10 @@ async def on_message(message: discord.Message):
     embeds = await CommandInterpreter.joinCommand(await bot.get_context(message))
     for embed in embeds:
       await message.reply(embed=embed, mention_author= False)
+
+  if(message.content.lower() == 'save' and message.author.id == 243759220057571328):  #Jank af keyboard inturrupt ""fix""
+    globalFiles.save()
+
   await bot.process_commands(message)
 
 @bot.event
