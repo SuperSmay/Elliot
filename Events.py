@@ -6,6 +6,7 @@ songEndCallbacks = {}
 songSkipCallbacks = {}
 songSkipCallbacks = {}
 disconnectCallbacks = {}
+resetCallbacks = {}
 pauseCallbacks = {}
 unpauseCallbacks = {}
 shuffleEnableCallbacks = {}
@@ -15,7 +16,7 @@ loadingCompleteCallbacks = {}
 class Generic:
     def addCallback(guildID, callback, callbackDict):
         if not guildID in callbackDict.keys(): callbackDict[guildID] = []
-        callbackDict[guildID].append(callback)
+        if callback not in callbackDict[guildID]: callbackDict[guildID].append(callback)
     def removeCallbacks(guildID, callbackDict):
         if not guildID in callbackDict.keys(): return
         callbackDict[guildID] = []
@@ -29,7 +30,7 @@ class Generic:
 class DownloadError:
     def addCallback(guildID, callback):
         if not guildID in downloadErrorCallbacks.keys(): downloadErrorCallbacks[guildID] = []
-        downloadErrorCallbacks[guildID].append(callback)
+        if callback not in downloadErrorCallbacks[guildID]: downloadErrorCallbacks[guildID].append(callback)
     def removeCallbacks(guildID):
         if not guildID in downloadErrorCallbacks.keys(): return
         downloadErrorCallbacks[guildID] = []
@@ -43,7 +44,7 @@ class DownloadError:
 class SongPlaybackStart:
     def addCallback(guildID, callback):
         if not guildID in songPlayedCallbacks.keys(): songPlayedCallbacks[guildID] = []
-        songPlayedCallbacks[guildID].append(callback)
+        if callback not in songPlayedCallbacks[guildID]: songPlayedCallbacks[guildID].append(callback)
     def removeCallbacks(guildID):
         if not guildID in songPlayedCallbacks.keys(): return
         songPlayedCallbacks[guildID] = []
@@ -57,7 +58,7 @@ class SongPlaybackStart:
 class SongEnd:
     def addCallback(guildID, callback):
         if not guildID in songEndCallbacks.keys(): songEndCallbacks[guildID] = []
-        songEndCallbacks[guildID].append(callback)
+        if callback not in songEndCallbacks[guildID]: songEndCallbacks[guildID].append(callback)
     def removeCallbacks(guildID):
         if not guildID in songEndCallbacks.keys(): return
         songEndCallbacks[guildID] = []
@@ -71,7 +72,7 @@ class SongEnd:
 class SongSkip:
     def addCallback(guildID, callback):
         if not guildID in songSkipCallbacks.keys(): songSkipCallbacks[guildID] = []
-        songSkipCallbacks[guildID].append(callback)
+        if callback not in songSkipCallbacks[guildID]: songSkipCallbacks[guildID].append(callback)
     def removeCallbacks(guildID):
         if not guildID in songSkipCallbacks.keys(): return
         songSkipCallbacks[guildID] = []
@@ -89,6 +90,14 @@ class Disconnect:
         Generic.removeCallbacks(guildID, disconnectCallbacks)
     async def call(player, guildID, ctx=None):
         await Generic.call(player, guildID, disconnectCallbacks, ctx)
+
+class Reset:
+    def addCallback(guildID, callback):
+        Generic.addCallback(guildID, callback, resetCallbacks)
+    def removeCallbacks(guildID):
+        Generic.removeCallbacks(guildID, resetCallbacks)
+    async def call(player, guildID, ctx=None):
+        await Generic.call(player, guildID, resetCallbacks, ctx)
 
 class Pause:
     def addCallback(guildID, callback):

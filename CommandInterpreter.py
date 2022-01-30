@@ -15,8 +15,7 @@ async def playCommand(ctx, input, playSingleFirst=True):  #Runs the play command
         elif exitCode=='movedToNewVoice': embeds.append(discord.Embed(description="Switched to your voice chat"))
         elif exitCode=='alreadyPlayingInOtherVoice': return [discord.Embed(description="Sorry, I'm already playing music elsewhere in this server")]
         if len(input) == 0:  #If the input is empty, just unpause the music
-            command = Groovy.MusicCommand(ctx)
-            await command.player.pause(ctx)
+            await play.player.pause(ctx)
             return embeds
         loadDict = play.parseInput(play.input)
         count = await play.addUnloadedSongs(loadDict)

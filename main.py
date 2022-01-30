@@ -4,7 +4,7 @@ from time import sleep
 import discord
 from discord.commands import Option
 from discord.commands import OptionChoice
-from globalVariables import bot, unverifiedRole, joinChannel
+from globalVariables import bot, unverifiedRole, joinChannel, musicPlayers
 import globalFiles
 import Interaction
 import datetime
@@ -45,12 +45,7 @@ async def on_message(message: discord.Message):
   if str(bot.user.id) in message.content:
     await message.add_reaction("<a:ping:866475995317534740>")
 
-  if (message.content.lower().startswith('scoot.boot()')):
-    embeds = await CommandInterpreter.joinCommand(await bot.get_context(message))
-    for embed in embeds:
-      await message.reply(embed=embed, mention_author= False)
-
-  if(message.content.lower() == 'save' and message.author.id == 243759220057571328):  #Jank af keyboard inturrupt ""fix""
+  if(message.content.lower() == 'save' and message.author.id == 243759220057571328):  #Jank af keyboard inturrupt ""fix"" Also uneeded now but eh
     globalFiles.save()
 
   await bot.process_commands(message)
@@ -115,6 +110,18 @@ async def play(ctx, input = '', *moreWords):
   for embed in embeds:
     await ctx.reply(embed=embed, mention_author= False)
 
+@bot.slash_command(name='join', description="Have the bot join your current VC")
+async def join(ctx):
+    embeds = await CommandInterpreter.joinCommand(ctx)
+    for embed in embeds:
+      await ctx.respond(embed=embed, mention_author= False)
+
+@bot.command(name='join', description="Have the bot join your current VC")
+async def join(ctx):
+    embeds = await CommandInterpreter.joinCommand(ctx)
+    for embed in embeds:
+      await ctx.reply(embed=embed, mention_author= False)
+
 @bot.slash_command(name="add", description="Adds a song/playlist to the queue from Youtube/Spotify")
 async def add(ctx, input:Option(str, description='A link or search term', required=False, default='')):
   await ctx.defer()
@@ -170,6 +177,16 @@ async def disconnect(ctx):
 async def disconnect(ctx):
   command = Groovy.MusicCommand(ctx)
   await command.player.disconnect(ctx)
+
+@bot.slash_command(name='reset', description="Reset the music player")
+async def reset(ctx):
+  command = Groovy.MusicCommand(ctx)
+  await command.player.reset(ctx)
+
+@bot.command(name='reset', description="Reset the music player")
+async def reset(ctx):
+  command = Groovy.MusicCommand(ctx)
+  await command.player.reset(ctx)
 
 @bot.slash_command(name="nowplaying", description="Show the now playing song")
 async def np(ctx):
@@ -244,6 +261,12 @@ async def on_member_join(user):
   await join.send()
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
+
+# @bot.event
+# async def on_voice_state_update(member, before, after):
+#   if (member.id == bot.user.id and before.channel != None and after.channel == None and member.guild.id in musicPlayers.keys()):
+#     player = musicPlayers[member.guild.id]
+#     await player.disconnect()
 
 # @bot.event
 # async def on_raw_reaction_add(payload):  #When reaction added

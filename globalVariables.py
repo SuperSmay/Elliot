@@ -2,7 +2,8 @@ import discord
 from discord.ext import commands
 
 intents = discord.Intents().default()
-intents.members = True
+#intents.members = True
+intents.voice_states = True
 
 client = discord.Client(intents= intents)
 bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Test description", intents=intents)

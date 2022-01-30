@@ -247,12 +247,10 @@ class MusicPlayer:
     async def disconnect(self, ctx=None):
         guild = await bot.fetch_guild(self.guildID)
         await guild.voice_client.disconnect()
-        Events.DownloadError.removeCallbacks(self.guildID)
-        Events.SongEnd.removeCallbacks(self.guildID)
-        Events.Disconnect.removeCallbacks(self.guildID)
-        Events.LoadingComplete.removeCallbacks(self.guildID)
-        del(musicPlayers[guild.id])
         await Events.Disconnect.call(self, self.guildID, ctx)
+
+    async def reset(self, ctx=None):
+        await Events.Reset.call(self, self.guildID, ctx)
 
     async def loadingLoop(self, playThisNext=False, ctx=None):
         self.playLock = threading.Lock()
@@ -287,7 +285,7 @@ class MusicPlayer:
     def loadDataInThread(self, song):
         if isinstance(song, UnloadedURL):
             try: data = song.data
-            except youtube_dl.DownloadError as e:
+            except Exception as e:
                 del(self.playlist[self.playlist.index(song)])
                 return song.title, e
             try: 
@@ -319,6 +317,23 @@ class EventHandlers:
 
     async def _sendDisconnect(player, ctx):
         await EventHandlers._sendGeneric(player, "Leaving VC", ctx)
+
+    async def _cleanupAfterDisconnet(player: MusicPlayer, ctx):
+        pass
+
+    async def _sendReset(player, ctx):
+        await EventHandlers._sendGeneric(player, "Resetting music player...", ctx)
+
+    async def _cleanupBeforeReset(player: MusicPlayer, ctx):
+        await player.disconnect()
+        del(musicPlayers[player.guildID])
+        Events.DownloadError.removeCallbacks(player.guildID)
+        Events.SongEnd.removeCallbacks(player.guildID)
+        Events.Disconnect.removeCallbacks(player.guildID)
+        Events.Reset.removeCallbacks(player.guildID)
+        Events.LoadingComplete.removeCallbacks(player.guildID)
+        rejoinCommand = bot.get_application_command('join')
+        await rejoinCommand.invoke(ctx)
     
     async def _loadingComplete(player, count, playThisNext=False, title=None, ctx=None):
         if count == 1:
@@ -342,6 +357,9 @@ class EventHandlers:
         Events.DownloadError.addCallback(guildID, EventHandlers._sendDownloadError)
         Events.SongEnd.addCallback(guildID, EventHandlers._songEnd)
         Events.Disconnect.addCallback(guildID, EventHandlers._sendDisconnect)
+        Events.Disconnect.addCallback(guildID, EventHandlers._cleanupAfterDisconnet)
+        Events.Reset.addCallback(guildID, EventHandlers._sendReset)
+        Events.Reset.addCallback(guildID, EventHandlers._cleanupBeforeReset)
         Events.LoadingComplete.addCallback(guildID, EventHandlers._loadingComplete)
 
 
@@ -355,10 +373,9 @@ class CheckLoop:
             players = musicPlayersCopy.values()
             for player in players:
                 guild = await bot.fetch_guild(player.guildID)
-                if guild.voice_client == None or guild.voice_client.channel == None: del(musicPlayers[guild.id])
-                else:
+                if guild.voice_client != None: 
                     vc = guild.voice_client.channel
-                    if len(vc.members) > 1:
+                    if len(vc.members) > 0:
                         player.timeOfLastMember = datetime.datetime.now(datetime.timezone.utc)
                     else:
                         if (datetime.datetime.now(datetime.timezone.utc) - player.timeOfLastMember).total_seconds() > 300:
@@ -460,6 +477,9 @@ class MusicCommand:
             await self.move(self.ctx.author.voice.channel)
             return 'movedToNewVoice'
         else: return 'alreadyPlayingInOtherVoice'
+
+    async def reset(self):
+        self.player.reset(self.ctx)
 
 class Play(MusicCommand):
 
