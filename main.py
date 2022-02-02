@@ -4,7 +4,7 @@ from time import sleep
 import discord
 from discord.commands import Option
 from discord.commands import OptionChoice
-from globalVariables import bot, unverifiedRole, joinChannel, musicPlayers
+from globalVariables import bot, unverifiedRole, joinChannel, last_start_time
 import globalFiles
 import Interaction
 import datetime
@@ -17,6 +17,7 @@ import ImageScan
 import BumpReminder
 import Groovy
 import CommandInterpreter
+import BotInfo
 
 use_dev_mode = pathlib.Path.exists(Path('use-dev-mode')) and open(Path('use-dev-mode'), 'r').read().lower() == 'true'
 
@@ -25,8 +26,9 @@ TOKEN = tokenFile.read()
 
 @bot.event
 async def on_ready():
+  global last_start_time
   print("I love coffee")
-  
+  last_start_time = datetime.datetime.utcnow()
   async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
   print("Starting VC Loop...")
@@ -270,6 +272,7 @@ async def on_member_join(user):
 
 bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
+bot.add_cog(BotInfo.BotInfo())
 
 
 

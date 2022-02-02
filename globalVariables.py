@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import datetime
 
 intents = discord.Intents().default()
 #intents.members = True
@@ -9,6 +10,10 @@ client = discord.Client(intents= intents)
 bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Test description", intents=intents)
 
 prefix = "eli "
+
+bot_version = '0.2.1'
+
+last_start_time = datetime.datetime.utcnow()
 
 unverifiedRole = {
     811369107181666343 : 811453152061685760,
