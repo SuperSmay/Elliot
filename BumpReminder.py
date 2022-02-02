@@ -1,105 +1,104 @@
 import asyncio
 import datetime
+from unittest import expectedFailure
 import discord
+
+from discord.ext import commands, tasks
 
 from globalVariables import bot, bumpChannel, bumpRole
 
-bumpTasksEnabled = True
 
-bumpReminderTasks = {
-    811369107181666343 : False
-}
-#Run on bot startup
-async def startBumpReminderTask(guild):
+class BumpReminder(commands.Cog):
 
-    #Find last "bump success" message
-    def bumpMessageCheck(message):
-        return (message.author.id == 302050872383242240 and hasattr(message, 'embeds') and "Bump done! :thumbsup:" in message.embeds[0].description)
+    def __init__(self):
+        self.bumpReminderTasks = {}
 
-    def bumpRemindCheck(message):
-        return (message.author.id == bot.user.id and hasattr(message, 'embeds') and "Bump the server" in message.embeds[0].description)
+    #Run on bot startup
+    async def bump_task_start(self, guild):
 
-    bumpMessage = await getMessage(guild, bumpMessageCheck)
-    #print("Bump message found")
+        #Find last "bump success" message
+        def bump_message_check(message):
+            return (message.author.id == 302050872383242240 and hasattr(message, 'embeds') and "Bump done! :thumbsup:" in message.embeds[0].description)
 
-    if bumpMessage == None:
-        print("Bump message was empty, reminding now")
-        bot.loop.create_task(bumpReminderTask(0, guild))
-        return
+        def bump_remind_check(message):
+            return (message.author.id == bot.user.id and hasattr(message, 'embeds') and "Bump the server" in message.embeds[0].description)
 
-    #Get time since last bump message
-    timeSinceBump = datetime.datetime.now(datetime.timezone.utc) - bumpMessage.created_at
-    print(f"Time since bump is {timeSinceBump}")
+        bump_message = await self.get_message(guild, bump_message_check)
 
-    #Get time unitl next bump
-    timeUntilBump = datetime.timedelta(hours= 2) - timeSinceBump
-    #print(f"Time until bump us {timeUntilBump}")
+        if bump_message == None:
+            print("Bump message was empty, reminding now")
+            bot.loop.create_task(self.bump_reminder_task(0, guild))
+            return
 
-    bumpRemindMessage = await getMessage(guild, bumpRemindCheck)
-    #print("Got bump remind message")
+        time_since_bump = datetime.datetime.now(datetime.timezone.utc) - bump_message.created_at
+        print(f"Time since bump is {time_since_bump}")
 
-    #print(f"bumpRemindMessage.created_at - bumpMessage.created_at ({bumpRemindMessage.created_at} - {bumpMessage.created_at} = {bumpRemindMessage.created_at - bumpMessage.created_at}")
+        time_until_bump = datetime.timedelta(hours= 2) - time_since_bump
 
-    if bumpRemindMessage != None and (bumpRemindMessage.created_at - bumpMessage.created_at).total_seconds() > 0: 
-        print(f"Cancelling remind task and waiting because reminder was sent after last bump success")
-        bumpReminderTasks[guild.id] = False
-        return
+        bump_remind_message = await self.get_message(guild, bump_remind_check)
 
-    
-    #print("Creating new reminder sender task...")
-    #Start async task waiting for time until next bump
-    bot.loop.create_task(bumpReminderTask(timeUntilBump.total_seconds(), guild))
-    #print("Reminder sender task created")
+        time_since_bump_remind = datetime.datetime.now(datetime.timezone.utc) - bump_remind_message.created_at
+
+        if bump_remind_message != None and (bump_remind_message.created_at - bump_message.created_at).total_seconds() > 0 and not time_since_bump_remind.total_seconds() > 7200: 
+            print(f"Cancelling remind task and waiting because reminder was sent after last bump success and within two hours")
+            self.bumpReminderTasks[guild.id] = False
+            return
+
+        #Start async task waiting for time until next bump
+        bot.loop.create_task(self.bump_reminder_task(time_until_bump.total_seconds(), guild))
+        self.bumpReminderTasks[guild.id] = True
 
 
-async def getMessage(guild, search):
+    async def get_message(self, guild, search):
 
-    #Get channel
-    channel = await bot.fetch_channel(bumpChannel[guild.id])
+        #Get channel
+        channel = await bot.fetch_channel(bumpChannel[guild.id])
 
-    message = await channel.history(limit=50).find(search)
-    
-    if message == None:
-        message = await channel.history(limit=150).find(search)
+        message = await channel.history(limit=50).find(search)
+        
+        if message == None:
+            message = await channel.history(limit=150).find(search)
 
-    if message == None:
-        message = await channel.history(limit=1500).find(search)
+        if message == None:
+            message = await channel.history(limit=1500).find(search)
 
-    if message == None:
-        message = await channel.history(limit=None).find(search)
+        if message == None:
+            print(f'Could not find bump message within 1500 messages for {guild.name}/{channel.name}')
 
-    return message
+        return message
 
-#Make bump message
-def getReminderEmbed():
-    embed = discord.Embed(title= "⋅•⋅⊰∙∘☽ Its bump time! ☾∘∙⊱⋅•⋅ <:be:876937712135983203><:ta:876937712022745119>", description= "Bump the server with `!d bump`!", color= 7528669)
-    embed.set_thumbnail(url=bot.user.avatar.url)
-    return embed
+    #Make bump message
+    def get_reminder_embed(self):
+        embed = discord.Embed(title= "⋅•⋅⊰∙∘☽ Its bump time! ☾∘∙⊱⋅•⋅", description= "Bump the server with `!d bump`!", color= 7528669)
+        embed.set_thumbnail(url=bot.user.avatar.url)
+        return embed
 
-#Async tasks
-async def bumpReminderTask(waitTime, guild):
-    id = guild.id
-    #print(f"Bump reminder sender: Sleeping for {waitTime} seconds...")
-    await asyncio.sleep(waitTime)
-    #print("Bump reminder sender: Waking from sleep")
-    #print("Bump reminder sender: Getting channel")
-    channel = await bot.fetch_channel(bumpChannel[id])
-    #print("Bump reminder sender: Channel got")
-    #TEMPUser = await client.fetch_user(243759220057571328)
-    #await TEMPUser.send(embed= getReminderEmbed(guild))
-    await channel.send(embed= getReminderEmbed(), content= f"<@&{bumpRole[id]}>")
-    #print("Bump reminder sender: Sending reminder")
-    bumpReminderTasks[id] = False
-    #print("Bump reminder sender: task running set to False")
+    #Async tasks
+    async def bump_reminder_task(self, waitTime, guild):
+        id = guild.id
+        if waitTime < 0: waitTime = 0
+        await asyncio.sleep(waitTime)  #Sleep for waitTime seconds
+        #...zzz...
+        channel = await bot.fetch_channel(bumpChannel[id])  #Get channel
+        await channel.send(embed= self.get_reminder_embed(), content= f"<@&{bumpRole[id]}>")  #Send reminder
+        self.bumpReminderTasks[id] = False  #Set task running to False
 
-async def backgroundReminderRestarter(guild):
-    if guild.id not in bumpReminderTasks.keys(): return
-    if guild.id not in bumpChannel.keys(): return
-    print(f"Bump reminder task starter started for guild {guild.name}")
-    while bumpTasksEnabled == True:
+    @commands.Cog.listener()
+    async def on_ready(self):
+        self.bump_reminder_starter.start()
+        async for guild in bot.fetch_guilds():
+            if guild.id in bumpChannel.keys() and bumpRole.keys():
+                print(f"Bump reminder task started for guild {guild.name}")
+
+    @tasks.loop(minutes=15)
+    async def bump_reminder_starter(self):
         #print("Attempting reminder task start...")
-        if not bumpReminderTasks[guild.id]:
-            bumpReminderTasks[guild.id] = True
-            await startBumpReminderTask(guild)
-            #print('New reminder task started')
-        await asyncio.sleep(600)
+        async for guild in bot.fetch_guilds():
+            if guild.id not in bumpChannel.keys(): return
+            if guild.id not in bumpRole.keys(): return
+            if guild.id not in self.bumpReminderTasks.keys(): self.bumpReminderTasks[guild.id] = False
+            if not self.bumpReminderTasks[guild.id]:
+                try:
+                    await self.bump_task_start(guild)  #Start new task
+                except Exception as e:
+                    print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later

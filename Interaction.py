@@ -7,32 +7,78 @@ import pathlib
 import json
 
 import discord
-import discord.ext.commands
+from discord.ext import commands, tasks
+from discord.commands import Option, slash_command, context
 
-from globalFiles import interactionDict
+import asyncio
 
-class BaseInteraction:
+from globalVariables import bot, prefix
 
-    def __init__(self, ctx:discord.ext.commands.Context, args, interaction):
+
+class Interaction(commands.Cog):
+
+    def __init__(self):
+        self.interactionFile = pathlib.Path('interactionCountDict')
+        self.interactionDict = json.load(open(self.interactionFile, 'r'))
+
+        print("Starting File Save Loop...")
+        self.save_interaction_file.start()
+
+    def cog_unload(self):
+        self.save_interaction_file.cancel()
+
+    def saveFile(self, file):
+        open_file = open(file, 'w')
+        json.dump(self.interactionDict, open_file)
+        open_file.close()
+
+    @tasks.loop(minutes=30)
+    async def save_interaction_file(self):
+        self.saveFile(self.interactionFile)
+        print("Interaction file saved.")
+
+    @save_interaction_file.after_loop
+    async def interaction_loop_cancelled(self):
+        if self.save_interaction_file.is_being_cancelled():
+            self.saveFile(self.interactionFile)
+
+    @commands.command(name="hug", description="Hugs a user!")
+    async def hug_prefix(self, ctx, *args):
+        await ctx.reply(embed=HugInteraction(ctx, args).run_and_get_response(), mention_author=False)
+
+    @slash_command(name="hug", description="Hugs a user!")
+    async def hug_slash(self, ctx, user:Option(discord.Member, description='User to hug', required=False), message:Option(str, description='Message to include', required=False)):
+        args = []
+        if user != None: args.append(user.mention)
+        if message != None: args += message.split(' ')
+        await ctx.respond(embed=HugInteraction(ctx, args).run_and_get_response())
+
+    
+
+class BaseInteraction():
+
+    def __init__(self, ctx:commands.Context, args, interactionName):
         self.ctx = ctx
-        self.interaction = interaction
+        self.interactionName = interactionName
         self.arguments = args
         self.nameList = []
         self.includedMessage = ""
         self.footer = ""
 
-    async def run(self):  #Replys with the embed or an error
+        self.interactionDict = (bot.get_cog('Interaction')).interactionDict
+
+    def run_and_get_response(self):  #Replys with the embed or an error
         try:
             userIDList, includedMessage = self.splitIntoIDsAndMessage()
             self.updateCounts(userIDList)
-            return [await self.embed(userIDList, includedMessage)]
+            return self.embed(userIDList, includedMessage)
         except:
             error = traceback.format_exc()
-            error = error.replace("c:\\Users\\31415\\Dropbox\\AmesBot", "bot")
-            error += f"\nVars:\nInteraction: {self.interaction}\nArguments: {self.arguments}\nnameList: {self.nameList}\nincludedMessage: {self.includedMessage}"
+            error = error.replace("c:\\Users\\Smay\\Dropbox\\AmesBot", "bot")
+            error += f"\nVars:\nInteraction: {self.interactionName}\nArguments: {self.arguments}\nnameList: {self.nameList}\nincludedMessage: {self.includedMessage}"
             embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
             traceback.print_exc()
-            return [embed]
+            return embed
    
     def updateCounts(self, userIDList):
         if len(userIDList) > 0:
@@ -45,8 +91,8 @@ class BaseInteraction:
         countMessage = countMessage.replace(" 1 times", " once").replace("69", "69 hehe") if random.randint(0, 20) != 0 else countMessage.replace("1 times", "**o**__n__c*é*")
         return countMessage
 
-    async def embed(self, userIDList, includedMessage):  #Creates the embed to be sent
-        nameList = [(await self.ctx.guild.fetch_member(id)).display_name for id in userIDList]
+    def embed(self, userIDList, includedMessage):  #Creates the embed to be sent
+        nameList = [(self.ctx.guild.get_member(id)).display_name for id in userIDList]
         embedToReturn = discord.Embed(title= self.getEmbedTitle(nameList), description= includedMessage, color= self.getColor())
         embedToReturn.set_image(url= self.getImageURL(nameList))
         embedToReturn.set_footer(text= f"{self.getCountMessage()} {self.footer}" )
@@ -64,11 +110,11 @@ class BaseInteraction:
         return f"{self.ctx.author.display_name} --> {self.getJoinedNames(nameList)}"
 
     def getJoinedNames(self, nameList):  #Joins all the names used into a nice string
-        if len(nameList) < 2:
+        if len(nameList) == 1:
             return nameList[0]
         elif len(nameList) == 2:
             return f"{nameList[0]} and {nameList[1]}"
-        else: 
+        elif len(nameList) > 2: 
             return ", ".join(nameList[:-1]) + ", and " + nameList[-1]
 
     def checkIfPingOrID(self, ping):  #Check if the first ping is valid for the guild
@@ -80,7 +126,7 @@ class BaseInteraction:
 
         userIDList = []
         messageList = []
-        tempArgs = self.arguments.copy()
+        tempArgs = list(self.arguments)
         while 0 < len(tempArgs):
             if fnmatch(tempArgs[0], f"<@*{self.ctx.author.id}>") or tempArgs[0] == str(self.ctx.author.id):  #If the user that sent the message pinged themselves, skip adding it to the ping list
                 del tempArgs[0]
@@ -114,50 +160,55 @@ class BaseInteraction:
         return "https://images-ext-1.discordapp.net/external/jdZsQ2YnpjXowNPa42l7p52SKfc-iddn1YlpN_BXt3M/https/c.tenor.com/UhcyGsGpLNIAAAAM/hug-anime.gif"
     
     def getGiveCount(self, userID):
-        if str(userID) in interactionDict.keys():
-            countDict = interactionDict[str(userID)]
-            if self.interaction in countDict.keys():
-                return countDict[self.interaction]["give"]
+        if str(userID) in self.interactionDict.keys():
+            countDict = self.interactionDict[str(userID)]
+            if self.interactionName in countDict.keys():
+                return countDict[self.interactionName]["give"]
         return 0
     
     def addGiveCount(self, userID):
-        if str(userID) in interactionDict.keys():
-            countDict = interactionDict[str(userID)]
-            if self.interaction in countDict.keys():
-                countDict[self.interaction]["give"] += 1
+        if str(userID) in self.interactionDict.keys():
+            countDict = self.interactionDict[str(userID)]
+            if self.interactionName in countDict.keys():
+                countDict[self.interactionName]["give"] += 1
             else:
-                countDict[self.interaction] = {"give" : 0, "receive" : 0}
-                countDict[self.interaction]["give"] += 1
-            return countDict[self.interaction]["give"]
+                countDict[self.interactionName] = {"give" : 0, "receive" : 0}
+                countDict[self.interactionName]["give"] += 1
+            return countDict[self.interactionName]["give"]
         else:
             countDict = {}
-            countDict[self.interaction] = {"give" : 0, "receive" : 0}
-            countDict[self.interaction]["give"] += 1
-            return countDict[self.interaction]["give"]
+            self.interactionDict[str(userID)] = countDict
+            countDict[self.interactionName] = {"give" : 0, "receive" : 0}
+            countDict[self.interactionName]["give"] += 1
+            return countDict[self.interactionName]["give"]
 
     def getReceiveCount(self, userID):
-        if str(userID) in interactionDict.keys():
-            countDict = interactionDict[str(userID)]
-            if self.interaction in countDict.keys():
-                return countDict[self.interaction]["receive"]
+        if str(userID) in self.interactionDict.keys():
+            countDict = self.interactionDict[str(userID)]
+            if self.interactionName in countDict.keys():
+                return countDict[self.interactionName]["receive"]
         return 0
     
     def addReceiveCount(self, userID):
-        if str(userID) in interactionDict.keys():
-            countDict = interactionDict[str(userID)]
-            if self.interaction in countDict.keys():
-                countDict[self.interaction]["receive"] += 1
+        if str(userID) in self.interactionDict.keys():
+            countDict = self.interactionDict[str(userID)]
+            if self.interactionName in countDict.keys():
+                countDict[self.interactionName]["receive"] += 1
             else:
-                countDict[self.interaction] = {"give" : 0, "receive" : 0}
-                countDict[self.interaction]["receive"] += 1
-            return countDict[self.interaction]["receive"]
+                countDict[self.interactionName] = {"give" : 0, "receive" : 0}
+                countDict[self.interactionName]["receive"] += 1
+            return countDict[self.interactionName]["receive"]
         else:
             countDict = {}
-            countDict[self.interaction] = {"give" : 0, "receive" : 0}
-            countDict[self.interaction]["receive"] += 1
-            return countDict[self.interaction]["receive"]
+            self.interactionDict[str(userID)] = countDict
+            countDict[self.interactionName] = {"give" : 0, "receive" : 0}
+            countDict[self.interactionName]["receive"] += 1
+            return countDict[self.interactionName]["receive"]
 
 class HugInteraction(BaseInteraction):
+
+    def __init__(self, ctx: commands.Context, args):
+        super().__init__(ctx, args, 'hug')
 
     def noPingTitle(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants a hug..."

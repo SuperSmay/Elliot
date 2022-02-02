@@ -29,11 +29,9 @@ async def on_ready():
   
   async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
-    bot.loop.create_task(BumpReminder.backgroundReminderRestarter(guild))
   print("Starting VC Loop...")
   bot.loop.create_task(Groovy.CheckLoop.loop())
-  print("Starting File Save Loop...")
-  bot.loop.create_task(globalFiles.saveLoop())
+
   
 @bot.event
 async def on_message(message: discord.Message):
@@ -50,6 +48,9 @@ async def on_message(message: discord.Message):
 
   await bot.process_commands(message)
 
+
+
+
 @bot.event
 async def on_message_edit(oldMessage, newMessage: discord.Message):
   if newMessage.author.bot: return
@@ -62,21 +63,6 @@ async def cutie(ctx):
 @bot.command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
-
-@bot.slash_command(name="hug", description="Hugs a user!")
-async def hug(ctx, user:Option(discord.Member, description='User to hug', required=False), message:Option(str, description='Message to include', required=False)):
-  args = []
-  if user != None: args.append(user.mention)
-  if message != None: args += message.split(' ')
-  interaction = Interaction.HugInteraction(ctx, args, "hug")
-  for embed in await interaction.run():
-    await ctx.respond(embed=embed)
-
-@bot.command(name="hug", description="Hugs a user!")
-async def hug(ctx, *args):
-  interaction = Interaction.HugInteraction(ctx, list(args), "hug")
-  for embed in await interaction.run():
-    await ctx.reply(embed=embed, mention_author=False)
 
 @bot.slash_command(name="leaderboard", description="Shows a leaderboard")
 async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver time', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
@@ -281,11 +267,16 @@ async def on_member_join(user):
 #     traceback.print_exc()
 #     print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
 
+
+bot.add_cog(Interaction.Interaction())
+bot.add_cog(BumpReminder.BumpReminder())
+
+
+
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
 except KeyboardInterrupt:
     bot.loop.run_until_complete(bot.close())
-    globalFiles.save()
     
     # cancel all tasks lingering
 finally:
