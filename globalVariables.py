@@ -3,7 +3,7 @@ from discord.ext import commands
 import datetime
 
 intents = discord.Intents().default()
-#intents.members = True
+intents.members = True
 intents.voice_states = True
 
 client = discord.Client(intents= intents)

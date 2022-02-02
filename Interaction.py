@@ -8,7 +8,7 @@ import json
 
 import discord
 from discord.ext import commands, tasks
-from discord.commands import Option, slash_command, context
+from discord import Option
 
 import asyncio
 
@@ -46,7 +46,7 @@ class Interaction(commands.Cog):
     async def hug_prefix(self, ctx, *args):
         await ctx.reply(embed=HugInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
-    @slash_command(name="hug", description="Hugs a user!")
+    @commands.slash_command(name="hug", description="Hugs a user!")
     async def hug_slash(self, ctx, user:Option(discord.Member, description='User to hug', required=False), message:Option(str, description='Message to include', required=False)):
         args = []
         if user != None: args.append(user.mention)
@@ -60,7 +60,7 @@ class BaseInteraction():
     def __init__(self, ctx:commands.Context, args, interactionName):
         self.ctx = ctx
         self.interactionName = interactionName
-        self.arguments = args
+        self.arguments = list(args)
         self.nameList = []
         self.includedMessage = ""
         self.footer = ""
@@ -120,13 +120,16 @@ class BaseInteraction():
     def checkIfPingOrID(self, ping):  #Check if the first ping is valid for the guild
         if fnmatch(ping, "<@*>") and self.getIDFromPing(ping) in [user.id for user in self.ctx.channel.members]: return True
         elif ping in [str(user.id) for user in self.ctx.channel.members]: return True
+        elif len([user.id for user in self.ctx.channel.members]) == 1:  #If Intents.members is off for some reason or something else denies access to the channel member list then the bot's user is the only one found
+            print(f'Could not get members for channel: {self.ctx.channel.id} in guild {self.ctx.guild.name}! Assuming user is valid and continuing')
+            return True
         return False
 
     def splitIntoIDsAndMessage(self):  #Splits the arugments into the nameList and included message and stores them in the class variables
 
         userIDList = []
         messageList = []
-        tempArgs = list(self.arguments)
+        tempArgs = self.arguments.copy()
         while 0 < len(tempArgs):
             if fnmatch(tempArgs[0], f"<@*{self.ctx.author.id}>") or tempArgs[0] == str(self.ctx.author.id):  #If the user that sent the message pinged themselves, skip adding it to the ping list
                 del tempArgs[0]
