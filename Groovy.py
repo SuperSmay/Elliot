@@ -5,7 +5,19 @@ import urllib
 from globalVariables import musicPlayers, bot
 
 
-
+##TODO List
+    ## Youtube-DL simple youtube links
+    ## Play youtube-dl'd input correctly
+    ## Split youtube playlists
+    ## Convert simple spotify tracks
+    ## Split spotify playlists and albums
+    ## Play history (Youtube link or dl'd dict?)
+    ## Add command
+    ## Skip command
+    ## Playlist command (Properly this time)
+    ## Skip backwards command
+    ## 
+##
 
 class LoadedSong:
     def __init__(self) -> None:
@@ -122,7 +134,7 @@ class iPod:
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
     #Loaders
 
-    def process_input(self, ctx, input: str, add_to_queue: bool = False):
+    def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
         parsed_input = self.parse_input(input)
         for youtube_url in parsed_input['youtube_links']:
             self.receive_youtube_url(ctx, youtube_url, add_to_queue)
@@ -137,7 +149,7 @@ class iPod:
         for search_term in parsed_input['search_terms']:
             self.receive_search_term(ctx, search_term, add_to_queue)
 
-    def parse_input(self, input: str):
+    def parse_input(self, input: str) -> dict:
         output_dict = {'youtube_links' : [], 'youtube_playlist_links' : [], 'spotify_track_links' : [], 'spotify_album_links' : [], 'spotify_playlist_links' : [],'search_terms' : []}
         if input == "":
             return output_dict
