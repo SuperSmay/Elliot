@@ -1,17 +1,19 @@
 import discord
 from discord.ext import commands, tasks
 import urllib
+import youtube_dl
+import threading
 
 from globalVariables import musicPlayers, bot
 
 
 ##TODO List
-    ## Youtube-DL simple youtube links
-    ## Play youtube-dl'd input correctly
+    #/ Youtube-DL simple youtube links
     ## Split youtube playlists
     ## Convert simple spotify tracks
     ## Split spotify playlists and albums
     ## Play history (Youtube link or dl'd dict?)
+    ## Play youtube-dl'd input correctly
     ## Add command
     ## Skip command
     ## Playlist command (Properly this time)
@@ -19,9 +21,33 @@ from globalVariables import musicPlayers, bot
     ## 
 ##
 
+
+ytdlFormatOptions = {
+    'format': 'bestaudio/best',
+    'extractaudio': True,
+    'audioformat': 'mp3',
+    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+}
+
+ffmpegOptions = {
+    'options': '-vn',
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+}
+
+ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
+
 class LoadedSong:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, data) -> None:
+        self.data = data
 
 class UnloadedYoutubeSong:
     def __init__(self, youtube_url) -> None:
@@ -50,8 +76,8 @@ class UnloadedSpotifyPlaylist:
 class iPod:
     def __init__(self, ctx):
         self.shuffle = False
-        self.playlist = []
-        self.queue = []
+        self.loaded_playlist = []
+        self.loaded_queue = []
         self.unloaded_playlist = []
         self.unloaded_queue = []
 
@@ -73,7 +99,7 @@ class iPod:
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
 
-    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False):
+    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False):  #Correctly process and call events for a youtube link. Below functions are similar
         if add_to_queue:
             new_item = UnloadedYoutubeSong(youtube_url)
             self.unloaded_queue.append(new_item)
@@ -132,6 +158,16 @@ class iPod:
             new_item = UnloadedYoutubeSearch(search_term)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
+
+    def receive_loaded_data(self, ctx, loaded_data: dict, add_to_queue: bool = False):
+        if add_to_queue:
+            loaded_song = LoadedSong(loaded_data)
+            self.loaded_queue.append(loaded_song)
+            self.on_item_added_to_loaded_queue(ctx, loaded_song)
+        else:
+            loaded_song = UnloadedYoutubeSearch(loaded_data)
+            self.loaded_playlist.append(loaded_song)
+            self.on_item_added_to_loaded_playlist(ctx, loaded_song)
     #Loaders
 
     def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
@@ -209,22 +245,54 @@ class iPod:
         else:
             return {'search_terms' : [url]}
 
+    def load_data_in_thread(self, ctx, unloaded_item, add_to_queue = False):
+        if isinstance(unloaded_item, UnloadedYoutubeSong):
+            self.on_load_start(ctx, unloaded_item, add_to_queue)
+            try: 
+                url = unloaded_item.youtube_url
+                data = ytdl.extract_info(url, download=False)
+                self.receive_loaded_data(data, add_to_queue)
+                self.on_load_succeed(ctx, data, add_to_queue)
+
+            except Exception as e:
+                if unloaded_item in self.unloaded_queue: del(self.unloaded_queue[self.unloaded_queue.index(unloaded_item)])
+                if unloaded_item in self.unloaded_playlist: del(self.unloaded_playlist[self.unloaded_playlist.index(unloaded_item)])
+                self.on_load_fail(ctx, unloaded_item, e)
+        else:
+            print('Impropper object type passed')
+
     #Events
 
-    def on_item_added_to_unloaded_queue(self, ctx, unloaded_song: UnloadedYoutubeSong | UnloadedSpotifyTrack):
+    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
         print('Song added to queue event')
-        bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_song))
+        bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
+        thread = threading.Thread(target=self.load_data_in_thread, args = (ctx, unloaded_item, True))
+        thread.start()
+
+    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
+        print('Song added to playlist event')
+        bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
+        thread = threading.Thread(target=self.load_data_in_thread, args = (ctx, unloaded_item, False))
+        thread.start()
+
+    def on_item_added_to_loaded_queue(self, ctx, loaded_item):
         pass
 
-    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_song: UnloadedYoutubeSong | UnloadedSpotifyTrack):
-        print('Song added to playlist event')
-        bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_song))
+    def on_item_added_to_loaded_playlist(self, ctx, loaded_item):
         pass
 
     def on_play_command(self, ctx, input):
         print('Play command received')
         self.process_input(ctx, input)
 
+    def on_load_fail(self, ctx, data):
+        print('Load failed')
+
+    def on_load_start(self, ctx, unloaded_item, add_to_queue):
+        print('Load start')
+
+    def on_load_succeed(self, ctx, loaded_item, add_to_queue):
+        print('Load Succeed')
     #Discord VC support
 
     async def setupVC(self):  #Attempts to set up VC. Returns exit status
