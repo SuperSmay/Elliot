@@ -3,12 +3,14 @@ from discord.ext import commands, tasks
 import urllib
 import youtube_dl
 import threading
+import concurrent.futures
 
 from globalVariables import musicPlayers, bot
 
 
 ##TODO List
-    #/ Youtube-DL simple youtube links
+    ## Youtube-DL simple youtube links ✓
+    ## Rearrange 
     ## Split youtube playlists
     ## Convert simple spotify tracks
     ## Split spotify playlists and albums
@@ -80,8 +82,31 @@ class iPod:
         self.loaded_queue = []
         self.unloaded_playlist = []
         self.unloaded_queue = []
+        self.loading_running = False
 
         musicPlayers[ctx.guild.id] = self
+        
+    async def loading_loop(self):
+        self.loading_running = False
+        self.play_lock = threading.Lock()
+        count = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            executor.map(self.load_data_in_thread, self.unloaded_playlist)
+
+            futures = []
+            for unloaded_item in self.unloaded_playlist:
+                futures.append(
+                    executor.submit(
+                        self.load_data_in_thread, unloaded_item
+                    )
+                )
+            for future in concurrent.futures.as_completed(futures):
+                title, status = (future.result())
+                if status == 'success':
+                    count += 1
+                else:
+                    await Events.DownloadError.call(self, self.guildID, song, status)
+                await self.playIfNothingPlaying()
 
     #"Buttons"
 
@@ -247,12 +272,11 @@ class iPod:
 
     def load_data_in_thread(self, ctx, unloaded_item, add_to_queue = False):
         if isinstance(unloaded_item, UnloadedYoutubeSong):
-            self.on_load_start(ctx, unloaded_item, add_to_queue)
+            
             try: 
-                url = unloaded_item.youtube_url
-                data = ytdl.extract_info(url, download=False)
+                data = self.load_youtube_url(ctx, unloaded_item, add_to_queue)
                 self.receive_loaded_data(data, add_to_queue)
-                self.on_load_succeed(ctx, data, add_to_queue)
+                
 
             except Exception as e:
                 if unloaded_item in self.unloaded_queue: del(self.unloaded_queue[self.unloaded_queue.index(unloaded_item)])
@@ -260,6 +284,37 @@ class iPod:
                 self.on_load_fail(ctx, unloaded_item, e)
         else:
             print('Impropper object type passed')
+
+    def load_youtube_url(self, ctx, unloaded_item: UnloadedYoutubeSong, add_to_queue = False):  #Loads single youtube url and returns data dict
+        if not isinstance(unloaded_item, UnloadedYoutubeSong): raise TypeError(unloaded_item)
+        self.on_load_start(ctx, unloaded_item, add_to_queue)
+        data = ytdl.extract_info(unloaded_item.youtube_url, download=False)
+        self.on_load_succeed(ctx, data, add_to_queue)
+        return data
+
+    def get_links_from_youtube_playlist(self, unloaded_item: UnloadedYoutubePlaylist):
+        #extract playlist id from url
+        if not isinstance(unloaded_item, UnloadedYoutubePlaylist): raise TypeError(unloaded_item)
+        url = unloaded_item.youtube_playlist_url
+        parsed_url = urllib.parse.urlparse(link)
+        query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
+        playlist_id = query["list"][0]
+
+        youtube = googleapiclient.discovery.build("youtube", "v3", developerKey = "AIzaSyBT0Ihv9c2ijSrzZxp3EX3MHiTnoKvZpf8")
+
+        request = youtube.playlistItems().list(
+            part = "snippet",
+            playlistId = playlist_id,
+            maxResults = 500
+        )
+
+        playlist_items = []
+        while request is not None:
+            response = request.execute()
+            playlist_items += response["items"]
+            request = youtube.playlistItems().list_next(request, response)
+
+        return [f'https://www.youtube.com/watch?v={t["snippet"]["resourceId"]["videoId"]}' for t in playlist_items]
 
     #Events
 
