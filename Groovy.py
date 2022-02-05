@@ -1,4 +1,4 @@
-from lib2to3.pytree import type_repr
+import pathlib
 import discord
 from discord.ext import commands, tasks
 import urllib.parse
@@ -50,12 +50,12 @@ ffmpegOptions = {
 
 ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
 
-client_id = "53c8241a03e54b6fa0bbc93bf966bc8c"
-client_secret = "034fe6ec5ad945de82dfbe1938224523"
+client_id = open(pathlib.Path('spotify-id'), 'r')
+client_secret = open(pathlib.Path('spotify-secret'), 'r')
 client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
 sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
 
-yt = googleapiclient.discovery.build("youtube", "v3", developerKey = "AIzaSyBT0Ihv9c2ijSrzZxp3EX3MHiTnoKvZpf8")
+yt = googleapiclient.discovery.build("youtube", "v3", developerKey = open(pathlib.Path('youtube-api-key'), 'r'))
 
 class LoadedSong:
     def __init__(self, data) -> None:

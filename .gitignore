@@ -16,3 +16,6 @@ extratokens
 test*.py
 use-dev-mode
 InteractionCountDict
+youtube-api-key
+spotify-secret
+spotify-id
