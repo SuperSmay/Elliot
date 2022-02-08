@@ -58,10 +58,6 @@ sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spo
 
 yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
 
-class LoadedSong:
-    def __init__(self, data) -> None:
-        self.data = data
-
 
 class LoadedYoutubeSong:
     def __init__(self, youtube_data: dict) -> None:
@@ -112,6 +108,7 @@ class UserNotInVC(Exception): pass
 class MusicAlreadyPlayingInGuild(Exception): pass
 class CannotSpeakInVC(Exception): pass
 class CannotConnectToVC(Exception): pass
+class TriedPlayingWhenOutOfVC(Exception): pass
 
 class iPod:
     def __init__(self, ctx):
@@ -121,8 +118,7 @@ class iPod:
         self.unloaded_playlist = []
         self.unloaded_queue = []
         self.loading_running = False
-        self.lock = threading.Lock()
-
+    
         musicPlayers[ctx.guild.id] = self
         
     def loading_loop(self, ctx):
@@ -132,26 +128,26 @@ class iPod:
             futures = {executor.submit(self.load_data_in_thread, ctx, unloaded_item, False): unloaded_item for unloaded_item in self.unloaded_playlist}
 
             for future in concurrent.futures.as_completed(futures):
+                unloaded_item = futures[future]
                 if unloaded_item in self.unloaded_playlist: del(self.unloaded_playlist[self.unloaded_playlist.index(unloaded_item)])
                 try: 
                     loaded_item = future.result()
-                    self.on_load_succeed(ctx, futures[future], loaded_item, False)
+                    self.on_load_succeed(ctx, unloaded_item, loaded_item, False)
                     self.distrubute_loaded_input(ctx, loaded_item, add_to_queue=False)     
                 except Exception as e:
-                    unloaded_item = futures[future]
                     self.on_load_fail(ctx, unloaded_item, e)
             executor.shutdown(wait=False)
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 futures = {executor.submit(self.load_data_in_thread, ctx, unloaded_item, True): unloaded_item for unloaded_item in self.unloaded_queue}
 
                 for future in concurrent.futures.as_completed(futures):
+                    unloaded_item = futures[future]
                     if unloaded_item in self.unloaded_queue: del(self.unloaded_queue[self.unloaded_queue.index(unloaded_item)])
                     try: 
                         loaded_item = future.result()
-                        self.on_load_succeed(ctx, futures[future], loaded_item, False)
+                        self.on_load_succeed(ctx, unloaded_item, loaded_item, False)
                         self.distrubute_loaded_input(ctx, loaded_item, add_to_queue=True)
                     except Exception as e:
-                        unloaded_item = futures[future]
                         self.on_load_fail(ctx, unloaded_item, e)
             if len(self.unloaded_playlist) > 0 or len(self.unloaded_queue) > 0: self.loading_loop(ctx)
         except Exception as e:
@@ -161,15 +157,41 @@ class iPod:
 
     #"Buttons"
 
-    def play(song: LoadedSong):
+    def play(self, ctx: commands.Context, song: LoadedYoutubeSong):
         #Change player to this song
-        pass
+        try:
+            if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
+            source = YTDLSource.from_url(YTDLSource, song.youtube_data, loop=bot.loop, stream=True)
+            ctx.guild.voice_client.play(source, after= lambda e: self.on_during_play_fail(ctx, song, e))
+            self.on_song_play(ctx, song)
+        except Exception as e:
+            self.on_start_play_fail(ctx, song, e)
+ 
 
-    def skip(count: int = 1):
+    def play_next_item(self, ctx):
+        #Play next item
+        if len(self.loaded_queue) > 0:
+            new_song = self.loaded_queue[0]
+            if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
+            if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
+            self.play(ctx, new_song)
+        elif len(self.loaded_playlist) > 0:
+            new_song = self.loaded_playlist[0]
+            if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
+            if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
+            self.play(ctx, new_song)
+
+    def play_next_if_nothing_playing(self, ctx):
+        #Play next item if nothing is currently playing
+        if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
+            self.play_next_item(ctx)
+            
+
+    def skip(self, ctx, count: int = 1):
         #Skip {count} number of songs
         pass
 
-    def skip_backwards(count: int = 1):
+    def skip_backwards(self, ctx, count: int = 1):
         #Skip {count} number of songs backwards
         pass
 
@@ -451,10 +473,10 @@ class iPod:
             loading_thread.start()
 
     def on_item_added_to_loaded_queue(self, ctx, loaded_item):
-        pass
+        self.play_next_if_nothing_playing(ctx)
 
     def on_item_added_to_loaded_playlist(self, ctx, loaded_item):
-        pass
+        self.play_next_if_nothing_playing(ctx)
 
     async def on_play_command(self, ctx, input):
         print('Play command received')
@@ -502,6 +524,17 @@ class iPod:
     def on_vc_connect(self, ctx, channel):
         pass
         
+    def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
+        print('Song play')
+        pass
+
+    def on_start_play_fail(self, ctx, new_song: LoadedYoutubeSong, exception):
+        traceback.print_exc()
+        print('Play failed starting song')
+
+    def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
+        traceback.print_exc()
+        print('Play failed during song')
     #Discord VC support
 
     async def setup_vc(self, ctx: commands.Context):  #Attempts to set up VC. Runs any associated events and sends any error messages
@@ -532,6 +565,19 @@ class iPod:
         embed = discord.Embed(description='Item added')
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get('title')
+        self.url = data.get('url')
+
+    def from_url(cls, data, *, loop=None, stream=False):
+        loop = loop or asyncio.get_event_loop()
+        filename = data['url'] if stream else ytdl.prepare_filename(data)
+        source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
+        return cls(source, data=data)
 
 
 class Groovy(commands.Cog):
