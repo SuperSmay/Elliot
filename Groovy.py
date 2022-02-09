@@ -60,8 +60,9 @@ yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathl
 
 
 class LoadedYoutubeSong:
-    def __init__(self, youtube_data: dict) -> None:
+    def __init__(self, youtube_data: dict, part_of_playlist=False) -> None:
         self.youtube_data = youtube_data
+        self.part_of_playlist = part_of_playlist
 
 class LoadedYoutubePlaylist:
     def __init__(self, youtube_playlist_split_urls: list) -> None:
@@ -81,16 +82,18 @@ class LoadedSpotifyPlaylist:
 
 
 class UnloadedYoutubeSong:
-    def __init__(self, youtube_url) -> None:
+    def __init__(self, youtube_url, part_of_playlist = False) -> None:
         self.youtube_url = youtube_url
+        self.part_of_playlist = part_of_playlist
 
 class UnloadedYoutubePlaylist:
     def __init__(self, youtube_playlist_url) -> None:
         self.youtube_playlist_url = youtube_playlist_url
 
 class UnloadedYoutubeSearch:
-    def __init__(self, youtube_search) -> None:
+    def __init__(self, youtube_search, part_of_playlist) -> None:
         self.youtube_search = youtube_search
+        self.part_of_playlist = part_of_playlist
 
 class UnloadedSpotifyTrack:
     def __init__(self, spotify_track_url) -> None:
@@ -212,13 +215,13 @@ class iPod:
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
 
-    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False):  #Correctly process and call events for a youtube link. Below functions are similar
+    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False, part_of_playlist = False):  #Correctly process and call events for a youtube link. Below functions are similar
         if add_to_queue:
-            new_item = UnloadedYoutubeSong(youtube_url)
+            new_item = UnloadedYoutubeSong(youtube_url, part_of_playlist)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedYoutubeSong(youtube_url)
+            new_item = UnloadedYoutubeSong(youtube_url, part_of_playlist)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
@@ -262,13 +265,13 @@ class iPod:
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def receive_search_term(self, ctx, search_term: str, add_to_queue: bool = False):
+    def receive_search_term(self, ctx, search_term: str, add_to_queue: bool = False, part_of_playlist = False):
         if add_to_queue:
-            new_item = UnloadedYoutubeSearch(search_term)
+            new_item = UnloadedYoutubeSearch(search_term, part_of_playlist)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedYoutubeSearch(search_term)
+            new_item = UnloadedYoutubeSearch(search_term, part_of_playlist)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
@@ -284,7 +287,7 @@ class iPod:
 
     def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
         for url in loaded_playlist.youtube_playlist_split_urls:
-            self.receive_youtube_url(ctx, url, add_to_queue)
+            self.receive_youtube_url(ctx, url, add_to_queue, True)
 
     def receive_loaded_spotify_track(self, ctx, loaded_track: LoadedSpotifyTrack, add_to_queue: bool = False):
         track = loaded_track.spotify_track_data
@@ -295,13 +298,13 @@ class iPod:
         album = loaded_album.spotify_album_data
         for loaded_track in album['tracks']['items']:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
-            self.receive_search_term(ctx, title, add_to_queue)
+            self.receive_search_term(ctx, title, add_to_queue, True)
 
     def receive_loaded_spotify_playlist(self, ctx, loaded_playlist: LoadedSpotifyPlaylist, add_to_queue: bool = False):
         playlist = loaded_playlist.spotify_playlist_data
         for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
-            self.receive_search_term(ctx, title, add_to_queue)
+            self.receive_search_term(ctx, title, add_to_queue, True)
 
     #Loaders
 
@@ -396,7 +399,7 @@ class iPod:
     def load_data_in_thread(self, ctx, unloaded_item, add_to_queue = False):  #Blocking function to be called in a thread. Loads given input and returns constructed Loaded{Type} object
         if isinstance(unloaded_item, UnloadedYoutubeSong):
             data = self.load_youtube_url(ctx, unloaded_item, add_to_queue)
-            return LoadedYoutubeSong(data)
+            return LoadedYoutubeSong(data, unloaded_item.part_of_playlist)
         elif isinstance(unloaded_item, UnloadedYoutubePlaylist):
             data = self.load_youtube_playlist_url(ctx, unloaded_item, add_to_queue)
             return LoadedYoutubePlaylist(data)
@@ -411,7 +414,7 @@ class iPod:
             return LoadedSpotifyPlaylist(data)
         elif isinstance(unloaded_item, UnloadedYoutubeSearch):
             data = self.load_youtube_search(ctx, unloaded_item, add_to_queue)
-            return LoadedYoutubeSong(data)
+            return LoadedYoutubeSong(data, unloaded_item.part_of_playlist)
         else:
             raise TypeError(unloaded_item)
 
@@ -567,10 +570,14 @@ class iPod:
 
     def on_load_start(self, ctx, unloaded_item, add_to_queue):
         print('Load start')
+        if isinstance(unloaded_item, UnloadedYoutubeSong):
+            if not unloaded_item.part_of_playlist: bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
         print(unloaded_item)
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
         print('Load Succeed')
+        if isinstance(loaded_item, LoadedYoutubeSong):
+            if not loaded_item.part_of_playlist: bot.loop.create_task(self.respond_to_add_youtube_song(ctx, loaded_item))
 
     def on_vc_connect(self, ctx, channel):
         pass
@@ -628,6 +635,11 @@ class iPod:
 
     async def respond_to_add_item(self, ctx, item_added):
         embed = discord.Embed(description='Item added')
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_add_youtube_song(self, ctx, item_added: LoadedYoutubeSong):
+        embed = discord.Embed(description=f'Successfully added {item_added.youtube_data["title"]}')
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
