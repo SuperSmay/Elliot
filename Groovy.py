@@ -19,10 +19,10 @@ from globalVariables import musicPlayers, bot
     ## Split youtube playlists ✓
     ## Convert simple spotify tracks ✓
     ## Split spotify playlists and albums ✓
-    ## Play youtube-dl'd input correctly
-    ## Add command
-    ## Skip command
-    ## Playlist command (Properly this time)
+    ## Play youtube-dl'd input correctly ✓
+    ## Add command ✓
+    ## Skip command ✓
+    ## Playlist command ✓ (Properly this time)
     ## Skip backwards command
     ## Play history (Youtube link or dl'd dict?) 
 ##
@@ -160,9 +160,10 @@ class iPod:
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong):
         #Change player to this song
         try:
+            if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()
             if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
             source = YTDLSource.from_url(YTDLSource, song.youtube_data, loop=bot.loop, stream=True)
-            ctx.guild.voice_client.play(source, after= lambda e: self.on_during_play_fail(ctx, song, e))
+            ctx.guild.voice_client.play(source, after= lambda e: self.on_song_end_unknown(ctx, song, e))
             self.on_song_play(ctx, song)
         except Exception as e:
             self.on_start_play_fail(ctx, song, e)
@@ -170,16 +171,21 @@ class iPod:
 
     def play_next_item(self, ctx):
         #Play next item
+        #Returns whether or not a new song was started
         if len(self.loaded_queue) > 0:
             new_song = self.loaded_queue[0]
             if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
             if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
             self.play(ctx, new_song)
+            return True
         elif len(self.loaded_playlist) > 0:
             new_song = self.loaded_playlist[0]
             if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
             if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
             self.play(ctx, new_song)
+            return True
+        else:
+            return False
 
     def play_next_if_nothing_playing(self, ctx):
         #Play next item if nothing is currently playing
@@ -189,10 +195,19 @@ class iPod:
 
     def skip(self, ctx, count: int = 1):
         #Skip {count} number of songs
-        pass
+        if count < 1: raise ValueError('Count cannot be less than one')
+        
+        for i in range(count):
+            if len(self.loaded_playlist) > 0 or len(self.loaded_queue) > 0:
+                self.play_next_item(ctx)
+            else:
+                if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song
+                break
+
 
     def skip_backwards(self, ctx, count: int = 1):
         #Skip {count} number of songs backwards
+        if count < 1: raise ValueError('Count cannot be less than one')
         pass
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
@@ -478,11 +493,46 @@ class iPod:
     def on_item_added_to_loaded_playlist(self, ctx, loaded_item):
         self.play_next_if_nothing_playing(ctx)
 
-    async def on_play_command(self, ctx, input):
+    async def on_play_command(self, ctx, input, add_to_queue=False):
         print('Play command received')
         try:
             await self.setup_vc(ctx)
-            self.process_input(ctx, input, False)
+            self.process_input(ctx, input, add_to_queue)
+        except UserNotInVC as e:
+            embed = discord.Embed(description='You need to join a vc!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except MusicAlreadyPlayingInGuild as e:
+            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except CannotConnectToVC as e:
+            embed = discord.Embed(description='I don\'t have access to that voice channel!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except CannotSpeakInVC as e:
+            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except asyncio.TimeoutError as e:
+            embed = discord.Embed(description='Connection timed out.')
+            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except Exception as e:
+            traceback.print_exc()
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_playlist_command(self, ctx):
+        print('Playlist command receive')
+        await self.respond_to_playlist(ctx)
+
+    async def on_skip_command(self, ctx, count: int):
+        try:
+            await self.setup_vc(ctx)
+            self.skip(ctx, count)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -517,6 +567,7 @@ class iPod:
 
     def on_load_start(self, ctx, unloaded_item, add_to_queue):
         print('Load start')
+        print(unloaded_item)
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
         print('Load Succeed')
@@ -535,9 +586,23 @@ class iPod:
     def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
         traceback.print_exc()
         print('Play failed during song')
+
+    def on_song_end_unknown(self, ctx, song, exception=None):
+        #When a song ends due to an unknown cause, either an exception or the song completed
+        if exception == None:
+            self.on_song_end(ctx, song)
+            self.play_next_item(ctx)
+        else:
+            self.on_during_play_fail(ctx, song, exception)
+            self.play_next_item(ctx)
+
+    def on_song_end(self, ctx, song):
+        pass
+
     #Discord VC support
 
     async def setup_vc(self, ctx: commands.Context):  #Attempts to set up VC. Runs any associated events and sends any error messages
+        #FIXME Don't error if already in the requested vc regardless of perms
         if ctx.author.voice == None: 
             raise UserNotInVC
         if not ctx.author.voice.channel.permissions_for(ctx.guild.me).connect:
@@ -565,6 +630,16 @@ class iPod:
         embed = discord.Embed(description='Item added')
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
+
+    async def respond_to_playlist(self, ctx):
+        text_to_send = self.compile_playlist()
+        try: await ctx.reply(text_to_send, mention_author=False)
+        except: await ctx.respond(text_to_send)
+
+    def compile_playlist(self):
+        queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
+        playlist_title_list = [f"{self.loaded_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_playlist[:10]]
+        return "Queue\n```\n" + "\n".join(queue_title_list) + " ```\n" + "Playlist\n```\n" + "\n".join(playlist_title_list) + "```"if len(queue_title_list + playlist_title_list) > 0 else '```Nothing to play next```'
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
@@ -595,6 +670,25 @@ class Groovy(commands.Cog):
         input = input + ' ' + ' '.join(more_words).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input)
+
+    @commands.command(name='add', description='Plays a song!')
+    async def add(self, ctx, input: str = '', *more_words):
+        input = input + ' ' + ' '.join(more_words).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
+        player = self.get_player(ctx)
+        await player.on_play_command(ctx, input, True)
+
+    @commands.command(name='skip', description='Skips a song!')
+    async def skip(self, ctx, count: str = 1):
+        try: count = max(1, int(count))
+        except ValueError: count = 1
+        player = self.get_player(ctx)
+        await player.on_skip_command(ctx, count)
+        
+
+    @commands.command(name='playlist', description='Show playlist')
+    async def playlist(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_playlist_command(ctx)
         
 
     @commands.command(name='play-debug', description='Debug')
