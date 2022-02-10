@@ -11,7 +11,7 @@ bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Test descriptio
 
 prefix = "eli "
 
-bot_version = '0.2.1'
+bot_version = '0.3.0b1'
 
 last_start_time = datetime.datetime.utcnow()
 

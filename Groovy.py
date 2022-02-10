@@ -288,23 +288,26 @@ class iPod:
     def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
         for url in loaded_playlist.youtube_playlist_split_urls:
             self.receive_youtube_url(ctx, url, add_to_queue, True)
+        self.on_youtube_playlist_sort_complete(ctx, loaded_playlist)
 
     def receive_loaded_spotify_track(self, ctx, loaded_track: LoadedSpotifyTrack, add_to_queue: bool = False):
         track = loaded_track.spotify_track_data
         title = f"{track['artists'][0]['name']} - {track['name']}"
-        self.receive_search_term(ctx, title, add_to_queue)
+        self.receive_search_term(ctx, title, add_to_queue, False)
 
     def receive_loaded_spotify_album(self, ctx, loaded_album: LoadedSpotifyAlbum, add_to_queue: bool = False):
         album = loaded_album.spotify_album_data
         for loaded_track in album['tracks']['items']:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
             self.receive_search_term(ctx, title, add_to_queue, True)
+        self.on_spotify_album_sort_complete(ctx, loaded_album)
 
     def receive_loaded_spotify_playlist(self, ctx, loaded_playlist: LoadedSpotifyPlaylist, add_to_queue: bool = False):
         playlist = loaded_playlist.spotify_playlist_data
         for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
             self.receive_search_term(ctx, title, add_to_queue, True)
+        self.on_spotify_playlist_sort_complete(ctx, loaded_playlist)
 
     #Loaders
 
@@ -535,7 +538,9 @@ class iPod:
     async def on_skip_command(self, ctx, count: int):
         try:
             await self.setup_vc(ctx)
+            skipped_source = ctx.guild.voice_client.source
             self.skip(ctx, count)
+            self.on_skip(ctx, skipped_source, count)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -567,11 +572,14 @@ class iPod:
     def on_load_fail(self, ctx, unloaded_item, exception):
         print(f'Load failed with exception: {exception}')
         traceback.print_exc()
+        bot.loop.create_task(self.respond_to_add_item_failed(ctx, unloaded_item, exception))
 
     def on_load_start(self, ctx, unloaded_item, add_to_queue):
         print('Load start')
-        if isinstance(unloaded_item, UnloadedYoutubeSong):
-            if not unloaded_item.part_of_playlist: bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
+        if isinstance(unloaded_item, UnloadedYoutubeSong) or isinstance(unloaded_item, UnloadedYoutubeSearch):
+            if not unloaded_item.part_of_playlist: bot.loop.create_task(self.respond_to_add_item_unloaded(ctx, unloaded_item))
+        else:
+            bot.loop.create_task(self.respond_to_add_item_unloaded(ctx, unloaded_item))
         print(unloaded_item)
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
@@ -606,6 +614,19 @@ class iPod:
     def on_song_end(self, ctx, song):
         pass
 
+    def on_youtube_playlist_sort_complete(self, ctx, loaded_playlist: LoadedYoutubePlaylist):
+        pass
+
+    def on_spotify_album_sort_complete(self, ctx, loaded_album: LoadedSpotifyAlbum):
+        pass
+
+    def on_spotify_playlist_sort_complete(self, ctx, loaded_playlist: LoadedSpotifyPlaylist):
+        pass
+
+    def on_skip(self, ctx, skipped_source, count):
+        bot.loop.create_task(self.respond_to_skip(ctx, skipped_source, count))
+    
+
     #Discord VC support
 
     async def setup_vc(self, ctx: commands.Context):  #Attempts to set up VC. Runs any associated events and sends any error messages
@@ -633,8 +654,13 @@ class iPod:
 
     #Discord interactions
 
-    async def respond_to_add_item(self, ctx, item_added):
+    async def respond_to_add_item_unloaded(self, ctx, item_added):
         embed = discord.Embed(description='Item added')
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_add_item_failed(self, ctx, unloaded_item, exception):
+        embed = discord.Embed(description=f'{unloaded_item} failed to load with error: {exception}')
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -647,6 +673,13 @@ class iPod:
         text_to_send = self.compile_playlist()
         try: await ctx.reply(text_to_send, mention_author=False)
         except: await ctx.respond(text_to_send)
+
+    async def respond_to_skip(self, ctx, skipped_source, count):
+        embed= discord.Embed(title='Reached the end of queue') if ctx.guild.voice_client.source == None else discord.Embed(title="Now Playing", description= f"{ctx.guild.voice_client.source.title}")
+        embed.set_footer(text= 'Add more with `/p`!' if ctx.guild.voice_client.source == None else f'Skipped {skipped_source.title}')
+        embed.color = 7528669
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
 
     def compile_playlist(self):
         queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
