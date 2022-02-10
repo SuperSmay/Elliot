@@ -479,14 +479,14 @@ class iPod:
 
     #Events
 
-    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
+    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item):
         print('Song added to queue event')
         #bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
         if not self.loading_running: 
             loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
             loading_thread.start()
 
-    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
+    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item):
         print('Song added to playlist event')
         #bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
         if not self.loading_running: 
