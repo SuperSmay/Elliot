@@ -56,6 +56,8 @@ async def on_message(message: discord.Message):
 @bot.event
 async def on_message_edit(oldMessage, newMessage: discord.Message):
   if newMessage.author.bot: return
+  if oldMessage.content == newMessage.content: return
+  print("ON MESSAGE EDIT")
   await bot.process_commands(newMessage)
 
 @bot.slash_command(name="cutie", description="you are a cutie")
