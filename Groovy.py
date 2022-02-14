@@ -9,6 +9,7 @@ import traceback
 import concurrent.futures
 import googleapiclient.discovery
 import spotipy
+from time import sleep
 
 from globalVariables import musicPlayers, bot
 
@@ -59,7 +60,7 @@ sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spo
 yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
 
 
-class SongLoadingData:
+class SongLoadingContext:
     def __init__(self) -> None:
         self.message = None
         self.parent_playlist = None
@@ -69,60 +70,60 @@ class SongLoadingData:
 
 
 class UnloadedYoutubeSong:
-    def __init__(self, youtube_url, loading_data: SongLoadingData) -> None:
+    def __init__(self, youtube_url, loading_context: SongLoadingContext) -> None:
         self.youtube_url = youtube_url
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class UnloadedYoutubePlaylist:
-    def __init__(self, youtube_playlist_url, loading_data: SongLoadingData) -> None:
+    def __init__(self, youtube_playlist_url, loading_context: SongLoadingContext) -> None:
         self.youtube_playlist_url = youtube_playlist_url
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class UnloadedYoutubeSearch:
-    def __init__(self, youtube_search, loading_data: SongLoadingData) -> None:
+    def __init__(self, youtube_search, loading_context: SongLoadingContext) -> None:
         self.youtube_search = youtube_search
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class UnloadedSpotifyTrack:
-    def __init__(self, spotify_track_url, loading_data: SongLoadingData) -> None:
+    def __init__(self, spotify_track_url, loading_context: SongLoadingContext) -> None:
         self.spotify_track_url = spotify_track_url
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class UnloadedSpotifyAlbum:
-    def __init__(self, spotify_album_url, loading_data: SongLoadingData) -> None:
+    def __init__(self, spotify_album_url, loading_context: SongLoadingContext) -> None:
         self.spotify_album_url = spotify_album_url
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class UnloadedSpotifyPlaylist:
-    def __init__(self, spotify_playlist_url, loading_data: SongLoadingData) -> None:
+    def __init__(self, spotify_playlist_url, loading_context: SongLoadingContext) -> None:
         self.spotify_playlist_url = spotify_playlist_url
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 
 class LoadedYoutubeSong:
-    def __init__(self, youtube_data: dict, loading_data: SongLoadingData) -> None:
+    def __init__(self, youtube_data: dict, loading_context: SongLoadingContext) -> None:
         self.youtube_data = youtube_data
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class LoadedYoutubePlaylist:
-    def __init__(self, youtube_playlist_split_urls: list, loading_data: SongLoadingData) -> None:
+    def __init__(self, youtube_playlist_split_urls: list, loading_context: SongLoadingContext) -> None:
         self.youtube_playlist_split_urls = youtube_playlist_split_urls
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class LoadedSpotifyTrack:
-    def __init__(self, spotify_track_data: dict, loading_data: SongLoadingData) -> None:
+    def __init__(self, spotify_track_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_track_data = spotify_track_data
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class LoadedSpotifyAlbum:
-    def __init__(self, spotify_album_data: dict, loading_data: SongLoadingData) -> None:
+    def __init__(self, spotify_album_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_album_data = spotify_album_data
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 class LoadedSpotifyPlaylist:
-    def __init__(self, spotify_playlist_data: dict, loading_data: SongLoadingData) -> None:
+    def __init__(self, spotify_playlist_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_playlist_data = spotify_playlist_data
-        self.loading_data = loading_data
+        self.loading_context = loading_context
 
 
 
@@ -231,63 +232,69 @@ class iPod:
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
 
-    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False):  #Correctly process and call events for a youtube link. Below functions are similar
+    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):  #Correctly process and call events for a youtube link. Below functions are similar
+        if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
-            new_item = UnloadedYoutubeSong(youtube_url, SongLoadingData())
+            new_item = UnloadedYoutubeSong(youtube_url, loading_context)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedYoutubeSong(youtube_url, SongLoadingData())
+            new_item = UnloadedYoutubeSong(youtube_url, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def receive_youtube_playlist_url(self, ctx, youtube_url: str, add_to_queue: bool = False):
+    def receive_youtube_playlist_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):
+        if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
-            new_item = UnloadedYoutubePlaylist(youtube_url, SongLoadingData())
+            new_item = UnloadedYoutubePlaylist(youtube_url, loading_context)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedYoutubePlaylist(youtube_url, SongLoadingData())
+            new_item = UnloadedYoutubePlaylist(youtube_url, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def receive_spotify_track_url(self, ctx, spotify_url: str, add_to_queue: bool = False):
+    def receive_spotify_track_url(self, ctx, spotify_url: str, add_to_queue: bool = False, loading_context = None):
+        if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
-            new_item = UnloadedSpotifyTrack(spotify_url, SongLoadingData())
+            new_item = UnloadedSpotifyTrack(spotify_url, loading_context)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedSpotifyTrack(spotify_url, SongLoadingData())
+            new_item = UnloadedSpotifyTrack(spotify_url, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def receive_spotify_album_url(self, ctx, spotify_album_url: str, add_to_queue: bool = False):
+    def receive_spotify_album_url(self, ctx, spotify_album_url: str, add_to_queue: bool = False, loading_context = None):
+        if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
-            new_item = UnloadedSpotifyAlbum(spotify_album_url, SongLoadingData())
+            new_item = UnloadedSpotifyAlbum(spotify_album_url, loading_context)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedSpotifyAlbum(spotify_album_url, SongLoadingData())
+            new_item = UnloadedSpotifyAlbum(spotify_album_url, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def receive_spotify_playlist_url(self, ctx, spotify_playlist_url: str, add_to_queue: bool = False):
+    def receive_spotify_playlist_url(self, ctx, spotify_playlist_url: str, add_to_queue: bool = False, loading_context = None):
+        if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
-            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, SongLoadingData())
+            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, loading_context)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, SongLoadingData())
+            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def receive_search_term(self, ctx, search_term: str, add_to_queue: bool = False):
+    def receive_search_term(self, ctx, search_term: str, add_to_queue: bool = False, loading_context = None):
+        if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
-            new_item = UnloadedYoutubeSearch(search_term, SongLoadingData())
+            new_item = UnloadedYoutubeSearch(search_term, loading_context)
             self.unloaded_queue.append(new_item)
             self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            new_item = UnloadedYoutubeSearch(search_term, SongLoadingData())
+            new_item = UnloadedYoutubeSearch(search_term, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
@@ -303,24 +310,24 @@ class iPod:
 
     def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
         for url in loaded_playlist.youtube_playlist_split_urls:
-            self.receive_youtube_url(ctx, url, add_to_queue)
+            self.receive_youtube_url(ctx, url, add_to_queue, loaded_playlist.loading_context)
 
     def receive_loaded_spotify_track(self, ctx, loaded_track: LoadedSpotifyTrack, add_to_queue: bool = False):
         track = loaded_track.spotify_track_data
         title = f"{track['artists'][0]['name']} - {track['name']}"
-        self.receive_search_term(ctx, title, add_to_queue)
+        self.receive_search_term(ctx, title, add_to_queue, loaded_track.loading_context)
 
     def receive_loaded_spotify_album(self, ctx, loaded_album: LoadedSpotifyAlbum, add_to_queue: bool = False):
         album = loaded_album.spotify_album_data
         for loaded_track in album['tracks']['items']:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
-            self.receive_search_term(ctx, title, add_to_queue)
+            self.receive_search_term(ctx, title, add_to_queue, loaded_album.loading_context)
 
     def receive_loaded_spotify_playlist(self, ctx, loaded_playlist: LoadedSpotifyPlaylist, add_to_queue: bool = False):
         playlist = loaded_playlist.spotify_playlist_data
         for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
-            self.receive_search_term(ctx, title, add_to_queue)
+            self.receive_search_term(ctx, title, add_to_queue, loaded_playlist.loading_context)
 
     #Loaders
 
@@ -336,7 +343,7 @@ class iPod:
         if isinstance(loaded_item, LoadedSpotifyPlaylist):
             self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
             
-    def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
+    def process_input(self, ctx, input: str, add_to_queue: bool = False, loading_context = None) -> None:  #Calls functions processing each type of supported link
         parsed_input = self.parse_input(input)
         for youtube_url in parsed_input['youtube_links']:
             self.receive_youtube_url(ctx, youtube_url, add_to_queue)
@@ -414,22 +421,22 @@ class iPod:
     def load_data_in_thread(self, ctx, unloaded_item, add_to_queue = False):  #Blocking function to be called in a thread. Loads given input and returns constructed Loaded{Type} object
         if isinstance(unloaded_item, UnloadedYoutubeSong):
             data = self.load_youtube_url(ctx, unloaded_item, add_to_queue)
-            return LoadedYoutubeSong(data, unloaded_item.loading_data)
+            return LoadedYoutubeSong(data, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedYoutubePlaylist):
             data = self.load_youtube_playlist_url(ctx, unloaded_item, add_to_queue)
-            return LoadedYoutubePlaylist(data, unloaded_item.loading_data)
+            return LoadedYoutubePlaylist(data, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedSpotifyTrack):
             data = self.load_spotify_track_url(ctx, unloaded_item, add_to_queue)
-            return LoadedSpotifyTrack(data, unloaded_item.loading_data)
+            return LoadedSpotifyTrack(data, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedSpotifyAlbum):
             data = self.load_spotify_album_url(ctx, unloaded_item, add_to_queue)
-            return LoadedSpotifyAlbum(data, unloaded_item.loading_data)
+            return LoadedSpotifyAlbum(data, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedSpotifyPlaylist):
             data = self.load_spotify_playlist_url(ctx, unloaded_item, add_to_queue)
-            return LoadedSpotifyPlaylist(data, unloaded_item.loading_data)
+            return LoadedSpotifyPlaylist(data, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedYoutubeSearch):
             data = self.load_youtube_search(ctx, unloaded_item, add_to_queue)
-            return LoadedYoutubeSong(data, unloaded_item.loading_data)
+            return LoadedYoutubeSong(data, unloaded_item.loading_context)
         else:
             raise TypeError(unloaded_item)
 
@@ -647,24 +654,27 @@ class iPod:
 
     async def respond_to_add_item(self, ctx, item_added):
         embed = discord.Embed(description='Item added')
-        try: item_added.loading_data.message = await ctx.reply(embed=embed, mention_author=False)
-        except: item_added.loading_data.message = await ctx.respond(embed=embed)
+        if item_added.loading_context.message == None:
+            try: item_added.loading_context.message = await ctx.reply(embed=embed, mention_author=False)
+            except: item_added.loading_context.message = await ctx.respond(embed=embed)
+        else:
+            await item_added.loading_context.message.edit(embed=embed)
 
     async def respond_to_load_error(self, ctx, item_added, exception):
         embed = discord.Embed(description=f'{item_added} failed to load with error: {exception}')
-        if item_added.loading_data.message == None:
-            try: item_added.loading_data.message = await ctx.reply(embed=embed, mention_author=False)
-            except: item_added.loading_data.message = await ctx.respond(embed=embed)
+        if item_added.loading_context.message == None:
+            try: item_added.loading_context.message = await ctx.reply(embed=embed, mention_author=False)
+            except: item_added.loading_context.message = await ctx.respond(embed=embed)
         else:
-            await item_added.loading_data.message.edit(embed=embed)
+            await item_added.loading_context.message.edit(embed=embed)
 
     async def respond_to_load_item(self, ctx, item_loaded, add_to_queue):
         embed = discord.Embed(description=f'Successfully added {item_loaded} to {"queue" if add_to_queue else "playlist"}')
-        if item_loaded.loading_data.message == None:
-            try: item_loaded.loading_data.message = await ctx.reply(embed=embed, mention_author=False)
-            except: item_loaded.loading_data.message = await ctx.respond(embed=embed)
+        if item_loaded.loading_context.message == None:
+            try: item_loaded.loading_context.message = await ctx.reply(embed=embed, mention_author=False)
+            except: item_loaded.loading_context.message = await ctx.respond(embed=embed)
         else:
-            await item_loaded.loading_data.message.edit(embed=embed)
+            await item_loaded.loading_context.message.edit(embed=embed)
         
         
 
