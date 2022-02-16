@@ -62,11 +62,30 @@ yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathl
 
 class SongLoadingContext:
     def __init__(self) -> None:
-        self.message = None
+        self._message = None
         self.parent_playlist = None
-    def __del__(self):
-        print("I got GCed lol")
+        self._future_embeds = []
 
+    async def send_message(self, ctx, embed: discord.Embed):
+        message = self._message
+        if isinstance(message, str):
+            self._future_embeds.append(embed)
+        elif isinstance(message, discord.Message):
+            self._message = 'Editing'
+            await message.edit(embed=embed)
+            self._message = message
+            if len(self._future_embeds) > 0:
+                next = self._future_embeds[-1]
+                self._future_embeds = []
+                await self.send_message(ctx, next)
+        elif message == None:
+            self._message = 'Sending'
+            try: self._message = await ctx.reply(embed=embed, mention_author=False)
+            except: self._message = await ctx.respond(embed=embed, mention_author=False)
+            if len(self._future_embeds) > 0:
+                next = self._future_embeds[-1]
+                self._future_embeds = []
+                await self.send_message(ctx, next)
 
 
 class UnloadedYoutubeSong:
@@ -223,8 +242,8 @@ class iPod:
         if len(self.loaded_playlist) > 0 or len(self.loaded_queue) > 0:
             self.play_next_item(ctx)
         else:
-            if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song
-            
+            if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song   
+
     def skip_backwards(self, ctx, count: int = 1):
         #Skip {count} number of songs backwards
         if count < 1: raise ValueError('Count cannot be less than one')
@@ -654,27 +673,15 @@ class iPod:
 
     async def respond_to_add_item(self, ctx, item_added):
         embed = discord.Embed(description='Item added')
-        if item_added.loading_context.message == None:
-            try: item_added.loading_context.message = await ctx.reply(embed=embed, mention_author=False)
-            except: item_added.loading_context.message = await ctx.respond(embed=embed)
-        else:
-            await item_added.loading_context.message.edit(embed=embed)
+        await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_error(self, ctx, item_added, exception):
         embed = discord.Embed(description=f'{item_added} failed to load with error: {exception}')
-        if item_added.loading_context.message == None:
-            try: item_added.loading_context.message = await ctx.reply(embed=embed, mention_author=False)
-            except: item_added.loading_context.message = await ctx.respond(embed=embed)
-        else:
-            await item_added.loading_context.message.edit(embed=embed)
+        await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_item(self, ctx, item_loaded, add_to_queue):
         embed = discord.Embed(description=f'Successfully added {item_loaded} to {"queue" if add_to_queue else "playlist"}')
-        if item_loaded.loading_context.message == None:
-            try: item_loaded.loading_context.message = await ctx.reply(embed=embed, mention_author=False)
-            except: item_loaded.loading_context.message = await ctx.respond(embed=embed)
-        else:
-            await item_loaded.loading_context.message.edit(embed=embed)
+        await item_loaded.loading_context.send_message(ctx, embed)
         
         
 
