@@ -85,7 +85,7 @@ class BumpReminder(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        self.bump_reminder_starter.start()
+        if not self.bump_reminder_starter.is_running: self.bump_reminder_starter.start()
         async for guild in bot.fetch_guilds():
             if guild.id in bumpChannel.keys() and bumpRole.keys():
                 print(f"Bump reminder task started for guild {guild.name}")
