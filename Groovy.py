@@ -9,7 +9,6 @@ import traceback
 import concurrent.futures
 import googleapiclient.discovery
 import spotipy
-from time import sleep
 
 from globalVariables import musicPlayers, bot
 
@@ -92,38 +91,49 @@ class UnloadedYoutubeSong:
     def __init__(self, youtube_url, loading_context: SongLoadingContext) -> None:
         self.youtube_url = youtube_url
         self.loading_context = loading_context
+    def __str__(self):
+        return self.youtube_url
 
 class UnloadedYoutubePlaylist:
     def __init__(self, youtube_playlist_url, loading_context: SongLoadingContext) -> None:
         self.youtube_playlist_url = youtube_playlist_url
         self.loading_context = loading_context
+    def __str__(self):
+        return self.youtube_playlist_url
 
 class UnloadedYoutubeSearch:
     def __init__(self, youtube_search, loading_context: SongLoadingContext) -> None:
         self.youtube_search = youtube_search
         self.loading_context = loading_context
+    def __str__(self):
+        return self.youtube_search
 
 class UnloadedSpotifyTrack:
     def __init__(self, spotify_track_url, loading_context: SongLoadingContext) -> None:
         self.spotify_track_url = spotify_track_url
         self.loading_context = loading_context
+    def __str__(self):
+        return self.spotify_track_url
 
 class UnloadedSpotifyAlbum:
     def __init__(self, spotify_album_url, loading_context: SongLoadingContext) -> None:
         self.spotify_album_url = spotify_album_url
         self.loading_context = loading_context
+    def __str__(self):
+        return self.spotify_album_url
 
 class UnloadedSpotifyPlaylist:
     def __init__(self, spotify_playlist_url, loading_context: SongLoadingContext) -> None:
         self.spotify_playlist_url = spotify_playlist_url
         self.loading_context = loading_context
+    def __str__(self):
+        return self.spotify_playlist_url
 
 
 class LoadedYoutubeSong:
     def __init__(self, youtube_data: dict, loading_context: SongLoadingContext) -> None:
         self.youtube_data = youtube_data
         self.loading_context = loading_context
-
     def __str__(self) -> str:
         return self.youtube_data['title']
 
@@ -142,6 +152,8 @@ class LoadedSpotifyTrack:
     def __init__(self, spotify_track_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_track_data = spotify_track_data
         self.loading_context = loading_context
+    def __str__(self):
+        return self.spotify_track_data['name']
 
 class LoadedSpotifyAlbum:
     def __init__(self, spotify_album_data: dict, loading_context: SongLoadingContext) -> None:
@@ -150,6 +162,8 @@ class LoadedSpotifyAlbum:
         self.loading_context.parent_playlist = self
         self.count = 0
         self.error_count = 0
+    def __str__(self):
+        return self.spotify_album_data['name']
 
 class LoadedSpotifyPlaylist:
     def __init__(self, spotify_playlist_data: dict, loading_context: SongLoadingContext) -> None:
@@ -158,6 +172,8 @@ class LoadedSpotifyPlaylist:
         self.loading_context.parent_playlist = self
         self.count = 0
         self.error_count = 0
+    def __str__(self):
+        return self.spotify_playlist_data['name']
 
 
 
@@ -529,8 +545,12 @@ class iPod:
         if not isinstance(unloaded_item, UnloadedSpotifyPlaylist): raise TypeError(unloaded_item)
         url = unloaded_item.spotify_playlist_url
         self.on_load_start(ctx, unloaded_item, add_to_queue)
-        playlist = sp.playlist(url)
-        return playlist
+        results = sp.playlist(url)
+        tracks = results['tracks']
+        while tracks['next']:
+            tracks = sp.next(tracks)
+            results['tracks']['items'].extend(tracks['items'])
+        return results
 
     def load_youtube_search(self, ctx, unloaded_item: UnloadedYoutubeSearch, add_to_queue = False):  #Loads single youtube search and returns data dict
         if not isinstance(unloaded_item, UnloadedYoutubeSearch): raise TypeError(unloaded_item)
@@ -639,7 +659,7 @@ class iPod:
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
         print('Load Succeed')
         print(loaded_item)
-        if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item: loaded_item.loading_context.parent_playlist.count += 1
+        if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
         bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
     def on_vc_connect(self, ctx, channel):
@@ -698,11 +718,12 @@ class iPod:
 
     async def respond_to_add_unloaded_item(self, ctx, item_added):
         if item_added.loading_context.parent_playlist != None: return
-        embed = discord.Embed(description='Loading input...')
+        embed = discord.Embed(description=f'Loading {item_added}...')
         await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_error(self, ctx, item_added, exception):
         embed = discord.Embed(description=f'{item_added} failed to load with error: {exception}')
+        embed.color = 16741747
         await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_item(self, ctx, item_loaded, add_to_queue):
@@ -721,11 +742,9 @@ class iPod:
         except: await ctx.respond(text_to_send)
 
     def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
-        title = ''
-        if isinstance(loaded_playlist, LoadedYoutubePlaylist):
-            title = loaded_playlist.title
-        embed = discord.Embed(description=f'Successfully added {loaded_playlist.count} songs from {title} to {"queue" if add_to_queue else "playlist"}')
+        embed = discord.Embed(description=f'Successfully added {loaded_playlist.count} songs from {loaded_playlist} to {"queue" if add_to_queue else "playlist"}')
         embed.color = 7528669
+        if loaded_playlist.error_count > 0: embed.set_footer(text=f'{loaded_playlist.error_count} songs failed to load')
         return embed
 
     def compile_playlist(self):
