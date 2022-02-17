@@ -124,10 +124,19 @@ class LoadedYoutubeSong:
         self.youtube_data = youtube_data
         self.loading_context = loading_context
 
+    def __str__(self) -> str:
+        return self.youtube_data['title']
+
 class LoadedYoutubePlaylist:
-    def __init__(self, youtube_playlist_split_urls: list, loading_context: SongLoadingContext) -> None:
+    def __init__(self, youtube_playlist_split_urls: list, title: str, loading_context: SongLoadingContext) -> None:
         self.youtube_playlist_split_urls = youtube_playlist_split_urls
+        self.title = title
         self.loading_context = loading_context
+        self.loading_context.parent_playlist = self
+        self.count = 0
+        self.error_count = 0
+    def __str__(self) -> str:
+        return self.title
 
 class LoadedSpotifyTrack:
     def __init__(self, spotify_track_data: dict, loading_context: SongLoadingContext) -> None:
@@ -138,11 +147,17 @@ class LoadedSpotifyAlbum:
     def __init__(self, spotify_album_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_album_data = spotify_album_data
         self.loading_context = loading_context
+        self.loading_context.parent_playlist = self
+        self.count = 0
+        self.error_count = 0
 
 class LoadedSpotifyPlaylist:
     def __init__(self, spotify_playlist_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_playlist_data = spotify_playlist_data
         self.loading_context = loading_context
+        self.loading_context.parent_playlist = self
+        self.count = 0
+        self.error_count = 0
 
 
 
@@ -442,8 +457,8 @@ class iPod:
             data = self.load_youtube_url(ctx, unloaded_item, add_to_queue)
             return LoadedYoutubeSong(data, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedYoutubePlaylist):
-            data = self.load_youtube_playlist_url(ctx, unloaded_item, add_to_queue)
-            return LoadedYoutubePlaylist(data, unloaded_item.loading_context)
+            data, title = self.load_youtube_playlist_url(ctx, unloaded_item, add_to_queue)
+            return LoadedYoutubePlaylist(data, title, unloaded_item.loading_context)
         elif isinstance(unloaded_item, UnloadedSpotifyTrack):
             data = self.load_spotify_track_url(ctx, unloaded_item, add_to_queue)
             return LoadedSpotifyTrack(data, unloaded_item.loading_context)
@@ -486,7 +501,15 @@ class iPod:
             playlist_items += response["items"]
             request = yt.playlistItems().list_next(request, response)
 
-        return [f'https://www.youtube.com/watch?v={t["snippet"]["resourceId"]["videoId"]}' for t in playlist_items]
+        request = yt.playlists().list(
+            part = "snippet",
+            id = playlist_id,
+            maxResults = 1
+        )
+
+        title_response = request.execute()
+
+        return [f'https://www.youtube.com/watch?v={t["snippet"]["resourceId"]["videoId"]}' for t in playlist_items], title_response['items'][0]['snippet']['title'] 
 
     def load_spotify_track_url(self, ctx, unloaded_item: UnloadedSpotifyTrack, add_to_queue = False):  #Loads spotify track and returns track dict
         if not isinstance(unloaded_item, UnloadedSpotifyTrack): raise TypeError(unloaded_item)
@@ -605,16 +628,18 @@ class iPod:
     def on_load_fail(self, ctx, unloaded_item, exception):
         print(f'Load failed with exception: {exception}')
         traceback.print_exc()
+        if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
         bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, exception))
 
     def on_load_start(self, ctx, unloaded_item, add_to_queue):
         print('Load start')
         print(unloaded_item)
-        bot.loop.create_task(self.respond_to_add_item(ctx, unloaded_item))
+        bot.loop.create_task(self.respond_to_add_unloaded_item(ctx, unloaded_item))
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
         print('Load Succeed')
         print(loaded_item)
+        if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item: loaded_item.loading_context.parent_playlist.count += 1
         bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
     def on_vc_connect(self, ctx, channel):
@@ -671,8 +696,9 @@ class iPod:
 
     #Discord interactions
 
-    async def respond_to_add_item(self, ctx, item_added):
-        embed = discord.Embed(description='Item added')
+    async def respond_to_add_unloaded_item(self, ctx, item_added):
+        if item_added.loading_context.parent_playlist != None: return
+        embed = discord.Embed(description='Loading input...')
         await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_error(self, ctx, item_added, exception):
@@ -680,7 +706,11 @@ class iPod:
         await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_item(self, ctx, item_loaded, add_to_queue):
-        embed = discord.Embed(description=f'Successfully added {item_loaded} to {"queue" if add_to_queue else "playlist"}')
+        if item_loaded.loading_context.parent_playlist != None: 
+            embed = self.get_playlist_state_embed(item_loaded.loading_context.parent_playlist, add_to_queue)
+        else:
+            embed = discord.Embed(description=f'Successfully added {item_loaded} to {"queue" if add_to_queue else "playlist"}')
+            embed.color = 7528669
         await item_loaded.loading_context.send_message(ctx, embed)
         
         
@@ -689,6 +719,14 @@ class iPod:
         text_to_send = self.compile_playlist()
         try: await ctx.reply(text_to_send, mention_author=False)
         except: await ctx.respond(text_to_send)
+
+    def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
+        title = ''
+        if isinstance(loaded_playlist, LoadedYoutubePlaylist):
+            title = loaded_playlist.title
+        embed = discord.Embed(description=f'Successfully added {loaded_playlist.count} songs from {title} to {"queue" if add_to_queue else "playlist"}')
+        embed.color = 7528669
+        return embed
 
     def compile_playlist(self):
         queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
