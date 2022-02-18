@@ -206,7 +206,7 @@ class iPod:
                     try: 
                         loaded_item = future.result()
                         self.on_load_succeed(ctx, unloaded_item, loaded_item, False)
-                        self.distrubute_loaded_input(ctx, loaded_item, add_to_queue=True)
+                        self.distrubute_loaded_input(ctx, loaded_item, add_to_queue=False)
                     except Exception as e:
                         self.on_load_fail(ctx, unloaded_item, e)
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -225,7 +225,6 @@ class iPod:
         except Exception as e:
             print(f'Loading loop failed with exception: {e}')
         self.loading_running = False
-
 
     #"Buttons"
 
@@ -279,6 +278,14 @@ class iPod:
         #Skip {count} number of songs backwards
         if count < 1: raise ValueError('Count cannot be less than one')
         pass
+
+    def toggle_shuffle(self, ctx):
+        if self.shuffle:
+            self.shuffle = False
+            self.on_shuffle_disable(ctx)
+        else:
+            self.shuffle = True
+            self.on_shuffle_enable(ctx)
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
 
@@ -393,7 +400,7 @@ class iPod:
         if isinstance(loaded_item, LoadedSpotifyPlaylist):
             self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
             
-    def process_input(self, ctx, input: str, add_to_queue: bool = False, loading_context = None) -> None:  #Calls functions processing each type of supported link
+    def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
         parsed_input = self.parse_input(input)
         for youtube_url in parsed_input['youtube_links']:
             self.receive_youtube_url(ctx, youtube_url, add_to_queue)
@@ -645,6 +652,9 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
+    def on_shuffle_command(self, ctx):
+        self.toggle_shuffle(ctx)
+
     def on_load_fail(self, ctx, unloaded_item, exception):
         print(f'Load failed with exception: {exception}')
         traceback.print_exc()
@@ -688,6 +698,14 @@ class iPod:
 
     def on_song_end(self, ctx, song):
         pass
+
+    def on_shuffle_enable(self, ctx):
+        print('Shuffle on')
+        bot.loop.create_task(self.respond_to_shuffle_enable(ctx))
+
+    def on_shuffle_disable(self, ctx):
+        print('Shuffle off')
+        bot.loop.create_task(self.respond_to_shuffle_disable(ctx))
 
     #Discord VC support
 
@@ -734,12 +752,26 @@ class iPod:
             embed.color = 7528669
         await item_loaded.loading_context.send_message(ctx, embed)
         
-        
-
     async def respond_to_playlist_command(self, ctx):
         text_to_send = self.compile_playlist()
         try: await ctx.reply(text_to_send, mention_author=False)
         except: await ctx.respond(text_to_send)
+
+    async def respond_to_shuffle_enable(self, ctx):
+        embed = discord.Embed(description='Shuffle enabled', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+        if len(self.loaded_queue) > len(self.loaded_playlist):
+            embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. If you want to move the songs to the playlist and use shuffle, use `/move queue all`', color=3093080)
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def respond_to_shuffle_disable(self, ctx):
+        embed = discord.Embed(description='Shuffle disabled', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    #Message contructors
 
     def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
         embed = discord.Embed(description=f'Successfully added {loaded_playlist.count} songs from {loaded_playlist} to {"queue" if add_to_queue else "playlist"}')
@@ -780,13 +812,13 @@ class Groovy(commands.Cog):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         print('PLAY COMMAND')
-        await player.on_play_command(ctx, input)
+        await player.on_play_command(ctx, input, True)
 
     @commands.command(name='add', description='Plays a song!')
     async def add(self, ctx, input: str = '', *more_words):
         input = input + ' ' + ' '.join(more_words).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
-        await player.on_play_command(ctx, input, True)
+        await player.on_play_command(ctx, input, False)
 
     @commands.command(name='skip', description='Skips a song!')
     async def skip(self, ctx, count: str = 1):
@@ -807,6 +839,12 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         print(f'Unloaded: P: {player.unloaded_playlist} Q: {player.unloaded_queue}')
         print(f'Loaded: P: {player.loaded_playlist} Q: {player.loaded_queue}')
+
+
+    # @commands.command(name='shuffle', description='Toggle shuffle mode')
+    # async def shuffle(self, ctx):
+    #     player = self.get_player(ctx)
+    #     player.on_shuffle_command(ctx)
 
 
 
