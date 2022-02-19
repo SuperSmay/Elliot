@@ -10,6 +10,7 @@ import concurrent.futures
 import googleapiclient.discovery
 import spotipy
 import random
+from youtubesearchpython import VideosSearch
 
 from globalVariables import musicPlayers, bot
 
@@ -194,6 +195,7 @@ class iPod:
         self.unloaded_playlist = []
         self.unloaded_queue = []
         self.loading_running = False
+        self.last_search = []
     
         musicPlayers[ctx.guild.id] = self
         
@@ -272,6 +274,7 @@ class iPod:
 
     def play_next_if_nothing_playing(self, ctx):
         #Play next item if nothing is currently playing
+        if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
         if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
             self.play_next_item(ctx)
             
@@ -307,6 +310,12 @@ class iPod:
         else:
             ctx.guild.voice_client.pause()
             self.on_pause_enable(ctx)
+
+    def disconnect(self, ctx):
+        if ctx.guild.voice_client == None: return
+        bot.loop.create_task(ctx.guild.voice_client.disconnect())
+        self.on_disconnect(ctx)
+
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
 
@@ -445,12 +454,12 @@ class iPod:
         parsed_url = urllib.parse.urlparse(input)
         website = parsed_url.netloc.removeprefix("www.").removesuffix(".com").removeprefix("open.")
         if website == "":
-            # try:  #FIXME
-            #     input = int(input)
-            #     if input <= 10 and input > 0 and self.last_search != None:
-            #         output_dict['youtubeLinks'].append(self.player.lastSearch['result'][input-1]['link'])
-            #     input = ''
-            # except ValueError:
+            try:
+                input = int(input)
+                if input <= 10 and input > 0 and self.last_search != None:
+                    output_dict['youtube_links'].append(self.last_search[input-1]['link'])
+                input = ''
+            except ValueError:
                 output_dict['search_terms'].append(input)
         elif website == "youtube":
             temp_dict = self.parse_youtube_link(parsed_url)
@@ -496,6 +505,10 @@ class iPod:
         else:
             return {'search_terms' : [url]}
 
+    def search_youtube(self, text_to_search, limit=10):
+        search = VideosSearch(text_to_search, limit=limit)
+        return search.result()['result']
+
     def get_shuffle_number(self, loaded_youtube_song: LoadedYoutubeSong):
         return loaded_youtube_song.random_value
 
@@ -529,6 +542,11 @@ class iPod:
             return LoadedYoutubeSong(data, unloaded_item.loading_context)
         else:
             raise TypeError(unloaded_item)
+
+    def run_youtube_multi_search_in_thread(self, ctx, search_term):
+        items = self.search_youtube(search_term, 10)
+        self.last_search = items
+        self.on_search_complete(ctx, items)
 
     def load_youtube_url(self, ctx, unloaded_item: UnloadedYoutubeSong, add_to_queue = False) -> dict:  #Loads single youtube url and returns data dict
         if not isinstance(unloaded_item, UnloadedYoutubeSong): raise TypeError(unloaded_item)
@@ -613,10 +631,12 @@ class iPod:
             loading_thread.start()
 
     def on_item_added_to_loaded_queue(self, ctx, loaded_item):
-        self.play_next_if_nothing_playing(ctx)
+        try: self.play_next_if_nothing_playing(ctx)
+        except TriedPlayingWhenOutOfVC: return
 
     def on_item_added_to_loaded_playlist(self, ctx, loaded_item):
-        self.play_next_if_nothing_playing(ctx)
+        try: self.play_next_if_nothing_playing(ctx)
+        except TriedPlayingWhenOutOfVC: return
 
     async def on_play_command(self, ctx, input, add_to_queue=False):
         print('Play command received')
@@ -729,6 +749,19 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
+    async def on_disconnect_command(self, ctx):
+        try:
+            self.disconnect(ctx)
+        except Exception as e:
+            traceback.print_exc()
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_search_command(self, ctx, search_term):
+        thread = threading.Thread(target=self.run_youtube_multi_search_in_thread, args=(ctx, search_term))
+        thread.start()
+
     def on_load_fail(self, ctx, unloaded_item, exception):
         print(f'Load failed with exception: {exception}')
         traceback.print_exc()
@@ -788,6 +821,14 @@ class iPod:
     def on_pause_disable(self, ctx):
         print('Pause off')
         bot.loop.create_task(self.respond_to_pause_disable(ctx))
+
+    def on_disconnect(self, ctx):
+        print('Disconnect')
+        bot.loop.create_task(self.respond_to_disconnect(ctx))
+
+    def on_search_complete(self, ctx, items):
+        print('Search complete')
+        bot.loop.create_task(self.respond_to_search(ctx, items))
 
     #Discord VC support
 
@@ -863,6 +904,16 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
+    async def respond_to_disconnect(self, ctx):
+        embed = discord.Embed(description='Leaving voice chat', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_search(self, ctx, items):
+        embed = self.get_search_message_embed(items)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
     #Message contructors
 
     def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
@@ -880,7 +931,16 @@ class iPod:
             queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
             playlist_title_list = [f"{self.loaded_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_playlist[:10]]
         return "Queue\n```\n" + "\n".join(queue_title_list) + " ```\n" + "Playlist\n```\n" + "\n".join(playlist_title_list) + "```"if len(queue_title_list + playlist_title_list) > 0 else '```Nothing to play next```'
-
+    
+    def get_search_message_embed(self, items):
+        joined_string = '\n'.join(
+            [f"{items.index(item) + 1}) {item['title']} -------- {item['duration']}"
+            for item in items]
+            )
+        embed = discord.Embed(description=joined_string, color=9471113)
+        embed.set_footer(text='Use /play {number} to play one of these songs')
+        return embed
+        
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
         super().__init__(source, volume)
@@ -924,19 +984,16 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_skip_command(ctx, count)
         
-
     @commands.command(name='playlist', description='Show playlist')
     async def playlist(self, ctx):
         player = self.get_player(ctx)
         await player.on_playlist_command(ctx)
         
-
     @commands.command(name='play-debug', description='Debug')
     async def play_debug(self, ctx, input: str = ''):
         player = self.get_player(ctx)
         print(f'Unloaded: P: {player.unloaded_playlist} Q: {player.unloaded_queue}')
         print(f'Loaded: P: {player.loaded_playlist} Q: {player.loaded_queue}')
-
 
     @commands.command(name='shuffle', description='Toggle shuffle mode')
     async def shuffle(self, ctx):
@@ -948,6 +1005,16 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_pause_command(ctx)
 
+    @commands.command(name='disconnect', description='Leave VC')
+    async def disconnect(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_disconnect_command(ctx)
+
+    @commands.command(name='search', description='Leave VC')
+    async def search(self, ctx, input: str = '', *more_words):
+        input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
+        player = self.get_player(ctx)
+        await player.on_search_command(ctx, input)
 
 
 
