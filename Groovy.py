@@ -616,7 +616,7 @@ class iPod:
         data = ytdl.extract_info(unloaded_item.youtube_search, download=False)['entries'][0]
         return data
 
-    #Events
+    #Command Events
 
     def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
         print('Song added to queue event')
@@ -761,6 +761,18 @@ class iPod:
     async def on_search_command(self, ctx, search_term):
         thread = threading.Thread(target=self.run_youtube_multi_search_in_thread, args=(ctx, search_term))
         thread.start()
+
+    async def on_nowplaying_command(self, ctx):
+        try:
+            embed = self.get_nowplaying_message_embed(ctx)
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except NotPlaying as e:
+            embed = discord.Embed(description='Play something first!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    #Internal events
 
     def on_load_fail(self, ctx, unloaded_item, exception):
         print(f'Load failed with exception: {exception}')
@@ -914,6 +926,11 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
+    async def respond_to_nowplaying(self, ctx):
+        embed = self.get_nowplay_message_embed()
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
     #Message contructors
 
     def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
@@ -939,6 +956,11 @@ class iPod:
             )
         embed = discord.Embed(description=joined_string, color=9471113)
         embed.set_footer(text='Use /play {number} to play one of these songs')
+        return embed
+
+    def get_nowplaying_message_embed(self, ctx):
+        if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
+        embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
         return embed
         
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -1015,6 +1037,12 @@ class Groovy(commands.Cog):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
+
+    @commands.command(name="nowplaying", aliases=['np'], description="Show the now playing song")
+    async def np(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_nowplaying_command(ctx)
+        
 
 
 
