@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-from unittest import expectedFailure
 import discord
 
 from discord.ext import commands, tasks
@@ -92,7 +91,7 @@ class BumpReminder(commands.Cog):
 
     @tasks.loop(minutes=15)
     async def bump_reminder_starter(self):
-        #print("Attempting reminder task start...")
+        # print("Attempting reminder task start...")
         async for guild in bot.fetch_guilds():
             if guild.id not in bumpChannel.keys(): return
             if guild.id not in bumpRole.keys(): return

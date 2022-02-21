@@ -109,7 +109,7 @@ botRole = {
 
 loadedInventories = {}
 
-musicPlayers = {}
+music_players = {}
 
 bumpChannel = {
     811369107181666343 : 812166022073024552,

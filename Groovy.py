@@ -3,6 +3,7 @@ import pathlib
 import discord
 from discord.ext import commands, tasks
 import urllib.parse
+import datetime
 import youtube_dl
 import threading
 import traceback
@@ -12,7 +13,7 @@ import spotipy
 import random
 from youtubesearchpython import VideosSearch
 
-from globalVariables import musicPlayers, bot
+from globalVariables import music_players, bot
 
 
 ##TODO List
@@ -196,8 +197,10 @@ class iPod:
         self.unloaded_queue = []
         self.loading_running = False
         self.last_search = []
+        self.last_context = None
+        self.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
     
-        musicPlayers[ctx.guild.id] = self
+        music_players[ctx.guild.id] = self
         
     def loading_loop(self, ctx):
         self.loading_running = True
@@ -640,6 +643,7 @@ class iPod:
 
     async def on_play_command(self, ctx, input, add_to_queue=False):
         print('Play command received')
+        self.last_context = ctx
         try:
             await self.setup_vc(ctx)
             self.process_input(ctx, input, add_to_queue)
@@ -672,9 +676,12 @@ class iPod:
 
     async def on_playlist_command(self, ctx):
         print('Playlist command receive')
+        self.last_context = ctx
         await self.respond_to_playlist_command(ctx)
 
     async def on_skip_command(self, ctx, count: int):
+        print('Skip command')
+        self.last_context = ctx
         try:
             await self.setup_vc(ctx)
             self.skip(ctx, count)
@@ -706,6 +713,8 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_shuffle_command(self, ctx):
+        print('Shuffle command')
+        self.last_context = ctx
         try:
             self.toggle_shuffle(ctx)
         except Exception as e:
@@ -715,6 +724,8 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_pause_command(self, ctx):
+        print('Pause command')
+        self.last_context = ctx
         try:
             await self.setup_vc(ctx)
             self.toggle_pause(ctx)
@@ -750,6 +761,8 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_disconnect_command(self, ctx):
+        print('Disconnect command')
+        self.last_context = ctx
         try:
             self.disconnect(ctx)
         except Exception as e:
@@ -759,10 +772,14 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_search_command(self, ctx, search_term):
+        print('Search command')
+        self.last_context = ctx
         thread = threading.Thread(target=self.run_youtube_multi_search_in_thread, args=(ctx, search_term))
         thread.start()
 
     async def on_nowplaying_command(self, ctx):
+        print('Now playing command')
+        self.last_context = ctx
         try:
             embed = self.get_nowplaying_message_embed(ctx)
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -980,9 +997,31 @@ class Groovy(commands.Cog):
     def __init__(self):
         pass
 
+    @tasks.loop(minutes=1)
+    async def voice_channel_leave(self):
+        music_players_copy = music_players.copy()
+        players: list[iPod] = music_players_copy.values()
+        for player in players:
+            guild = await bot.fetch_guild(player.last_context.guild.id)
+            if guild.voice_client != None: 
+                vc = guild.voice_client.channel
+                if len(vc.members) > 0:
+                    player.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
+                    print('Users in voice channel, updating time')
+                else:
+                    if (datetime.datetime.now(datetime.timezone.utc) - player.time_of_last_member).total_seconds() > 300:
+                        print('Nobody in voice channel for time limit, disconnecting...')
+                        player.disconnect(player.last_context)
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if not self.voice_channel_leave.is_running: 
+            self.voice_channel_leave.start()
+            print(f"Starting voice channel loop...")
+
     def get_player(self, ctx) -> iPod | None:
-        if ctx.guild.id in musicPlayers.keys():
-            return musicPlayers[ctx.guild.id]
+        if ctx.guild.id in music_players.keys():
+            return music_players[ctx.guild.id]
         else:
             return iPod(ctx)
 
