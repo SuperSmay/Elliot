@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from unittest import expectedFailure
 import discord
 
 from discord.ext import commands, tasks
@@ -11,7 +12,6 @@ class BumpReminder(commands.Cog):
 
     def __init__(self):
         self.bumpReminderTasks = {}
-        self.bump_reminder_starter.start()
 
     #Run on bot startup
     async def bump_task_start(self, guild):
@@ -83,9 +83,16 @@ class BumpReminder(commands.Cog):
         await channel.send(embed= self.get_reminder_embed(), content= f"<@&{bumpRole[id]}>")  #Send reminder
         self.bumpReminderTasks[id] = False  #Set task running to False
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if not self.bump_reminder_starter.is_running: self.bump_reminder_starter.start()
+        async for guild in bot.fetch_guilds():
+            if guild.id in bumpChannel.keys() and bumpRole.keys():
+                print(f"Bump reminder task started for guild {guild.name}")
+
     @tasks.loop(minutes=15)
     async def bump_reminder_starter(self):
-        # print("Attempting reminder task start...")
+        #print("Attempting reminder task start...")
         async for guild in bot.fetch_guilds():
             if guild.id not in bumpChannel.keys(): return
             if guild.id not in bumpRole.keys(): return
@@ -95,11 +102,3 @@ class BumpReminder(commands.Cog):
                     await self.bump_task_start(guild)  #Start new task
                 except Exception as e:
                     print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later
-
-    @bump_reminder_starter.before_loop
-    async def before_bump(self):
-        print('Starting bump loop...')
-        await bot.wait_until_ready()
-        async for guild in bot.fetch_guilds():
-            if guild.id in bumpChannel.keys() and bumpRole.keys():
-                print(f"Bump reminder task started for guild {guild.name}")
