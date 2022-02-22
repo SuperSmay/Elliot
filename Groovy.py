@@ -1,20 +1,21 @@
 import asyncio
-import pathlib
-import discord
-from discord.ext import commands, tasks
-import urllib.parse
+import concurrent.futures
 import datetime
-import youtube_dl
+import logging
+import pathlib
+import random
 import threading
 import traceback
-import concurrent.futures
+import urllib.parse
+
+import discord
 import googleapiclient.discovery
 import spotipy
-import random
+import youtube_dl
+from discord.ext import commands, tasks
 from youtubesearchpython import VideosSearch
 
-from globalVariables import music_players, bot
-
+from globalVariables import bot, music_players
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
@@ -30,6 +31,8 @@ from globalVariables import music_players, bot
     ## Play history (Youtube link or dl'd dict?) 
 ##
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 ytdlFormatOptions = {
     'format': 'bestaudio/best',
@@ -88,7 +91,6 @@ class SongLoadingContext:
                 next = self._future_embeds[-1]
                 self._future_embeds = []
                 await self.send_message(ctx, next)
-
 
 class UnloadedYoutubeSong:
     def __init__(self, youtube_url, loading_context: SongLoadingContext) -> None:
@@ -202,6 +204,8 @@ class iPod:
     
         music_players[ctx.guild.id] = self
         
+        logger.info(f'iPod {self} created for {ctx.guild.name}')
+        
     def loading_loop(self, ctx):
         self.loading_running = True
         try:
@@ -231,13 +235,14 @@ class iPod:
                         self.on_load_fail(ctx, unloaded_item, e)
             if len(self.unloaded_playlist) > 0 or len(self.unloaded_queue) > 0: self.loading_loop(ctx)
         except Exception as e:
-            print(f'Loading loop failed with exception: {e}')
+            logger.error(f'Loading loop failed', exc_info=e)
         self.loading_running = False
 
     #"Buttons"
 
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong):
         #Change player to this song
+        logger.info(f'Playing {song}')
         try:
             if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
             source = YTDLSource.from_url(YTDLSource, song.youtube_data, loop=bot.loop, stream=True)
@@ -622,27 +627,29 @@ class iPod:
     #Command Events
 
     def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
-        print('Song added to queue event')
+        logger.info(f'Song added to unloaded queue event {unloaded_item}')
         if not self.loading_running: 
             loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
             loading_thread.start()
 
     def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong):
-        print('Song added to playlist event')
+        logger.info(f'Song added to unloaded playlist event {unloaded_item}')
         if not self.loading_running: 
             loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
             loading_thread.start()
 
     def on_item_added_to_loaded_queue(self, ctx, loaded_item):
+        logger.info(f'Song added to loaded queue event {loaded_item}')
         try: self.play_next_if_nothing_playing(ctx)
         except TriedPlayingWhenOutOfVC: return
 
     def on_item_added_to_loaded_playlist(self, ctx, loaded_item):
+        logger.info(f'Song added to loaded playlist event {loaded_item}')
         try: self.play_next_if_nothing_playing(ctx)
         except TriedPlayingWhenOutOfVC: return
 
     async def on_play_command(self, ctx, input, add_to_queue=False):
-        print('Play command received')
+        logger.info(f'Play command received')
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
@@ -670,17 +677,25 @@ class iPod:
             except: await ctx.respond(embed=embed)
         except Exception as e:
             traceback.print_exc()
+            logger.error(f'Play command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
     async def on_playlist_command(self, ctx):
-        print('Playlist command receive')
+        logger.info('Playlist command receive')
         self.last_context = ctx
-        await self.respond_to_playlist_command(ctx)
+        try:
+            await self.respond_to_playlist_command(ctx)
+        except Exception as e:
+            traceback.print_exc()
+            logger.error(f'Playlist command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
 
     async def on_skip_command(self, ctx, count: int):
-        print('Skip command')
+        logger.info('Skip command receive')
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
@@ -708,23 +723,25 @@ class iPod:
             except: await ctx.respond(embed=embed)
         except Exception as e:
             traceback.print_exc()
+            logger.error(f'Skip command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
     async def on_shuffle_command(self, ctx):
-        print('Shuffle command')
+        logger.info('Shuffle command receive')
         self.last_context = ctx
         try:
             self.toggle_shuffle(ctx)
         except Exception as e:
             traceback.print_exc()
+            logger.error(f'Shuffle command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
     async def on_pause_command(self, ctx):
-        print('Pause command')
+        logger.info('Pause command receive')
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
@@ -756,35 +773,38 @@ class iPod:
             except: await ctx.respond(embed=embed)
         except Exception as e:
             traceback.print_exc()
+            logger.error(f'Pause command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
     async def on_disconnect_command(self, ctx):
-        print('Disconnect command')
+        logger.info('Disconnect command receive')
         self.last_context = ctx
         try:
             self.disconnect(ctx)
         except Exception as e:
             traceback.print_exc()
+            logger.error(f'Disconnect command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
     async def on_search_command(self, ctx, search_term):
-        print('Search command')
+        logger.info('Search command receive')
         self.last_context = ctx
         thread = threading.Thread(target=self.run_youtube_multi_search_in_thread, args=(ctx, search_term))
         thread.start()
 
     async def on_nowplaying_command(self, ctx):
-        print('Now playing command')
+        logger.info('Now playing command receive')
         self.last_context = ctx
         try:
             embed = self.get_nowplaying_message_embed(ctx)
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         except NotPlaying as e:
+            logger.error(f'Now playing command failed', exc_info=e)
             embed = discord.Embed(description='Play something first!')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
@@ -792,36 +812,33 @@ class iPod:
     #Internal events
 
     def on_load_fail(self, ctx, unloaded_item, exception):
-        print(f'Load failed with exception: {exception}')
+        logger.error(f'Failed loading item {unloaded_item}', exc_info=exception)
         traceback.print_exc()
         if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
         bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, exception))
 
     def on_load_start(self, ctx, unloaded_item, add_to_queue):
-        print('Load start')
-        print(unloaded_item)
+        logger.info(f'Started loading item {unloaded_item}')
         bot.loop.create_task(self.respond_to_add_unloaded_item(ctx, unloaded_item))
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
-        print('Load Succeed')
-        print(loaded_item)
+        logger.info(f'Succeeded loading item {unloaded_item} into {loaded_item}')
         if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
         bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
     def on_vc_connect(self, ctx, channel):
-        pass
+        logger.info(f'Connected to channel {channel}')
         
     def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
-        print('Song play')
-        pass
+        logger.info(f'Song play succeed {new_song}')
 
     def on_start_play_fail(self, ctx, new_song: LoadedYoutubeSong, exception):
         traceback.print_exc()
-        print('Play failed starting song')
+        logger.error(f'Song play fail {new_song}', exc_info=exception)
 
     def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
         traceback.print_exc()
-        print('Play failed during song')
+        logger.error(f'Play failed during song {song}', exc_info=exception)
 
     def on_song_end_unknown(self, ctx, song, exception=None):
         #When a song ends due to an unknown cause, either an exception or the song completed
@@ -836,27 +853,27 @@ class iPod:
         pass
 
     def on_shuffle_enable(self, ctx):
-        print('Shuffle on')
+        logger.info('Shuffle on')
         bot.loop.create_task(self.respond_to_shuffle_enable(ctx))
 
     def on_shuffle_disable(self, ctx):
-        print('Shuffle off')
+        logger.info('Shuffle off')
         bot.loop.create_task(self.respond_to_shuffle_disable(ctx))
 
     def on_pause_enable(self, ctx):
-        print('Pause on')
+        logger.info('Pause on')
         bot.loop.create_task(self.respond_to_pause_enable(ctx))
 
     def on_pause_disable(self, ctx):
-        print('Pause off')
+        logger.info('Pause off')
         bot.loop.create_task(self.respond_to_pause_disable(ctx))
 
     def on_disconnect(self, ctx, auto):
-        print('Disconnect')
+        logger.info('Disconnect')
         bot.loop.create_task(self.respond_to_disconnect(ctx, auto))
 
     def on_search_complete(self, ctx, items):
-        print('Search complete')
+        logger.info('Search complete')
         bot.loop.create_task(self.respond_to_search(ctx, items))
 
     #Discord VC support
@@ -1010,15 +1027,15 @@ class Groovy(commands.Cog):
                 vc = guild.voice_client.channel
                 if len(vc.members) > 1:
                     player.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
-                    print('Users in voice channel, updating time')
+                    logger.info('Users in voice channel, updating time')
                 else:
                     if (datetime.datetime.now(datetime.timezone.utc) - player.time_of_last_member).total_seconds() > 3:
-                        print('Nobody in voice channel for time limit, disconnecting...')
+                        logger.info('Nobody in voice channel for time limit, disconnecting...')
                         player.disconnect(player.last_context)
 
     @voice_channel_leave.before_loop
     async def before_vc(self):
-        print("Starting voice channel loop...")
+        logger.info("Starting voice channel loop...")
         await bot.wait_until_ready()
            
 
@@ -1032,7 +1049,6 @@ class Groovy(commands.Cog):
     async def play(self, ctx, input: str = '', *more_words):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
-        print('PLAY COMMAND')
         await player.on_play_command(ctx, input, True)
 
     @commands.command(name='add', description='Add a song to the playlist')
@@ -1052,12 +1068,6 @@ class Groovy(commands.Cog):
     async def playlist(self, ctx):
         player = self.get_player(ctx)
         await player.on_playlist_command(ctx)
-        
-    @commands.command(name='play-debug', description='Debug')
-    async def play_debug(self, ctx, input: str = ''):
-        player = self.get_player(ctx)
-        print(f'Unloaded: P: {player.unloaded_playlist} Q: {player.unloaded_queue}')
-        print(f'Loaded: P: {player.loaded_playlist} Q: {player.loaded_queue}')
 
     @commands.command(name='shuffle', description='Toggle shuffle mode')
     async def shuffle(self, ctx):
