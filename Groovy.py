@@ -621,13 +621,13 @@ class iPod:
 
     #Command Events
 
-    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
+    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
         print('Song added to queue event')
         if not self.loading_running: 
             loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
             loading_thread.start()
 
-    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong | UnloadedSpotifyTrack):
+    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong):
         print('Song added to playlist event')
         if not self.loading_running: 
             loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
@@ -1022,7 +1022,7 @@ class Groovy(commands.Cog):
         await bot.wait_until_ready()
            
 
-    def get_player(self, ctx) -> iPod | None:
+    def get_player(self, ctx) -> iPod:
         if ctx.guild.id in music_players.keys():
             return music_players[ctx.guild.id]
         else:
