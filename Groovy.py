@@ -314,10 +314,10 @@ class iPod:
             ctx.guild.voice_client.pause()
             self.on_pause_enable(ctx)
 
-    def disconnect(self, ctx):
+    def disconnect(self, ctx, auto=False):
         if ctx.guild.voice_client == None: return
         bot.loop.create_task(ctx.guild.voice_client.disconnect())
-        self.on_disconnect(ctx)
+        self.on_disconnect(ctx, auto)
 
 
     #"USB cable" Yeah this anaology is falling apart a bit but whatever
@@ -851,9 +851,9 @@ class iPod:
         print('Pause off')
         bot.loop.create_task(self.respond_to_pause_disable(ctx))
 
-    def on_disconnect(self, ctx):
+    def on_disconnect(self, ctx, auto):
         print('Disconnect')
-        bot.loop.create_task(self.respond_to_disconnect(ctx))
+        bot.loop.create_task(self.respond_to_disconnect(ctx, auto))
 
     def on_search_complete(self, ctx, items):
         print('Search complete')
@@ -933,10 +933,13 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
-    async def respond_to_disconnect(self, ctx):
+    async def respond_to_disconnect(self, ctx, auto):
         embed = discord.Embed(description='Leaving voice chat', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        if not auto:
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        else:
+            await ctx.send(embed=embed)
 
     async def respond_to_search(self, ctx, items):
         embed = self.get_search_message_embed(items)
@@ -944,7 +947,7 @@ class iPod:
         except: await ctx.respond(embed=embed)
 
     async def respond_to_nowplaying(self, ctx):
-        embed = self.get_nowplay_message_embed()
+        embed = self.get_nowplaying_message_embed()
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -995,7 +998,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 class Groovy(commands.Cog):
     def __init__(self):
-        pass
+        self.voice_channel_leave.start()
 
     @tasks.loop(minutes=1)
     async def voice_channel_leave(self):
@@ -1005,19 +1008,19 @@ class Groovy(commands.Cog):
             guild = await bot.fetch_guild(player.last_context.guild.id)
             if guild.voice_client != None: 
                 vc = guild.voice_client.channel
-                if len(vc.members) > 0:
+                if len(vc.members) > 1:
                     player.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
                     print('Users in voice channel, updating time')
                 else:
-                    if (datetime.datetime.now(datetime.timezone.utc) - player.time_of_last_member).total_seconds() > 300:
+                    if (datetime.datetime.now(datetime.timezone.utc) - player.time_of_last_member).total_seconds() > 3:
                         print('Nobody in voice channel for time limit, disconnecting...')
                         player.disconnect(player.last_context)
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        if not self.voice_channel_leave.is_running: 
-            self.voice_channel_leave.start()
-            print(f"Starting voice channel loop...")
+    @voice_channel_leave.before_loop
+    async def before_vc(self):
+        print("Starting voice channel loop...")
+        await bot.wait_until_ready()
+           
 
     def get_player(self, ctx) -> iPod | None:
         if ctx.guild.id in music_players.keys():
