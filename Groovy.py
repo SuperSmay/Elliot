@@ -13,6 +13,7 @@ import googleapiclient.discovery
 import spotipy
 import youtube_dl
 from discord.ext import commands, tasks
+from discord.commands import Option, OptionChoice
 from youtubesearchpython import VideosSearch
 
 from globalVariables import bot, music_players
@@ -653,7 +654,8 @@ class iPod:
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
-            self.process_input(ctx, input, add_to_queue)
+            if len(input ) > 0: self.process_input(ctx, input, add_to_queue)
+            else: self.toggle_pause(ctx)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -682,11 +684,11 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
-    async def on_playlist_command(self, ctx):
+    async def on_playlist_command(self, ctx, list):
         logger.info('Playlist command receive')
         self.last_context = ctx
         try:
-            await self.respond_to_playlist_command(ctx)
+            await self.respond_to_playlist_command(ctx, list)
         except Exception as e:
             traceback.print_exc()
             logger.error(f'Playlist command failed', exc_info=e)
@@ -921,10 +923,10 @@ class iPod:
             embed.color = 7528669
         await item_loaded.loading_context.send_message(ctx, embed)
         
-    async def respond_to_playlist_command(self, ctx):
-        text_to_send = self.compile_playlist()
-        try: await ctx.reply(text_to_send, mention_author=False)
-        except: await ctx.respond(text_to_send)
+    async def respond_to_playlist_command(self, ctx, list):
+        embed_to_send = self.compile_playlist(list)
+        try: await ctx.reply(embed=embed_to_send, mention_author=False)
+        except: await ctx.respond(embed=embed_to_send)
 
     async def respond_to_shuffle_enable(self, ctx):
         embed = discord.Embed(description='Shuffle enabled', color=3093080)
@@ -976,7 +978,8 @@ class iPod:
         if loaded_playlist.error_count > 0: embed.set_footer(text=f'{loaded_playlist.error_count} songs failed to load')
         return embed
 
-    def compile_playlist(self):
+    def compile_playlist(self, list: str, page = 0) -> discord.Embed:
+        if list != 'both' or list != 'playlist' or list != 'queue': raise ValueError
         if self.shuffle:
             shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
             queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
@@ -984,8 +987,11 @@ class iPod:
         else:
             queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
             playlist_title_list = [f"{self.loaded_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_playlist[:10]]
-        return "Queue\n```\n" + "\n".join(queue_title_list) + " ```\n" + "Playlist\n```\n" + "\n".join(playlist_title_list) + "```"if len(queue_title_list + playlist_title_list) > 0 else '```Nothing to play next```'
-    
+        embed = discord.Embed(title='Upcoming playlist', description='')
+        if list == 'both' or list == 'queue': embed.description += queue_title_list
+        if list == 'both' or list == 'playlist': embed.description += playlist_title_list
+        return embed
+
     def get_search_message_embed(self, items):
         joined_string = '\n'.join(
             [f"{items.index(item) + 1}) {item['title']} -------- {item['duration']}"
@@ -1045,53 +1051,102 @@ class Groovy(commands.Cog):
         else:
             return iPod(ctx)
 
-    @commands.command(name='play', description='Add a song to the queue')
-    async def play(self, ctx, input: str = '', *more_words):
+    @commands.command(name='play', aliases=['p'], description='Add a song to the queue')
+    async def prefix_play(self, ctx, input: str = '', *more_words):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, True)
 
-    @commands.command(name='add', description='Add a song to the playlist')
-    async def add(self, ctx, input: str = '', *more_words):
+    @commands.slash_command(name='play', description='Add a song to the queue')
+    async def slash_play(self, ctx, input: Option(str, description='A link or search term', required=False, default='')):
+        player = self.get_player(ctx)
+        await player.on_play_command(ctx, input, True)
+
+    @commands.command(name='add', aliases=['a'], description='Add a song to the playlist')
+    async def prefix_add(self, ctx, input: str = '', *more_words):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, False)
 
-    @commands.command(name='skip', description='Skips a song!')
-    async def skip(self, ctx, count: str = 1):
-        try: count = max(1, int(count))
-        except ValueError: count = 1
+    @commands.slash_command(name='add', description='Add a song to the playlist')
+    async def slash_add(self, ctx, input: Option(str, description='A link or search term', required=False, default='')):
         player = self.get_player(ctx)
-        await player.on_skip_command(ctx, count)
-        
-    @commands.command(name='playlist', description='Show playlist')
-    async def playlist(self, ctx):
-        player = self.get_player(ctx)
-        await player.on_playlist_command(ctx)
+        await player.on_play_command(ctx, input, False)
 
-    @commands.command(name='shuffle', description='Toggle shuffle mode')
-    async def shuffle(self, ctx):
+    @commands.command(name='skip', aliases=['s', 'sk'], description='Skip the current song!')
+    async def prefix_skip(self, ctx):
+        # try: count = max(1, int(count))
+        # except ValueError: count = 1
+        player = self.get_player(ctx)
+        await player.on_skip_command(ctx, 1)
+
+    @commands.slash_command(name='skip', description='Skip the current song!')
+    async def slash_skip(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_skip_command(ctx, 1)
+        
+    @commands.command(name='playlist', aliases=['pl'], description='Show playlist/queue')
+    async def prefix_playlist(self, ctx, list='both'):
+        if list.startswith('p'): list = 'playlist'
+        if list.startswith('q'): list = 'queue'
+        if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
+        player = self.get_player(ctx)
+        await player.on_playlist_command(ctx, list)
+
+    @commands.slash_command(name='playlist', description='Show playlist/queue')
+    async def slash_playlist(self, ctx, list: Option(str, description='Specify playlist or queue', choices=[OptionChoice('Show playlist', 'playlist'), OptionChoice('Show queue', 'queue')], required=False, default='both')):
+        player = self.get_player(ctx)
+        await player.on_playlist_command(ctx, list)
+
+    @commands.command(name='shuffle', aliases=['sh'], description='Toggle shuffle mode')
+    async def prefix_shuffle(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_shuffle_command(ctx)
+
+    @commands.slash_command(name='shuffle', description='Toggle shuffle mode')
+    async def slash_shuffle(self, ctx):
         player = self.get_player(ctx)
         await player.on_shuffle_command(ctx)
 
     @commands.command(name='pause', description='Toggle pause')
-    async def pause(self, ctx):
+    async def prefix_pause(self, ctx):
         player = self.get_player(ctx)
         await player.on_pause_command(ctx)
 
-    @commands.command(name='disconnect', description='Leave VC')
-    async def disconnect(self, ctx):
+    @commands.slash_command(name='pause', description='Toggle pause')
+    async def slash_pause(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_pause_command(ctx)
+
+    @commands.command(name='disconnect', aliases=['dc', 'dis'], description='Leave VC')
+    async def prefix_disconnect(self, ctx):
         player = self.get_player(ctx)
         await player.on_disconnect_command(ctx)
 
-    @commands.command(name='search', description='Leave VC')
-    async def search(self, ctx, input: str = '', *more_words):
+    @commands.slash_command(name='disconnect', description='Leave VC')
+    async def slash_disconnect(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_disconnect_command(ctx)
+
+    @commands.command(name='search', aliases=['sch'], description='Leave VC')
+    async def prefix_search(self, ctx, input: str = '', *more_words):
+        input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
+        player = self.get_player(ctx)
+        await player.on_search_command(ctx, input)
+
+    @commands.slash_command(name='search', description='Leave VC')
+    async def slash_search(self, ctx, input: str = '', *more_words):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
 
     @commands.command(name="nowplaying", aliases=['np'], description="Show the now playing song")
     async def np(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_nowplaying_command(ctx)
+
+    @commands.slash_command(name="nowplaying", description="Show the now playing song")
+    async def slash_np(self, ctx):
         player = self.get_player(ctx)
         await player.on_nowplaying_command(ctx)
         
