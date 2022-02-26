@@ -87,7 +87,7 @@ class SongLoadingContext:
         elif message == None:
             self._message = 'Sending'
             try: self._message = await ctx.reply(embed=embed, mention_author=False)
-            except: self._message = await ctx.respond(embed=embed, mention_author=False)
+            except: self._message = await ctx.respond(embed=embed)
             if len(self._future_embeds) > 0:
                 next = self._future_embeds[-1]
                 self._future_embeds = []
@@ -655,7 +655,9 @@ class iPod:
         try:
             await self.setup_vc(ctx)
             if len(input ) > 0: self.process_input(ctx, input, add_to_queue)
-            else: self.toggle_pause(ctx)
+            else: 
+                try: self.toggle_pause(ctx)
+                except NotPlaying: self.play_next_item(ctx)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -684,11 +686,11 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
-    async def on_playlist_command(self, ctx, list):
+    async def on_playlist_command(self, ctx, list, page):
         logger.info('Playlist command receive')
         self.last_context = ctx
         try:
-            await self.respond_to_playlist_command(ctx, list)
+            await self.respond_to_playlist_command(ctx, list, page)
         except Exception as e:
             traceback.print_exc()
             logger.error(f'Playlist command failed', exc_info=e)
@@ -923,8 +925,8 @@ class iPod:
             embed.color = 7528669
         await item_loaded.loading_context.send_message(ctx, embed)
         
-    async def respond_to_playlist_command(self, ctx, list):
-        embed_to_send = self.compile_playlist(list)
+    async def respond_to_playlist_command(self, ctx, list, page):
+        embed_to_send = self.compile_playlist(list, page)
         try: await ctx.reply(embed=embed_to_send, mention_author=False)
         except: await ctx.respond(embed=embed_to_send)
 
@@ -933,7 +935,7 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
         if len(self.loaded_queue) > len(self.loaded_playlist):
-            embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. To add songs to the playlist, use `/add {song} `If you want to move existing songs to the playlist and use shuffle, use `/move queue all`', color=3093080)
+            embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. To add songs to the playlist, use `/add {song}` ~~If you want to move existing songs to the playlist and use shuffle, use `/move queue all`~~ NOT IMPLEMENTED YET', color=3093080)  #FIXME
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
@@ -978,18 +980,41 @@ class iPod:
         if loaded_playlist.error_count > 0: embed.set_footer(text=f'{loaded_playlist.error_count} songs failed to load')
         return embed
 
-    def compile_playlist(self, list: str, page = 0) -> discord.Embed:
-        if list != 'both' or list != 'playlist' or list != 'queue': raise ValueError
+    def compile_playlist(self, list: str, page=0) -> discord.Embed:
+        if list != 'both' and list != 'playlist' and list != 'queue': raise ValueError
+        #Set lists of strings
         if self.shuffle:
             shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
-            queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
-            playlist_title_list = [f"{shuffled_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in shuffled_playlist[:10]]
+            queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[0 + (10*page): 10 + (10*page)]]
+            playlist_title_list = [f"{shuffled_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in shuffled_playlist[0 + (10*page): 10 + (10*page)]]
         else:
-            queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[:10]]
-            playlist_title_list = [f"{self.loaded_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_playlist[:10]]
-        embed = discord.Embed(title='Upcoming playlist', description='')
-        if list == 'both' or list == 'queue': embed.description += queue_title_list
-        if list == 'both' or list == 'playlist': embed.description += playlist_title_list
+            queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[0 + (10*page): 10 + (10*page)]]
+            playlist_title_list = [f"{self.loaded_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_playlist[0 + (10*page): 10 + (10*page)]]
+        max_page_queue = max((len(self.loaded_queue) - 1)//10, 0)
+        max_page_playlist = max((len(self.loaded_playlist) - 1)//10, 0)
+        #Do the title
+        if list == 'both': title= 'Upcoming Queue/Playlist'
+        elif list == 'queue': title= 'Upcoming Queue'
+        elif list == 'playlist': title= f'Upcoming Playlist {f"(plays after {len(self.loaded_queue)} songs in queue)" if len(self.loaded_queue) >0 else ""}'
+        #Do the footer
+        if list == 'both': footer=f'Page {min(page+1, max(max_page_playlist, max_page_queue) + 1)} of {max(max_page_playlist, max_page_queue) + 1}'
+        elif list == 'queue': footer=f'Page {min(page+1, max_page_queue + 1)} of {max_page_queue + 1}'
+        elif list == 'playlist': footer=f'Page {min(page+1, max_page_playlist + 1)} of {max_page_playlist + 1}'
+        #Do the main content
+        description = ''
+        if list == 'both': description += 'Queue:\n'
+        if list == 'both' or list == 'queue':
+            if len(queue_title_list) > 0: description += ('```\n' + '\n'.join(queue_title_list) + '```\n')
+            elif len(self.loaded_queue) > 0: description += '`There is nothing on this page of the queue`\n'
+            else: description += '`The queue is empty`\n'
+        if list == 'both': description += '\nPlaylist:\n'
+        if list == 'both' or list == 'playlist': 
+            if len(playlist_title_list) > 0: description += ('```\n' + '\n'.join(playlist_title_list) + '```\n')
+            elif len(self.loaded_playlist) > 0: description += '`There is nothing on this page of the playlist`\n'
+            else: description += '`Playlist is empty`\n'
+        #Make embed for real
+        embed = discord.Embed(title=title, description=description, color=3093080)
+        embed.set_footer(text=footer)
         return embed
 
     def get_search_message_embed(self, items):
@@ -1086,17 +1111,20 @@ class Groovy(commands.Cog):
         await player.on_skip_command(ctx, 1)
         
     @commands.command(name='playlist', aliases=['pl'], description='Show playlist/queue')
-    async def prefix_playlist(self, ctx, list='both'):
+    async def prefix_playlist(self, ctx, list='both', page='1'):
         if list.startswith('p'): list = 'playlist'
         if list.startswith('q'): list = 'queue'
         if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
+        try: page = max(0, int(page)-1)
+        except ValueError: page = 0
         player = self.get_player(ctx)
-        await player.on_playlist_command(ctx, list)
+        await player.on_playlist_command(ctx, list, page)
 
     @commands.slash_command(name='playlist', description='Show playlist/queue')
-    async def slash_playlist(self, ctx, list: Option(str, description='Specify playlist or queue', choices=[OptionChoice('Show playlist', 'playlist'), OptionChoice('Show queue', 'queue')], required=False, default='both')):
+    async def slash_playlist(self, ctx, list: Option(str, description='Specify playlist or queue', choices=[OptionChoice('Show playlist', 'playlist'), OptionChoice('Show queue', 'queue')], required=False, default='both'), page: Option(int, description='Specify page number', required=False, default=1)):
+        page = max(0, page-1)
         player = self.get_player(ctx)
-        await player.on_playlist_command(ctx, list)
+        await player.on_playlist_command(ctx, list, page)
 
     @commands.command(name='shuffle', aliases=['sh'], description='Toggle shuffle mode')
     async def prefix_shuffle(self, ctx):
@@ -1128,15 +1156,14 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_disconnect_command(ctx)
 
-    @commands.command(name='search', aliases=['sch'], description='Leave VC')
-    async def prefix_search(self, ctx, input: str = '', *more_words):
+    @commands.command(name='search', aliases=['sch'], description='Search something on YouTube and get a list of results')
+    async def prefix_search(self, ctx, input: str = 'music', *more_words):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
 
-    @commands.slash_command(name='search', description='Leave VC')
-    async def slash_search(self, ctx, input: str = '', *more_words):
-        input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
+    @commands.slash_command(name='search', description='Search something on YouTube and get a list of results')
+    async def slash_search(self, ctx, input: Option(str, description='A search term', required=True)):
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
 
