@@ -1235,19 +1235,19 @@ class Groovy(commands.Cog):
 
     #TODO Move songs command
 
-    @commands.message_command(name='play', description='Add message to music queue', guild_ids=[866160840037236736])
+    @commands.message_command(name='play', description='Add message to music queue')
     async def context_play(self, ctx, message: discord.Message):
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_message_context(ctx, message, True)
 
-    @commands.message_command(name='add', description='Add message to music playlist', guild_ids=[866160840037236736])
+    @commands.message_command(name='add', description='Add message to music playlist')
     async def context_add(self, ctx, message: discord.Message):
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_message_context(ctx, message, False)
 
-    @commands.message_command(name='search', description='Search YouTube for message', guild_ids=[866160840037236736])
+    @commands.message_command(name='search', description='Search YouTube for message')
     async def context_search(self, ctx, message: discord.Message):
         await ctx.defer()
         player = self.get_player(ctx)
