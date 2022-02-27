@@ -1,23 +1,27 @@
 #Bot
-import pathlib
-from time import sleep
-import discord
-from discord.commands import Option
-from discord.commands import OptionChoice
-from globalVariables import bot, unverifiedRole, joinChannel, last_start_time
-import globalFiles
-import Interaction
+import asyncio
 import datetime
+import logging
+import pathlib
 from pathlib import Path
+from time import sleep
+
+import discord
+from discord.commands import Option, OptionChoice
+
+import BotInfo
+import BumpReminder
+import CommandInterpreter
+import globalFiles
+import Groovy
+import ImageScan
+import Interaction
+import Join
 import Leaderboard
 import Verify
-import Join
-import asyncio
-import ImageScan
-import BumpReminder
-import Groovy
-import CommandInterpreter
-import BotInfo
+from globalVariables import bot, joinChannel, last_start_time, unverifiedRole
+
+logging.basicConfig()
 
 use_dev_mode = pathlib.Path.exists(Path('use-dev-mode')) and open(Path('use-dev-mode'), 'r').read().lower() == 'true'
 
@@ -31,7 +35,6 @@ async def on_ready():
   last_start_time = datetime.datetime.utcnow()
   async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
-  print("Starting VC Loop...")
   # bot.loop.create_task(Groovy.CheckLoop.loop())
 
   
