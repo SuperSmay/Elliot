@@ -5,7 +5,6 @@ import logging
 import pathlib
 import random
 import threading
-import traceback
 import urllib.parse
 
 import discord
@@ -65,6 +64,18 @@ sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spo
 
 yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
 
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get('title')
+        self.url = data.get('url')
+
+    def from_url(cls, data, *, loop=None, stream=False):
+        loop = loop or asyncio.get_event_loop()
+        filename = data['url'] if stream else ytdl.prepare_filename(data)
+        source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
+        return cls(source, data=data)
 
 class SongLoadingContext:
     def __init__(self) -> None:
@@ -293,9 +304,15 @@ class iPod:
         if count < 1: raise ValueError('Count cannot be less than one')
         
         if len(self.loaded_playlist) > 0 or len(self.loaded_queue) > 0:
+            old_song = ctx.guild.voice_client.source
             self.play_next_item(ctx)
+            new_song = ctx.guild.voice_client.source
+            self.on_song_skip(ctx, old_song, new_song)
         else:
-            if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song   
+            old_song = ctx.guild.voice_client.source
+            if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song
+            new_song = None
+            self.on_song_skip(ctx, old_song, new_song)
 
     def skip_backwards(self, ctx, count: int = 1):
         #Skip {count} number of songs backwards
@@ -657,7 +674,9 @@ class iPod:
             if len(input ) > 0: self.process_input(ctx, input, add_to_queue)
             else: 
                 try: self.toggle_pause(ctx)
-                except NotPlaying: self.play_next_item(ctx)
+                except NotPlaying: 
+                    self.play_next_item(ctx)
+                    await self.on_nowplaying_command(ctx)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -680,7 +699,6 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         except Exception as e:
-            traceback.print_exc()
             logger.error(f'Play command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -692,7 +710,6 @@ class iPod:
         try:
             await self.respond_to_playlist_command(ctx, list, page)
         except Exception as e:
-            traceback.print_exc()
             logger.error(f'Playlist command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -726,7 +743,6 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         except Exception as e:
-            traceback.print_exc()
             logger.error(f'Skip command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -738,7 +754,6 @@ class iPod:
         try:
             self.toggle_shuffle(ctx)
         except Exception as e:
-            traceback.print_exc()
             logger.error(f'Shuffle command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -776,7 +791,6 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         except Exception as e:
-            traceback.print_exc()
             logger.error(f'Pause command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -788,7 +802,6 @@ class iPod:
         try:
             self.disconnect(ctx)
         except Exception as e:
-            traceback.print_exc()
             logger.error(f'Disconnect command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -808,18 +821,45 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         except NotPlaying as e:
-            logger.error(f'Now playing command failed', exc_info=e)
+            logger.info(f'Nothing playing for now playing command')
             embed = discord.Embed(description='Play something first!')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
+        except Exception as e:
+            logger.error(f'Now playing command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_play_message_context(self, ctx, message, add_to_queue):
+        logger.info('Play context command receive')
+        if message.content == '':
+            embed = discord.Embed(description='Message must have text')
+            await ctx.respond(embed=embed)
+        else:
+            input = message.content
+            await self.on_play_command(ctx, input, add_to_queue)
+
+    async def on_search_message_context(self, ctx, message):
+        logger.info('Search context command receive')
+        if message.content == '':
+            embed = discord.Embed(description='Message must have text')
+            await ctx.respond(embed=embed)
+        else:
+            search_term = message.content
+            await self.on_search_command(ctx, search_term)
 
     #Internal events
 
     def on_load_fail(self, ctx, unloaded_item, exception):
-        logger.error(f'Failed loading item {unloaded_item}', exc_info=exception)
-        traceback.print_exc()
-        if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
-        bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, exception))
+        if isinstance(exception, youtube_dl.utils.DownloadError) and exception.args[0] == 'ERROR: Sign in to confirm your age\nThis video may be inappropriate for some users.':
+            logger.info(f'Age restricted video {unloaded_item} cannot be loaded')
+            if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
+            bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, message='Video is age restricted'))
+        else:
+            logger.error(f'Failed loading item {unloaded_item}', exc_info=exception)
+            if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
+            bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, exception))
 
     def on_load_start(self, ctx, unloaded_item, add_to_queue):
         logger.info(f'Started loading item {unloaded_item}')
@@ -837,11 +877,9 @@ class iPod:
         logger.info(f'Song play succeed {new_song}')
 
     def on_start_play_fail(self, ctx, new_song: LoadedYoutubeSong, exception):
-        traceback.print_exc()
         logger.error(f'Song play fail {new_song}', exc_info=exception)
 
     def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
-        traceback.print_exc()
         logger.error(f'Play failed during song {song}', exc_info=exception)
 
     def on_song_end_unknown(self, ctx, song, exception=None):
@@ -880,6 +918,10 @@ class iPod:
         logger.info('Search complete')
         bot.loop.create_task(self.respond_to_search(ctx, items))
 
+    def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
+        logger.info('Song skipped')
+        bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song))
+
     #Discord VC support
 
     async def setup_vc(self, ctx: commands.Context):  #Attempts to set up VC. Runs any associated events and sends any error messages
@@ -912,9 +954,16 @@ class iPod:
         embed = discord.Embed(description=f'Loading {item_added}...')
         await item_added.loading_context.send_message(ctx, embed)
 
-    async def respond_to_load_error(self, ctx, item_added, exception):
-        embed = discord.Embed(description=f'{item_added} failed to load with error: {exception}')
-        embed.color = 16741747
+    async def respond_to_load_error(self, ctx, item_added, exception=None, message=None):
+        if exception != None:
+            embed = discord.Embed(description=f'{item_added} failed to load with error: {exception}{f", message: {message}" if message != None else ""}')
+            embed.color = 16741747
+        elif message != None:
+            embed = discord.Embed(description=f'{item_added} failed to load. {message}')
+            embed.color = 16741747
+        else:
+            embed = discord.Embed(description=f'{item_added} failed to load due to an unknown error.')
+            embed.color = 16741747
         await item_added.loading_context.send_message(ctx, embed)
 
     async def respond_to_load_item(self, ctx, item_loaded, add_to_queue):
@@ -972,6 +1021,11 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
+    async def respond_to_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
+        embed = self.get_skip_message_embed(old_song, new_song)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
     #Message contructors
 
     def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
@@ -995,7 +1049,7 @@ class iPod:
         #Do the title
         if list == 'both': title= 'Upcoming Queue/Playlist'
         elif list == 'queue': title= 'Upcoming Queue'
-        elif list == 'playlist': title= f'Upcoming Playlist {f"(plays after {len(self.loaded_queue)} songs in queue)" if len(self.loaded_queue) >0 else ""}'
+        elif list == 'playlist': title= f'Upcoming Playlist{f" (will play after {len(self.loaded_queue)} songs currently in queue)" if len(self.loaded_queue) > 0 else ""}'
         #Do the footer
         if list == 'both': footer=f'Page {min(page+1, max(max_page_playlist, max_page_queue) + 1)} of {max(max_page_playlist, max_page_queue) + 1}'
         elif list == 'queue': footer=f'Page {min(page+1, max_page_queue + 1)} of {max_page_queue + 1}'
@@ -1030,19 +1084,16 @@ class iPod:
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
         embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
         return embed
-        
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-        self.title = data.get('title')
-        self.url = data.get('url')
 
-    def from_url(cls, data, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        filename = data['url'] if stream else ytdl.prepare_filename(data)
-        source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
-        return cls(source, data=data)
+    def get_skip_message_embed(self, old_song: YTDLSource, new_song: YTDLSource):
+        if new_song == None: 
+            embed = discord.Embed(title='No more songs to play!', description='Add more with /play or /add!', color=7528669)
+            if old_song != None:
+                embed.set_footer(text=f'Skipped {old_song.title}')
+        else: 
+            embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
+            embed.set_footer(text=f'Skipped {old_song.title}')
+        return embed
 
 class Groovy(commands.Cog):
     def __init__(self):
@@ -1083,7 +1134,8 @@ class Groovy(commands.Cog):
         await player.on_play_command(ctx, input, True)
 
     @commands.slash_command(name='play', description='Add a song to the queue')
-    async def slash_play(self, ctx, input: Option(str, description='A link or search term', required=False, default='')):
+    async def slash_play(self, ctx: discord.ApplicationContext, input: Option(str, description='A link or search term', required=False, default='')):
+        await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, True)
 
@@ -1095,6 +1147,7 @@ class Groovy(commands.Cog):
 
     @commands.slash_command(name='add', description='Add a song to the playlist')
     async def slash_add(self, ctx, input: Option(str, description='A link or search term', required=False, default='')):
+        await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, False)
 
@@ -1164,6 +1217,7 @@ class Groovy(commands.Cog):
 
     @commands.slash_command(name='search', description='Search something on YouTube and get a list of results')
     async def slash_search(self, ctx, input: Option(str, description='A search term', required=True)):
+        await ctx.defer()
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
 
@@ -1176,6 +1230,29 @@ class Groovy(commands.Cog):
     async def slash_np(self, ctx):
         player = self.get_player(ctx)
         await player.on_nowplaying_command(ctx)
+    
+    #TODO Clear list command
+
+    #TODO Move songs command
+
+    @commands.message_command(name='play', description='Add message to music queue', guild_ids=[866160840037236736])
+    async def context_play(self, ctx, message: discord.Message):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_play_message_context(ctx, message, True)
+
+    @commands.message_command(name='add', description='Add message to music playlist', guild_ids=[866160840037236736])
+    async def context_add(self, ctx, message: discord.Message):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_play_message_context(ctx, message, False)
+
+    @commands.message_command(name='search', description='Search YouTube for message', guild_ids=[866160840037236736])
+    async def context_search(self, ctx, message: discord.Message):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_search_message_context(ctx, message)
+        
         
 
 
