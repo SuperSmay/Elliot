@@ -31,6 +31,7 @@ from globalVariables import bot, music_players
     ## Play history (Youtube link or dl'd dict?) 
 ##
 
+#region Variables and setup
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -63,6 +64,7 @@ client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=c
 sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
 
 yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
+#endregion
 
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, data, volume=0.5):
@@ -104,6 +106,7 @@ class SongLoadingContext:
                 self._future_embeds = []
                 await self.send_message(ctx, next)
 
+#region Song Classes
 class UnloadedYoutubeSong:
     def __init__(self, youtube_url, loading_context: SongLoadingContext) -> None:
         self.youtube_url = youtube_url
@@ -192,15 +195,16 @@ class LoadedSpotifyPlaylist:
         self.error_count = 0
     def __str__(self):
         return self.spotify_playlist_data['name']
+#endregion
 
-
-
+#region Exceptions
 class UserNotInVC(Exception): pass
 class MusicAlreadyPlayingInGuild(Exception): pass
 class CannotSpeakInVC(Exception): pass
 class CannotConnectToVC(Exception): pass
 class TriedPlayingWhenOutOfVC(Exception): pass
 class NotPlaying(Exception): pass
+#endregion
 
 class iPod:
     def __init__(self, ctx):
@@ -250,8 +254,7 @@ class iPod:
             logger.error(f'Loading loop failed', exc_info=e)
         self.loading_running = False
 
-    #"Buttons"
-
+    #region "Buttons"
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong):
         #Change player to this song
         logger.info(f'Playing {song}')
@@ -341,10 +344,9 @@ class iPod:
         if ctx.guild.voice_client == None: return
         bot.loop.create_task(ctx.guild.voice_client.disconnect())
         self.on_disconnect(ctx, auto)
+    #endregion
 
-
-    #"USB cable" Yeah this anaology is falling apart a bit but whatever
-
+    #region "USB cable" Yeah this anaology is falling apart a bit but whatever
     def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):  #Correctly process and call events for a youtube link. Below functions are similar
         if loading_context == None: loading_context = SongLoadingContext()
         if add_to_queue:
@@ -410,9 +412,9 @@ class iPod:
             new_item = UnloadedYoutubeSearch(search_term, loading_context)
             self.unloaded_playlist.append(new_item)
             self.on_item_added_to_unloaded_playlist(ctx, new_item)
-
-    #Receive loaded
-
+    #endregion
+    
+    #region Receive loaded
     def receive_loaded_youtube_data(self, ctx, loaded_song: LoadedYoutubeSong, add_to_queue: bool = False):
         if add_to_queue:
             self.loaded_queue.append(loaded_song)
@@ -441,9 +443,9 @@ class iPod:
         for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
             title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
             self.receive_search_term(ctx, title, add_to_queue, loaded_playlist.loading_context)
-
-    #Loaders
-
+    #endregion
+    
+    #region Loaders
     def distrubute_loaded_input(self, ctx, loaded_item, add_to_queue):
         if isinstance(loaded_item, LoadedYoutubeSong):
             self.receive_loaded_youtube_data(ctx, loaded_item, add_to_queue)
@@ -641,9 +643,9 @@ class iPod:
         self.on_load_start(ctx, unloaded_item, add_to_queue)
         data = ytdl.extract_info(unloaded_item.youtube_search, download=False)['entries'][0]
         return data
-
-    #Command Events
-
+    #endregion
+    
+    #region Command Events
     def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
         logger.info(f'Song added to unloaded queue event {unloaded_item}')
         if not self.loading_running: 
@@ -830,6 +832,14 @@ class iPod:
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
+    
+    async def on_clear_command(self, ctx, list):
+        logger.info('Clear command receive')
+        self.loaded_playlist = []
+        self.loaded_queue =[]
+        embed = discord.Embed(description='Cleared all songs')
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
 
     async def on_play_message_context(self, ctx, message, add_to_queue):
         logger.info('Play context command receive')
@@ -848,9 +858,9 @@ class iPod:
         else:
             search_term = message.content
             await self.on_search_command(ctx, search_term)
-
-    #Internal events
-
+    #endregion
+    
+    #region Internal events
     def on_load_fail(self, ctx, unloaded_item, exception):
         if isinstance(exception, youtube_dl.utils.DownloadError) and exception.args[0] == 'ERROR: Sign in to confirm your age\nThis video may be inappropriate for some users.':
             logger.info(f'Age restricted video {unloaded_item} cannot be loaded')
@@ -921,9 +931,9 @@ class iPod:
     def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         logger.info('Song skipped')
         bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song))
+    #endregion
 
-    #Discord VC support
-
+    #region Discord VC support
     async def setup_vc(self, ctx: commands.Context):  #Attempts to set up VC. Runs any associated events and sends any error messages
         #FIXME Don't error if already in the requested vc regardless of perms
         if ctx.author.voice == None: 
@@ -946,9 +956,9 @@ class iPod:
 
     def should_change_vc(self, ctx):
         return not (ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused())
+    #endregion
 
-    #Discord interactions
-
+    #region Discord interactions
     async def respond_to_add_unloaded_item(self, ctx, item_added):
         if item_added.loading_context.parent_playlist != None: return
         embed = discord.Embed(description=f'Loading {item_added}...')
@@ -1025,9 +1035,9 @@ class iPod:
         embed = self.get_skip_message_embed(old_song, new_song)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
+    #endregion
 
-    #Message contructors
-
+    #region Message contructors
     def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
         embed = discord.Embed(description=f'Successfully added {loaded_playlist.count} songs from {loaded_playlist} to {"queue" if add_to_queue else "playlist"}')
         embed.color = 7528669
@@ -1094,6 +1104,7 @@ class iPod:
             embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
             embed.set_footer(text=f'Skipped {old_song.title}')
         return embed
+    #endregion
 
 class Groovy(commands.Cog):
     def __init__(self):
@@ -1119,7 +1130,6 @@ class Groovy(commands.Cog):
     async def before_vc(self):
         logger.info("Starting voice channel loop...")
         await bot.wait_until_ready()
-           
 
     def get_player(self, ctx) -> iPod:
         if ctx.guild.id in music_players.keys():
@@ -1127,6 +1137,7 @@ class Groovy(commands.Cog):
         else:
             return iPod(ctx)
 
+    #region Commands
     @commands.command(name='play', aliases=['p'], description='Add a song to the queue')
     async def prefix_play(self, ctx, input: str = '', *more_words):
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
@@ -1232,6 +1243,13 @@ class Groovy(commands.Cog):
         await player.on_nowplaying_command(ctx)
     
     #TODO Clear list command
+    @commands.command(name="clear", aliases=['c'], description="Clear the playlist/queue")
+    async def prefix_clear(self, ctx, list='both'):
+        player = self.get_player(ctx)
+        if list.startswith('p'): list = 'playlist'  #FIXME only lowercase works
+        if list.startswith('q'): list = 'queue'
+        if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
+        await player.on_clear_command(ctx, list)
 
     #TODO Move songs command
 
@@ -1253,6 +1271,7 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_search_message_context(ctx, message)
         
+    #endregion
         
 
 
