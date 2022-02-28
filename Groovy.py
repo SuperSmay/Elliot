@@ -845,6 +845,26 @@ class iPod:
         self.last_context = ctx
         await self.respond_to_clear(ctx, list)
 
+    async def on_remove_command(self, ctx, list_name, index):
+        logger.info('Remove command receive')
+        self.last_context = ctx
+        if list_name == 'playlist': song_list = self.loaded_playlist
+        elif list_name == 'queue': song_list = self.loaded_queue
+        else: 
+            embed = discord.Embed(description=f'List name must be `playlist` or `queue`, not `{list_name}`!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+            return
+            
+        if len(song_list) == 0:
+            embed = discord.Embed(description=f'The {list_name} is empty!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        else:
+            index = max(0, min(index, len(song_list) - 1))
+            loaded_song = song_list[index]
+            await self.respond_to_remove(ctx, list_name, song_list, loaded_song)
+
     async def on_play_message_context(self, ctx, message, add_to_queue):
         logger.info('Play context command receive')
         if message.content == '':
@@ -881,6 +901,34 @@ class iPod:
         def __init__(self, iPod, list):
             self.iPod = iPod
             self.list = list
+            super().__init__(style=discord.enums.ButtonStyle.gray, label='Cancel')
+
+        async def callback(self, interaction: discord.Interaction):
+            await interaction.message.delete()
+
+    class RemoveCommandYesButton(discord.ui.Button):
+        def __init__(self, iPod, list_name, song_list, loaded_song):
+            self.iPod = iPod
+            self.list_name = list_name
+            self.song_list: list = song_list
+            self.loaded_song = loaded_song
+            super().__init__(style=discord.enums.ButtonStyle.danger, label='Remove')
+
+        async def callback(self, interaction: discord.Interaction):
+            try: 
+                index = self.song_list.index(self.loaded_song)
+                del(self.song_list[index])
+                embed = discord.Embed(description=f'Removed `{self.loaded_song}` from {self.list_name}', color=8180120)
+            except ValueError: 
+                embed = discord.Embed(description=f'{self.loaded_song} is not in {self.list_name}', color=16741747)
+            await interaction.message.edit(embed=embed, view=None)
+
+    class RemoveCommandNoButton(discord.ui.Button):
+        def __init__(self, iPod, list_name, song_list, loaded_song):
+            self.iPod = iPod
+            self.list_name = list_name
+            self.song_list = song_list
+            self.loaded_song = loaded_song
             super().__init__(style=discord.enums.ButtonStyle.gray, label='Cancel')
 
         async def callback(self, interaction: discord.Interaction):
@@ -1071,6 +1119,14 @@ class iPod:
         embed = discord.Embed(description=f'Are you sure you want to clear the {"playlist and queue" if list == "both" else list}?', color=16741747)
         try: await ctx.reply(embed=embed, view=view, mention_author=False)
         except: await ctx.respond(embed=embed, view=view)
+
+    async def respond_to_remove(self, ctx, list_name, song_list, loaded_song):
+        view = discord.ui.View()
+        view.add_item(self.RemoveCommandNoButton(self, list_name, song_list, loaded_song))
+        view.add_item(self.RemoveCommandYesButton(self, list_name, song_list, loaded_song))
+        embed = discord.Embed(description=f'Are you sure you want to remove `{loaded_song}` from the {list_name}?', color=16741747)
+        try: await ctx.reply(embed=embed, view=view, mention_author=False)
+        except: await ctx.respond(embed=embed, view=view)
         
     #endregion
 
@@ -1161,7 +1217,7 @@ class Groovy(commands.Cog):
                 else:
                     if (datetime.datetime.now(datetime.timezone.utc) - player.time_of_last_member).total_seconds() > 3:
                         logger.info('Nobody in voice channel for time limit, disconnecting...')
-                        player.disconnect(player.last_context)
+                        player.disconnect(player.last_context, True)
 
     @voice_channel_leave.before_loop
     async def before_vc(self):
@@ -1292,6 +1348,15 @@ class Groovy(commands.Cog):
     async def slash_clear(self, ctx, list:Option(str, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
         player = self.get_player(ctx)
         await player.on_clear_command(ctx, list)
+
+    @commands.command(name="remove", aliases=['r'], description="Clear the playlist/queue")
+    async def prefix_remove(self, ctx, list='', index='1'):
+        player = self.get_player(ctx)
+        if list.lower().startswith('p'): list = 'playlist'
+        if list.lower().startswith('q'): list = 'queue'
+        try: index = max(0, int(index)-1)
+        except ValueError: index = 0
+        await player.on_remove_command(ctx, list, index)
 
     #TODO Move songs command
 
