@@ -67,17 +67,18 @@ yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathl
 #endregion
 
 class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, data, volume=0.5):
+    def __init__(self, source, data, loaded_song, volume=0.5):
         super().__init__(source, volume)
         self.data = data
+        self.loaded_song = loaded_song
         self.title = data.get('title')
         self.url = data.get('url')
 
-    def from_url(cls, data, *, loop=None, stream=False):
+    def from_url(cls, data, loaded_song, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         source = discord.FFmpegPCMAudio(filename, **ffmpegOptions)
-        return cls(source, data=data)
+        return cls(source, data=data, loaded_song=loaded_song)
 
 class SongLoadingContext:
     def __init__(self) -> None:
@@ -208,13 +209,17 @@ class NotPlaying(Exception): pass
 
 class iPod:
     def __init__(self, ctx):
-        self.shuffle = False
+        
         self.loaded_playlist = []
         self.loaded_queue = []
         self.unloaded_playlist = []
         self.unloaded_queue = []
+        self.past_songs_played = []
+
+        self.shuffle = False
         self.loading_running = False
-        self.last_search = []
+
+        self.last_search = None
         self.last_context = None
         self.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
     
@@ -260,9 +265,11 @@ class iPod:
         logger.info(f'Playing {song}')
         try:
             if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
-            source = YTDLSource.from_url(YTDLSource, song.youtube_data, loop=bot.loop, stream=True)
+            source = YTDLSource.from_url(YTDLSource, song.youtube_data, song, loop=bot.loop, stream=True)
             if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused():
+                old_source =  ctx.guild.voice_client.source
                 ctx.guild.voice_client.source = source
+                self.on_song_end_succeed(ctx, old_source.loaded_song)
             else:
                 ctx.guild.voice_client.play(source, after= lambda e: self.on_song_end_unknown(ctx, song, e))
             self.on_song_play(ctx, song)
@@ -835,11 +842,8 @@ class iPod:
     
     async def on_clear_command(self, ctx, list):
         logger.info('Clear command receive')
-        self.loaded_playlist = []
-        self.loaded_queue =[]
-        embed = discord.Embed(description='Cleared all songs')
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        self.last_context = ctx
+        await self.respond_to_clear(ctx, list)
 
     async def on_play_message_context(self, ctx, message, add_to_queue):
         logger.info('Play context command receive')
@@ -858,6 +862,29 @@ class iPod:
         else:
             search_term = message.content
             await self.on_search_command(ctx, search_term)
+    #endregion
+
+    #region Buttons
+    class ClearCommandYesButton(discord.ui.Button):
+        def __init__(self, iPod, list):
+            self.iPod = iPod
+            self.list = list
+            super().__init__(style=discord.enums.ButtonStyle.danger, label='Clear')
+
+        async def callback(self, interaction: discord.Interaction):
+            if self.list == 'both' or self.list == 'playlist': self.iPod.loaded_playlist = []
+            if self.list == 'both' or self.list == 'queue': self.iPod.loaded_queue = []
+            embed = discord.Embed(description=f'Cleared all songs from {"playlist and queue" if self.list == "both" else self.list}', color=8180120)
+            await interaction.message.edit(embed=embed, view=None)
+
+    class ClearCommandNoButton(discord.ui.Button):
+        def __init__(self, iPod, list):
+            self.iPod = iPod
+            self.list = list
+            super().__init__(style=discord.enums.ButtonStyle.gray, label='Cancel')
+
+        async def callback(self, interaction: discord.Interaction):
+            await interaction.message.delete()
     #endregion
     
     #region Internal events
@@ -895,14 +922,15 @@ class iPod:
     def on_song_end_unknown(self, ctx, song, exception=None):
         #When a song ends due to an unknown cause, either an exception or the song completed
         if exception == None:
-            self.on_song_end(ctx, song)
+            self.on_song_end_succeed(ctx, song)
             self.play_next_item(ctx)
         else:
             self.on_during_play_fail(ctx, song, exception)
             self.play_next_item(ctx)
 
-    def on_song_end(self, ctx, song):
-        pass
+    def on_song_end_succeed(self, ctx, song):
+        logger.info('Song ended')
+        self.past_songs_played.insert(0, song)
 
     def on_shuffle_enable(self, ctx):
         logger.info('Shuffle on')
@@ -1035,6 +1063,15 @@ class iPod:
         embed = self.get_skip_message_embed(old_song, new_song)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
+    
+    async def respond_to_clear(self, ctx, list):
+        view = discord.ui.View()
+        view.add_item(self.ClearCommandNoButton(self, list))
+        view.add_item(self.ClearCommandYesButton(self, list))
+        embed = discord.Embed(description=f'Are you sure you want to clear the {"playlist and queue" if list == "both" else list}?', color=16741747)
+        try: await ctx.reply(embed=embed, view=view, mention_author=False)
+        except: await ctx.respond(embed=embed, view=view)
+        
     #endregion
 
     #region Message contructors
@@ -1176,8 +1213,8 @@ class Groovy(commands.Cog):
         
     @commands.command(name='playlist', aliases=['pl'], description='Show playlist/queue')
     async def prefix_playlist(self, ctx, list='both', page='1'):
-        if list.startswith('p'): list = 'playlist'
-        if list.startswith('q'): list = 'queue'
+        if list.lower().startswith('p'): list = 'playlist'
+        if list.lower().startswith('q'): list = 'queue'
         if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
         try: page = max(0, int(page)-1)
         except ValueError: page = 0
@@ -1246,9 +1283,14 @@ class Groovy(commands.Cog):
     @commands.command(name="clear", aliases=['c'], description="Clear the playlist/queue")
     async def prefix_clear(self, ctx, list='both'):
         player = self.get_player(ctx)
-        if list.startswith('p'): list = 'playlist'  #FIXME only lowercase works
-        if list.startswith('q'): list = 'queue'
+        if list.lower().startswith('p'): list = 'playlist'
+        if list.lower().startswith('q'): list = 'queue'
         if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
+        await player.on_clear_command(ctx, list)
+
+    @commands.slash_command(name="clear", description="Clear the playlist/queue")
+    async def slash_clear(self, ctx, list:Option(str, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
+        player = self.get_player(ctx)
         await player.on_clear_command(ctx, list)
 
     #TODO Move songs command
