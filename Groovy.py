@@ -865,6 +865,34 @@ class iPod:
             loaded_song = song_list[index]
             await self.respond_to_remove(ctx, list_name, song_list, loaded_song)
 
+    async def on_move_command(self, ctx, song_list_name, index_of_first_song, index_of_last_song, index_to_move_to):
+        logger.info('Move command receive')
+        self.last_context = ctx
+        if song_list_name == 'playlist': 
+            song_list = self.loaded_playlist
+            other_list = self.loaded_queue
+            other_list_name = 'queue'
+        elif song_list_name == 'queue': 
+            song_list = self.loaded_queue
+            other_list = self.loaded_playlist
+            other_list_name = 'playlist'
+        else: 
+            embed = discord.Embed(description=f'List name must be `playlist` or `queue`, not `{song_list_name}`!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+            return
+            
+        if len(song_list) == 0:
+            embed = discord.Embed(description=f'The {song_list_name} is empty!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        else:
+            index_of_first_song = max(0, min(index_of_first_song, len(song_list) - 1))
+            index_of_last_song = max(0, min(index_of_last_song, len(song_list) - 1))
+            other_list[index_to_move_to:index_to_move_to] = song_list[index_of_first_song:index_of_last_song+1]
+            del(song_list[index_of_first_song:index_of_last_song+1])
+            await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
+
     async def on_play_message_context(self, ctx, message, add_to_queue):
         logger.info('Play context command receive')
         if message.content == '':
@@ -882,6 +910,8 @@ class iPod:
         else:
             search_term = message.content
             await self.on_search_command(ctx, search_term)
+
+    
     #endregion
 
     #region Buttons
@@ -1127,7 +1157,11 @@ class iPod:
         embed = discord.Embed(description=f'Are you sure you want to remove `{loaded_song}` from the {list_name}?', color=16741747)
         try: await ctx.reply(embed=embed, view=view, mention_author=False)
         except: await ctx.respond(embed=embed, view=view)
-        
+
+    async def respond_to_move(self, ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
+        embed = self.get_move_embed(song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
     #endregion
 
     #region Message contructors
@@ -1197,6 +1231,11 @@ class iPod:
             embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
             embed.set_footer(text=f'Skipped {old_song.title}')
         return embed
+
+    def get_move_embed(self, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
+        moved_songs = index_of_last_song+1 - index_of_first_song
+        embed = discord.Embed(description=f'Moved {moved_songs} songs from {song_list_name} to {other_list_name}')
+        return embed
     #endregion
 
 class Groovy(commands.Cog):
@@ -1238,7 +1277,7 @@ class Groovy(commands.Cog):
         await player.on_play_command(ctx, input, True)
 
     @commands.slash_command(name='play', description='Add a song to the queue')
-    async def slash_play(self, ctx: discord.ApplicationContext, input: Option(str, description='A link or search term', required=False, default='')):
+    async def slash_play(self, ctx: discord.ApplicationContext, input: Option(discord.enums.SlashCommandOptionType.string, description='A link or search term', required=False, default='')):
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, True)
@@ -1250,7 +1289,7 @@ class Groovy(commands.Cog):
         await player.on_play_command(ctx, input, False)
 
     @commands.slash_command(name='add', description='Add a song to the playlist')
-    async def slash_add(self, ctx, input: Option(str, description='A link or search term', required=False, default='')):
+    async def slash_add(self, ctx, input: Option(discord.enums.SlashCommandOptionType.string, description='A link or search term', required=False, default='')):
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, False)
@@ -1278,8 +1317,10 @@ class Groovy(commands.Cog):
         await player.on_playlist_command(ctx, list, page)
 
     @commands.slash_command(name='playlist', description='Show playlist/queue')
-    async def slash_playlist(self, ctx, list: Option(str, description='Specify playlist or queue', choices=[OptionChoice('Show playlist', 'playlist'), OptionChoice('Show queue', 'queue')], required=False, default='both'), page: Option(int, description='Specify page number', required=False, default=1)):
-        page = max(0, page-1)
+    async def slash_playlist(self, ctx, 
+    list: Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Show playlist', 'playlist'), OptionChoice('Show queue', 'queue')], required=False, default='both'), 
+    page: Option(discord.enums.SlashCommandOptionType.integer, description='Specify page number', required=False, default=1, min_value=1)
+    ):
         player = self.get_player(ctx)
         await player.on_playlist_command(ctx, list, page)
 
@@ -1345,11 +1386,12 @@ class Groovy(commands.Cog):
         await player.on_clear_command(ctx, list)
 
     @commands.slash_command(name="clear", description="Clear the playlist/queue")
-    async def slash_clear(self, ctx, list:Option(str, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
+    async def slash_clear(self, ctx, 
+    list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
         player = self.get_player(ctx)
         await player.on_clear_command(ctx, list)
 
-    @commands.command(name="remove", aliases=['r'], description="Clear the playlist/queue")
+    @commands.command(name="remove", aliases=['r', 'rm'], description="Clear the playlist/queue")
     async def prefix_remove(self, ctx, list='', index='1'):
         player = self.get_player(ctx)
         if list.lower().startswith('p'): list = 'playlist'
@@ -1358,7 +1400,36 @@ class Groovy(commands.Cog):
         except ValueError: index = 0
         await player.on_remove_command(ctx, list, index)
 
-    #TODO Move songs command
+    @commands.slash_command(name="remove", description="Clear the playlist/queue")
+    async def slash_remove(self, ctx, 
+    list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Remove song from playlist', 'playlist'), OptionChoice('Remove song from queue', 'queue')], required=True), 
+    index:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the song to remove', required=True, min_value=1)):
+        player = self.get_player(ctx)
+        await player.on_remove_command(ctx, list, index)
+
+    @commands.command(name="move", aliases=['m', 'mv'], description="Move a song between playlist and queue")
+    async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song='1', index_to_move_to='1'):
+        player = self.get_player(ctx)
+        if song_list_list.lower().startswith('p'): song_list_list = 'playlist'
+        if song_list_list.lower().startswith('q'): song_list_list = 'queue'
+
+        try: index_of_first_song = max(0, int(index_of_first_song)-1)
+        except ValueError: index_of_first_song = 0
+        try: index_of_last_song = max(0, int(index_of_last_song)-1)
+        except ValueError: index_of_last_song = 0
+        try: index_to_move_to = max(0, int(index_to_move_to)-1)
+        except ValueError: index_to_move_to = 0
+
+        await player.on_move_command(ctx, song_list_list, index_of_first_song, index_of_last_song, index_to_move_to)
+
+    @commands.slash_command(name="move", description="Move a song between playlist and queue")
+    async def slash_move(self, ctx, 
+    list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Move song from playlist', 'playlist'), OptionChoice('Move song from queue', 'queue')], required=True), 
+    index_to_start:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the first song to move', required=True, min_value=1),
+    index_to_end:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the last song to move', required=True, min_value=1),
+    index_to_move_to:Option(discord.enums.SlashCommandOptionType.integer, description='Where to put the songs in the other list', required=False, default=1, min_value=1)):
+        player = self.get_player(ctx)
+        await player.on_move_command(ctx, list, index_to_start, index_to_end, index_to_move_to)
 
     @commands.message_command(name='play', description='Add message to music queue')
     async def context_play(self, ctx, message: discord.Message):
