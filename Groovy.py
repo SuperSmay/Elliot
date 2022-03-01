@@ -652,6 +652,13 @@ class iPod:
         return data
     #endregion
     
+    #region Data processing
+    #Sort for shuffle
+    #Get shuffle num
+    #Get fancy title for playlist
+    #Etc
+    #endregion
+
     #region Command Events
     def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
         logger.info(f'Song added to unloaded queue event {unloaded_item}')
@@ -1376,7 +1383,6 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_nowplaying_command(ctx)
     
-    #TODO Clear list command
     @commands.command(name="clear", aliases=['c'], description="Clear the playlist/queue")
     async def prefix_clear(self, ctx, list='both'):
         player = self.get_player(ctx)
