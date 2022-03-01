@@ -544,14 +544,6 @@ class iPod:
         search = VideosSearch(text_to_search, limit=limit)
         return search.result()['result']
 
-    def get_shuffle_number(self, loaded_youtube_song: LoadedYoutubeSong):
-        return loaded_youtube_song.random_value
-
-    def sort_for_shuffle(self, playlist:list[LoadedYoutubeSong]):
-        new_list = playlist.copy()
-        new_list.sort(key=self.get_shuffle_number)
-        return new_list
-
     def reshuffle_list(self, playlist:list[LoadedYoutubeSong]):
         for song in playlist:
             song.random_value = random.randint(0, 10000)
@@ -653,8 +645,74 @@ class iPod:
     #endregion
     
     #region Data processing
-    #Sort for shuffle
-    #Get shuffle num
+    def get_shuffle_number(self, loaded_youtube_song: LoadedYoutubeSong):
+        return loaded_youtube_song.random_value
+
+    def sort_for_shuffle(self, playlist:list[LoadedYoutubeSong]):
+        new_list = playlist.copy()
+        new_list.sort(key=self.get_shuffle_number)
+        return new_list
+
+    def get_formatted_list(self, list, page):
+        index_length = 0
+        for song in list[0 + (10*page): 10 + (10*page)]:
+            if len(str(list.index(song) + 1)) > index_length: index_length = len(str(list.index(song) + 1))
+        return [f'{self.get_consistant_index(list.index(song) + 1, index_length)} {self.get_35_char_title(song.youtube_data["title"])}  {self.parse_duration(song.youtube_data["duration"])}' for song in list[0 + (10*page): 10 + (10*page)]]
+            
+    def get_35_char_title(self, song_title):
+        if len(song_title) < 35:
+            song_title += ' '
+            while len(song_title) < 35: song_title += '-'
+        if len(song_title) > 35:
+            song_title = song_title[0:34] + '…'
+        return song_title
+
+    def get_consistant_index(self, index, length):
+        pos = f'{index})'
+        while len(pos) < length + 1:
+            pos = ' ' + pos
+        return pos
+
+    def parse_duration(self, duration):
+        '''
+        Converts a time, in seconds, to a string in the format hr:min:sec, or min:sec if less than one hour.
+    
+        @type  duration: int
+        @param duration: The time, in seconds
+
+        @rtype:   string
+        @return:  The new time, hr:min:sec or min:sec
+        '''
+
+        #Divides everything into hours, minutes, and seconds
+        hours = duration // 3600
+        temp_time = duration % 3600 #Modulo takes the remainder of division, leaving the remaining minutes after all hours are taken out
+        minutes = temp_time // 60
+        seconds = temp_time % 60
+
+        #Formats time into a readable string
+        new_time = ""
+        if hours > 0: #Adds hours to string if hours are available; else this will just be blank
+            new_time += str(hours) + ":"
+
+        if minutes > 0:
+            if minutes < 10: #Adds a 0 to one-digit times
+                new_time += "0" + str(minutes) + ":"
+            else:
+                new_time += str(minutes) +":"
+        else: #If there are no minutes, the place still needs to be held
+            new_time += "00:"
+
+        if seconds > 0:
+            if seconds < 10: #Adds a 0 to one-digit times
+                new_time += "0" + str(seconds)
+            else:
+                new_time += str(seconds)
+        else:
+            new_time += "00"
+
+        return new_time
+
     #Get fancy title for playlist
     #Etc
     #endregion
@@ -1183,11 +1241,11 @@ class iPod:
         #Set lists of strings
         if self.shuffle:
             shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
-            queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[0 + (10*page): 10 + (10*page)]]
-            playlist_title_list = [f"{shuffled_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in shuffled_playlist[0 + (10*page): 10 + (10*page)]]
+            queue_title_list = self.get_formatted_list(self.loaded_queue, page)
+            playlist_title_list = self.get_formatted_list(shuffled_playlist, page)
         else:
-            queue_title_list = [f"{self.loaded_queue.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_queue[0 + (10*page): 10 + (10*page)]]
-            playlist_title_list = [f"{self.loaded_playlist.index(song) + 1}) {song.youtube_data['title']}" for song in self.loaded_playlist[0 + (10*page): 10 + (10*page)]]
+            queue_title_list = self.get_formatted_list(self.loaded_queue, page)
+            playlist_title_list = self.get_formatted_list(self.loaded_playlist, page)
         max_page_queue = max((len(self.loaded_queue) - 1)//10, 0)
         max_page_playlist = max((len(self.loaded_playlist) - 1)//10, 0)
         #Do the title
