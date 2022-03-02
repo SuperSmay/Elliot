@@ -1,4 +1,5 @@
 import asyncio
+from code import interact
 import concurrent.futures
 import datetime
 import logging
@@ -653,13 +654,13 @@ class iPod:
         new_list.sort(key=self.get_shuffle_number)
         return new_list
 
-    def get_formatted_list(self, list, page):
+    def get_formatted_playlist(self, list, page):
         index_length = 0
-        for song in list[0 + (10*page): 10 + (10*page)]:
+        for song in list[10*page: 10*(page + 1)]:
             if len(str(list.index(song) + 1)) > index_length: index_length = len(str(list.index(song) + 1))
-        return [f'{self.get_consistant_index(list.index(song) + 1, index_length)} {self.get_35_char_title(song.youtube_data["title"])}  {self.parse_duration(song.youtube_data["duration"])}' for song in list[0 + (10*page): 10 + (10*page)]]
+        return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {self.get_consistent_length_title(song.youtube_data["title"])}  {self.parse_duration(song.youtube_data["duration"])}' for song in list[0 + (10*page): 10 + (10*page)]]
             
-    def get_35_char_title(self, song_title):
+    def get_consistent_length_title(self, song_title):
         if len(song_title) < 35:
             song_title += ' '
             while len(song_title) < 35: song_title += '-'
@@ -667,7 +668,7 @@ class iPod:
             song_title = song_title[0:34] + '…'
         return song_title
 
-    def get_consistant_index(self, index, length):
+    def get_consistent_length_index(self, index, length):
         pos = f'{index})'
         while len(pos) < length + 1:
             pos = ' ' + pos
@@ -712,6 +713,16 @@ class iPod:
             new_time += "00"
 
         return new_time
+
+    def clear_list(self, ctx, list_name):
+        if list_name == 'both' or list_name == 'playlist': self.loaded_playlist = []
+        if list_name == 'both' or list_name == 'queue': self.loaded_queue = []
+        self.on_list_clear(ctx, list_name)
+
+    def remove_item_from_list(self, ctx, list_name, song_list, loaded_song):
+        index = song_list.index(loaded_song)
+        del(song_list[index])
+        self.on_remove_item_from_list(ctx, list_name, song_list, loaded_song)
 
     #Get fancy title for playlist
     #Etc
@@ -928,7 +939,7 @@ class iPod:
         else:
             index = max(0, min(index, len(song_list) - 1))
             loaded_song = song_list[index]
-            await self.respond_to_remove(ctx, list_name, song_list, loaded_song)
+            await self.respond_to_remove_command(ctx, list_name, song_list, loaded_song)
 
     async def on_move_command(self, ctx, song_list_name, index_of_first_song, index_of_last_song, index_to_move_to):
         logger.info('Move command receive')
@@ -976,22 +987,32 @@ class iPod:
             search_term = message.content
             await self.on_search_command(ctx, search_term)
 
-    
+    async def on_clear_button(self, interaction, list_name):
+        ctx = await bot.get_context(interaction.message)
+        self.clear_list(ctx, list_name)
+        embed = discord.Embed(description=f'Cleared all songs from {"playlist and queue" if list_name == "both" else list_name}', color=8180120)
+        await interaction.message.edit(embed=embed, view=None)
+
+    async def on_remove_button(self, interaction, list_name, song_list, loaded_song):
+        try:
+            ctx = await bot.get_context(interaction.message)
+            self.remove_item_from_list(ctx, list_name, song_list, loaded_song)
+            embed = discord.Embed(description=f'Removed `{loaded_song}` from {list_name}', color=8180120)
+        except ValueError: 
+            embed = discord.Embed(description=f'{loaded_song} is not in {list_name}', color=16741747)
+        await interaction.message.edit(embed=embed, view=None)
     #endregion
 
     #region Buttons
     class ClearCommandYesButton(discord.ui.Button):
-        def __init__(self, iPod, list):
+        def __init__(self, iPod, list_name):
             self.iPod = iPod
-            self.list = list
+            self.list_name = list_name
             super().__init__(style=discord.enums.ButtonStyle.danger, label='Clear')
 
         async def callback(self, interaction: discord.Interaction):
-            if self.list == 'both' or self.list == 'playlist': self.iPod.loaded_playlist = []
-            if self.list == 'both' or self.list == 'queue': self.iPod.loaded_queue = []
-            embed = discord.Embed(description=f'Cleared all songs from {"playlist and queue" if self.list == "both" else self.list}', color=8180120)
-            await interaction.message.edit(embed=embed, view=None)
-
+            await self.iPod.on_clear_button(interaction, self.list_name)
+            
     class ClearCommandNoButton(discord.ui.Button):
         def __init__(self, iPod, list):
             self.iPod = iPod
@@ -1010,13 +1031,7 @@ class iPod:
             super().__init__(style=discord.enums.ButtonStyle.danger, label='Remove')
 
         async def callback(self, interaction: discord.Interaction):
-            try: 
-                index = self.song_list.index(self.loaded_song)
-                del(self.song_list[index])
-                embed = discord.Embed(description=f'Removed `{self.loaded_song}` from {self.list_name}', color=8180120)
-            except ValueError: 
-                embed = discord.Embed(description=f'{self.loaded_song} is not in {self.list_name}', color=16741747)
-            await interaction.message.edit(embed=embed, view=None)
+            await self.iPod.on_remove_button(interaction, self.list_name, self.song_list, self.loaded_song)
 
     class RemoveCommandNoButton(discord.ui.Button):
         def __init__(self, iPod, list_name, song_list, loaded_song):
@@ -1102,6 +1117,12 @@ class iPod:
     def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         logger.info('Song skipped')
         bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song))
+    
+    def on_list_clear(self, ctx, list_name):
+        logger.info(f'{list_name} cleared')
+
+    def on_remove_item_from_list(self, ctx, list_name, song_list, loaded_song):
+        logger.info(f'Removed {loaded_song} from {list_name}')
     #endregion
 
     #region Discord VC support
@@ -1215,7 +1236,7 @@ class iPod:
         try: await ctx.reply(embed=embed, view=view, mention_author=False)
         except: await ctx.respond(embed=embed, view=view)
 
-    async def respond_to_remove(self, ctx, list_name, song_list, loaded_song):
+    async def respond_to_remove_command(self, ctx, list_name, song_list, loaded_song):
         view = discord.ui.View()
         view.add_item(self.RemoveCommandNoButton(self, list_name, song_list, loaded_song))
         view.add_item(self.RemoveCommandYesButton(self, list_name, song_list, loaded_song))
@@ -1241,11 +1262,11 @@ class iPod:
         #Set lists of strings
         if self.shuffle:
             shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
-            queue_title_list = self.get_formatted_list(self.loaded_queue, page)
-            playlist_title_list = self.get_formatted_list(shuffled_playlist, page)
+            queue_title_list = self.get_formatted_playlist(self.loaded_queue, page)
+            playlist_title_list = self.get_formatted_playlist(shuffled_playlist, page)
         else:
-            queue_title_list = self.get_formatted_list(self.loaded_queue, page)
-            playlist_title_list = self.get_formatted_list(self.loaded_playlist, page)
+            queue_title_list = self.get_formatted_playlist(self.loaded_queue, page)
+            playlist_title_list = self.get_formatted_playlist(self.loaded_playlist, page)
         max_page_queue = max((len(self.loaded_queue) - 1)//10, 0)
         max_page_playlist = max((len(self.loaded_playlist) - 1)//10, 0)
         #Do the title
