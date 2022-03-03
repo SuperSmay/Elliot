@@ -157,6 +157,7 @@ class LoadedYoutubeSong:
         self.youtube_data = youtube_data
         self.loading_context = loading_context
         self.random_value = random.randint(0, 10000)
+        self.song_list = []
     def __str__(self) -> str:
         return self.youtube_data['title']
 
@@ -261,7 +262,7 @@ class iPod:
         self.loading_running = False
 
     #region "Buttons"
-    def play(self, ctx: commands.Context, song: LoadedYoutubeSong):
+    def play(self, ctx: commands.Context, song: LoadedYoutubeSong, is_skip_backwards: bool):
         #Change player to this song
         logger.info(f'Playing {song}')
         try:
@@ -271,6 +272,10 @@ class iPod:
                 old_source =  ctx.guild.voice_client.source
                 ctx.guild.voice_client.source = source
                 self.on_song_end_succeed(ctx, old_source.loaded_song)
+                if is_skip_backwards:
+                    self.return_song_to_original_list(old_source.loaded_song)
+                else:
+                    self.add_song_to_play_history(old_source.loaded_song)
             else:
                 ctx.guild.voice_client.play(source, after= lambda e: self.on_song_end_unknown(ctx, song, e))
             self.on_song_play(ctx, song)
@@ -284,7 +289,7 @@ class iPod:
             new_song = self.loaded_queue[0]
             if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
             if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
-            self.play(ctx, new_song)
+            self.play(ctx, new_song, False)
             return True
         elif len(self.loaded_playlist) > 0:
             if self.shuffle:
@@ -292,14 +297,25 @@ class iPod:
                 new_song = shuffled_playlist[0]
                 if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
                 if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
-                self.play(ctx, new_song)
+                self.play(ctx, new_song, False)
                 return True
             else:
                 new_song = self.loaded_playlist[0]
                 if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
                 if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
-                self.play(ctx, new_song)
+                self.play(ctx, new_song, False)
                 return True
+        else:
+            return False
+
+    def play_previous_item(self, ctx):
+        #Play next item
+        #Returns whether or not a new song was started
+        if len(self.past_songs_played) > 0:
+            new_song = self.past_songs_played[0]
+            if new_song in self.past_songs_played: del(self.past_songs_played[self.past_songs_played.index(new_song)])
+            self.play(ctx, new_song, True)
+            return True
         else:
             return False
 
@@ -309,11 +325,8 @@ class iPod:
         if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
             self.play_next_item(ctx)
             
-    def skip(self, ctx, count: int = 1):
-        #Skip {count} number of songs
-        #FIXME make count actually work
-        if count < 1: raise ValueError('Count cannot be less than one')
-        
+    def skip(self, ctx):
+        #Skip a song
         if len(self.loaded_playlist) > 0 or len(self.loaded_queue) > 0:
             old_song = ctx.guild.voice_client.source
             self.play_next_item(ctx)
@@ -325,10 +338,17 @@ class iPod:
             new_song = None
             self.on_song_skip(ctx, old_song, new_song)
 
-    def skip_backwards(self, ctx, count: int = 1):
-        #Skip {count} number of songs backwards
-        if count < 1: raise ValueError('Count cannot be less than one')
-        pass
+    def skip_backwards(self, ctx):
+        #Skip a song backwards
+        if len(self.past_songs_played) > 0:
+            old_song = ctx.guild.voice_client.source
+            self.play_previous_item(ctx)
+            new_song = ctx.guild.voice_client.source
+            self.on_song_skip_backwards(ctx, old_song, new_song)
+        else:
+            old_song = ctx.guild.voice_client.source
+            new_song = None
+            self.on_song_skip_backwards(ctx, old_song, new_song)
 
     def toggle_shuffle(self, ctx):
         if self.shuffle:
@@ -426,9 +446,11 @@ class iPod:
     def receive_loaded_youtube_data(self, ctx, loaded_song: LoadedYoutubeSong, add_to_queue: bool = False):
         if add_to_queue:
             self.loaded_queue.append(loaded_song)
+            loaded_song.song_list = self.loaded_queue
             self.on_item_added_to_loaded_queue(ctx, loaded_song)
         else:
             self.loaded_playlist.append(loaded_song)
+            loaded_song.song_list = self.loaded_playlist
             self.on_item_added_to_loaded_playlist(ctx, loaded_song)
 
     def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
@@ -715,8 +737,8 @@ class iPod:
         return new_time
 
     def clear_list(self, ctx, list_name):
-        if list_name == 'both' or list_name == 'playlist': self.loaded_playlist = []
-        if list_name == 'both' or list_name == 'queue': self.loaded_queue = []
+        if list_name == 'both' or list_name == 'playlist': self.loaded_playlist.clear()
+        if list_name == 'both' or list_name == 'queue': self.loaded_queue.clear()
         self.on_list_clear(ctx, list_name)
 
     def remove_item_from_list(self, ctx, list_name, song_list, loaded_song):
@@ -724,8 +746,20 @@ class iPod:
         del(song_list[index])
         self.on_remove_item_from_list(ctx, list_name, song_list, loaded_song)
 
-    #Get fancy title for playlist
-    #Etc
+    def move_items_between_lists(self, song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
+        index_of_first_song = max(0, min(index_of_first_song, len(song_list) - 1))
+        index_of_last_song = max(0, min(index_of_last_song, len(song_list) - 1))
+        other_list[index_to_move_to:index_to_move_to] = song_list[index_of_first_song:index_of_last_song+1]
+        for loaded_song in song_list[index_of_first_song:index_of_last_song+1]:
+            loaded_song.song_list = other_list
+        del(song_list[index_of_first_song:index_of_last_song+1])
+
+    def add_song_to_play_history(self, loaded_song):
+        self.past_songs_played.insert(0, loaded_song)
+
+    def return_song_to_original_list(self, loaded_song):
+        loaded_song.song_list.insert(0, loaded_song)
+
     #endregion
 
     #region Command Events
@@ -800,12 +834,12 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
-    async def on_skip_command(self, ctx, count: int):
+    async def on_skip_command(self, ctx):
         logger.info('Skip command receive')
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
-            self.skip(ctx, count)
+            self.skip(ctx)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -829,6 +863,39 @@ class iPod:
             except: await ctx.respond(embed=embed)
         except Exception as e:
             logger.error(f'Skip command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_skip_backwards_command(self, ctx):
+        logger.info('Skip back command receive')
+        self.last_context = ctx
+        try:
+            await self.setup_vc(ctx)
+            self.skip_backwards(ctx)
+        except UserNotInVC as e:
+            embed = discord.Embed(description='You need to join a vc!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except MusicAlreadyPlayingInGuild as e:
+            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except CannotConnectToVC as e:
+            embed = discord.Embed(description='I don\'t have access to that voice channel!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except CannotSpeakInVC as e:
+            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except asyncio.TimeoutError as e:
+            embed = discord.Embed(description='Connection timed out.')
+            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except Exception as e:
+            logger.error(f'Skip back command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
@@ -920,7 +987,7 @@ class iPod:
         logger.info('Clear command receive')
         self.last_context = ctx
         await self.respond_to_clear(ctx, list)
-
+#endregion
     async def on_remove_command(self, ctx, list_name, index):
         logger.info('Remove command receive')
         self.last_context = ctx
@@ -963,10 +1030,7 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         else:
-            index_of_first_song = max(0, min(index_of_first_song, len(song_list) - 1))
-            index_of_last_song = max(0, min(index_of_last_song, len(song_list) - 1))
-            other_list[index_to_move_to:index_to_move_to] = song_list[index_of_first_song:index_of_last_song+1]
-            del(song_list[index_of_first_song:index_of_last_song+1])
+            self.move_items_between_lists(song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
             await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
 
     async def on_play_message_context(self, ctx, message, add_to_queue):
@@ -1081,6 +1145,7 @@ class iPod:
         #When a song ends due to an unknown cause, either an exception or the song completed
         if exception == None:
             self.on_song_end_succeed(ctx, song)
+            self.add_song_to_play_history(song)
             self.play_next_item(ctx)
         else:
             self.on_during_play_fail(ctx, song, exception)
@@ -1088,7 +1153,6 @@ class iPod:
 
     def on_song_end_succeed(self, ctx, song):
         logger.info('Song ended')
-        self.past_songs_played.insert(0, song)
 
     def on_shuffle_enable(self, ctx):
         logger.info('Shuffle on')
@@ -1117,6 +1181,10 @@ class iPod:
     def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         logger.info('Song skipped')
         bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song))
+
+    def on_song_skip_backwards(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
+        logger.info('Song skipped back')
+        bot.loop.create_task(self.respond_to_skip_backwards(ctx, old_song, new_song))
     
     def on_list_clear(self, ctx, list_name):
         logger.info(f'{list_name} cleared')
@@ -1227,6 +1295,11 @@ class iPod:
         embed = self.get_skip_message_embed(old_song, new_song)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
+
+    async def respond_to_skip_backwards(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
+        embed = self.get_skip_backward_message_embed(old_song, new_song)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
     
     async def respond_to_clear(self, ctx, list):
         view = discord.ui.View()
@@ -1258,25 +1331,29 @@ class iPod:
         return embed
 
     def compile_playlist(self, list: str, page=0) -> discord.Embed:
-        if list != 'both' and list != 'playlist' and list != 'queue': raise ValueError
+        if list != 'both' and list != 'playlist' and list != 'queue' and list != 'history': raise ValueError(list)
         #Set lists of strings
         if self.shuffle:
             shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
-            queue_title_list = self.get_formatted_playlist(self.loaded_queue, page)
             playlist_title_list = self.get_formatted_playlist(shuffled_playlist, page)
         else:
-            queue_title_list = self.get_formatted_playlist(self.loaded_queue, page)
             playlist_title_list = self.get_formatted_playlist(self.loaded_playlist, page)
+        queue_title_list = self.get_formatted_playlist(self.loaded_queue, page)
+        history_title_list = self.get_formatted_playlist(self.past_songs_played, page)
+        #Max page numbers (For footer)
         max_page_queue = max((len(self.loaded_queue) - 1)//10, 0)
         max_page_playlist = max((len(self.loaded_playlist) - 1)//10, 0)
+        max_page_history = max((len(self.past_songs_played) - 1)//10, 0)
         #Do the title
         if list == 'both': title= 'Upcoming Queue/Playlist'
         elif list == 'queue': title= 'Upcoming Queue'
         elif list == 'playlist': title= f'Upcoming Playlist{f" (will play after {len(self.loaded_queue)} songs currently in queue)" if len(self.loaded_queue) > 0 else ""}'
+        elif list == 'history': title= f'Song History (sorted by most recent first)'
         #Do the footer
         if list == 'both': footer=f'Page {min(page+1, max(max_page_playlist, max_page_queue) + 1)} of {max(max_page_playlist, max_page_queue) + 1}'
         elif list == 'queue': footer=f'Page {min(page+1, max_page_queue + 1)} of {max_page_queue + 1}'
         elif list == 'playlist': footer=f'Page {min(page+1, max_page_playlist + 1)} of {max_page_playlist + 1}'
+        elif list == 'history': footer=f'Page {min(page+1, max_page_history + 1)} of {max_page_history + 1}'
         #Do the main content
         description = ''
         if list == 'both': description += 'Queue:\n'
@@ -1289,6 +1366,10 @@ class iPod:
             if len(playlist_title_list) > 0: description += ('```\n' + '\n'.join(playlist_title_list) + '```\n')
             elif len(self.loaded_playlist) > 0: description += '`There is nothing on this page of the playlist`\n'
             else: description += '`Playlist is empty`\n'
+        if list == 'history': 
+            if len(history_title_list) > 0: description += ('```\n' + '\n'.join(history_title_list) + '```\n')
+            elif len(self.past_songs_played) > 0: description += '`There is nothing on this page of the play history`\n'
+            else: description += '`Play history is empty`\n'
         #Make embed for real
         embed = discord.Embed(title=title, description=description, color=3093080)
         embed.set_footer(text=footer)
@@ -1316,6 +1397,13 @@ class iPod:
         else: 
             embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
             embed.set_footer(text=f'Skipped {old_song.title}')
+        return embed
+
+    def get_skip_backward_message_embed(self, old_song: YTDLSource, new_song: YTDLSource):
+        if new_song == None: 
+            embed = discord.Embed(description='Nothing in the play history', color=7528669)
+        else: 
+            embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
         return embed
 
     def get_move_embed(self, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
@@ -1382,21 +1470,30 @@ class Groovy(commands.Cog):
 
     @commands.command(name='skip', aliases=['s', 'sk'], description='Skip the current song!')
     async def prefix_skip(self, ctx):
-        # try: count = max(1, int(count))
-        # except ValueError: count = 1
         player = self.get_player(ctx)
-        await player.on_skip_command(ctx, 1)
+        await player.on_skip_command(ctx)
 
     @commands.slash_command(name='skip', description='Skip the current song!')
     async def slash_skip(self, ctx):
         player = self.get_player(ctx)
-        await player.on_skip_command(ctx, 1)
+        await player.on_skip_command(ctx)
+
+    @commands.command(name='skipback', aliases=['sb', 'b'], description='Skip back to past songs!')
+    async def prefix_skipback(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_skip_backwards_command(ctx)
+
+    @commands.slash_command(name='skipback', description='Skip back to past songs!')
+    async def slash_skipback(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_skip_backwards_command(ctx)
         
     @commands.command(name='playlist', aliases=['pl'], description='Show playlist/queue')
     async def prefix_playlist(self, ctx, list='both', page='1'):
         if list.lower().startswith('p'): list = 'playlist'
         if list.lower().startswith('q'): list = 'queue'
-        if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
+        if list.lower().startswith('h'): list = 'history'
+        if list != 'both' and list != 'playlist' and list != 'queue' and list != 'history': list = 'both'
         try: page = max(0, int(page)-1)
         except ValueError: page = 0
         player = self.get_player(ctx)
@@ -1493,15 +1590,15 @@ class Groovy(commands.Cog):
         await player.on_remove_command(ctx, list, index)
 
     @commands.command(name="move", aliases=['m', 'mv'], description="Move a song between playlist and queue")
-    async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song='1', index_to_move_to='1'):
+    async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song=None, index_to_move_to='1'):
         player = self.get_player(ctx)
         if song_list_list.lower().startswith('p'): song_list_list = 'playlist'
         if song_list_list.lower().startswith('q'): song_list_list = 'queue'
 
         try: index_of_first_song = max(0, int(index_of_first_song)-1)
         except ValueError: index_of_first_song = 0
-        try: index_of_last_song = max(0, int(index_of_last_song)-1)
-        except ValueError: index_of_last_song = 0
+        try: index_of_last_song = max(index_of_first_song, int(index_of_last_song)-1)
+        except ValueError: index_of_last_song = index_of_first_song
         try: index_to_move_to = max(0, int(index_to_move_to)-1)
         except ValueError: index_to_move_to = 0
 
