@@ -5,6 +5,7 @@ import datetime
 import logging
 import pathlib
 import random
+import requests
 import threading
 import urllib.parse
 
@@ -324,53 +325,29 @@ class iPod:
 
     def preloading_loop(self, ctx):
         logger.info('Preloading loop started')
-        self.preloading_running = True
         
-        if self.shuffle: partially_loaded_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)  #FIXME please god fix this
-        else: partially_loaded_playlist = self.partially_loaded_playlist
-
-        partially_loaded_queue = self.partially_loaded_queue
+        items_to_preload = self.get_items_to_preload()
 
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                futures = {executor.submit(partially_loaded_item.get_youtube_dl): partially_loaded_item for partially_loaded_item in partially_loaded_playlist[0:3]}
+                futures = {executor.submit(partially_loaded_item.get_youtube_dl): partially_loaded_item for partially_loaded_item in items_to_preload}
 
                 for future in concurrent.futures.as_completed(futures):
                     partially_loaded_item = futures[future]
                     try:
-                        if isinstance(partially_loaded_item, LoadedYoutubeSong):  #FIXME 403
-                            self.on_preload_succeed(ctx, partially_loaded_item, partially_loaded_item, True)
+                        if self.is_valid_to_play(partially_loaded_item):
+                            self.on_preload_succeed(ctx, partially_loaded_item, partially_loaded_item)
                             continue
                         loaded_item = future.result()
-                        try: self.partially_loaded_playlist[self.partially_loaded_playlist.index(partially_loaded_item)] = loaded_item
-                        except ValueError: continue
-                        self.on_preload_succeed(ctx, partially_loaded_item, loaded_item, False)
+                        self.replace_item_in_partially_loaded_lists(partially_loaded_item, loaded_item)
+                        self.on_preload_succeed(ctx, partially_loaded_item, loaded_item)
                     except Exception as e:
                         if partially_loaded_item in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(partially_loaded_item)])
                         self.on_load_fail(ctx, partially_loaded_item, e)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                futures = {executor.submit(partially_loaded_item.get_youtube_dl): partially_loaded_item for partially_loaded_item in partially_loaded_queue[0:3]}
-
-                for future in concurrent.futures.as_completed(futures):
-                    partially_loaded_item = futures[future]
-                    try:
-                        if isinstance(partially_loaded_item, LoadedYoutubeSong):  #FIXME 403
-                            self.on_preload_succeed(ctx, partially_loaded_item, partially_loaded_item, True)
-                            continue
-                        loaded_item = future.result()
-                        try: self.partially_loaded_queue[self.partially_loaded_queue.index(partially_loaded_item)] = loaded_item 
-                        except ValueError: continue
-                        self.on_preload_succeed(ctx, partially_loaded_item, loaded_item, True)
-                    except Exception as e:
-                        if partially_loaded_item in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(partially_loaded_item)])
-                        self.on_load_fail(ctx, partially_loaded_item, e)
-
+            
             do_loop = False
-            for item in partially_loaded_playlist[0:3]:  #FIXME 403
-                if not isinstance(item, LoadedYoutubeSong):
-                    do_loop = True
-            for item in partially_loaded_queue[0:3]:
-                if not isinstance(item, LoadedYoutubeSong):
+            for item in self.get_items_to_preload():
+                if not self.is_valid_to_play(item):
                     do_loop = True
             if do_loop: self.preloading_loop(ctx)
 
@@ -378,6 +355,46 @@ class iPod:
             logger.error(f'Preloading loop failed', exc_info=e)
 
         self.preloading_running = False
+
+    def get_items_to_preload(self):
+        items_to_preload = []
+        items_to_preload.extend(self.partially_loaded_queue[0:3])
+        if self.shuffle: items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])  #FIXME please god fix this
+        else: items_to_preload.extend(self.partially_loaded_playlist[0:3])
+        return items_to_preload
+
+    def replace_item_in_partially_loaded_lists(self, partially_loaded_item, loaded_item):
+        if partially_loaded_item in self.partially_loaded_playlist:
+            index = self.partially_loaded_playlist.index(partially_loaded_item)
+            self.partially_loaded_playlist[index] = loaded_item
+        elif partially_loaded_item in self.partially_loaded_queue:
+            index = self.partially_loaded_queue.index(partially_loaded_item)
+            self.partially_loaded_queue[index] = loaded_item
+
+    def remove_item_in_partially_loaded_lists(self, partially_loaded_item):
+        if partially_loaded_item in self.partially_loaded_playlist:
+            index = self.partially_loaded_playlist.index(partially_loaded_item)
+            del self.partially_loaded_playlist[index]
+        elif partially_loaded_item in self.partially_loaded_queue:
+            index = self.partially_loaded_queue.index(partially_loaded_item)
+            del self.partially_loaded_queue[index]
+
+    def ensure_preload(self, ctx):
+        if not self.preloading_running:
+            self.preloading_running = True
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
+
+    def is_valid_to_play(self, partially_loaded_song):
+        if isinstance(partially_loaded_song, LoadedYoutubeSong) and not self.check_403(partially_loaded_song): return True
+        else: return False
+
+    def check_403(self, loaded_youtube_song: LoadedYoutubeSong):
+        request = requests.head(loaded_youtube_song.youtube_data['url'])
+        code = request.status_code
+        if code == 403: return True
+        else: return False
+
 
     #region "Buttons"
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong, is_skip_backwards: bool):
@@ -407,42 +424,42 @@ class iPod:
         else: partially_loaded_playlist = self.partially_loaded_playlist
 
 
-        if len(self.partially_loaded_queue) > 0 and isinstance(self.partially_loaded_queue[0], LoadedYoutubeSong):  #FIXME use self.is_valid_to_play() instead
+        if len(self.partially_loaded_queue) > 0 and self.is_valid_to_play(self.partially_loaded_queue[0]):
             new_song = self.partially_loaded_queue[0]
             if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
             if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
             self.play(ctx, new_song, False)
             return True
-        elif len(self.partially_loaded_playlist) > 0 and isinstance(partially_loaded_playlist[0], LoadedYoutubeSong):
+        elif len(self.partially_loaded_playlist) > 0 and self.is_valid_to_play(partially_loaded_playlist[0]):
             if self.shuffle:
                 shuffled_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
                 new_song = shuffled_playlist[0]
-                if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
-                if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
-                self.play(ctx, new_song, False)
-                return True
             else:
                 new_song = self.partially_loaded_playlist[0]
-                if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
-                if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
-                self.play(ctx, new_song, False)
-                return True
+            if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
+            if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
+            self.play(ctx, new_song, False)
+            return True
         else:
             if len(self.partially_loaded_queue) > 0 or len(self.partially_loaded_playlist) > 0:
                 ctx.guild.voice_client.stop()
-                if not self.preloading_running:
-                    preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-                    preloading_thread.start()
-        return False
+                self.ensure_preload(ctx)
+            return False
 
     def play_previous_item(self, ctx):
         #Play next item
         #Returns whether or not a new song was started
-        if len(self.past_songs_played) > 0:
+        if len(self.past_songs_played) > 0 and self.is_valid_to_play(self.past_songs_played[0]):
             new_song = self.past_songs_played[0]
             if new_song in self.past_songs_played: del(self.past_songs_played[self.past_songs_played.index(new_song)])
             self.play(ctx, new_song, True)
             return True
+        elif len(self.past_songs_played) > 0:
+            ctx.guild.voice_client.stop()
+            self.return_song_to_original_list(ctx.guild.voice_client.source.loaded_song)
+            self.return_song_to_original_list(self.past_songs_played[0])
+            self.ensure_preload(ctx)
+            return False
         else:
             return False
 
@@ -450,23 +467,20 @@ class iPod:
         #Play next item if nothing is currently playing
         if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
         if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
-            if not self.play_next_item(ctx):
-                if not self.preloading_running: 
-                    preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-                    preloading_thread.start()
+            self.play_next_item(ctx)
             
     def skip(self, ctx):
         #Skip a song
         if len(self.partially_loaded_playlist) > 0 or len(self.partially_loaded_queue) > 0:
             old_song = ctx.guild.voice_client.source
-            self.play_next_item(ctx)
+            is_song_playing = self.play_next_item(ctx)
             new_song = ctx.guild.voice_client.source
-            self.on_song_skip(ctx, old_song, new_song)
+            self.on_song_skip(ctx, old_song, new_song, not is_song_playing)
         else:
             old_song = ctx.guild.voice_client.source
             if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song
             new_song = None
-            self.on_song_skip(ctx, old_song, new_song)
+            self.on_song_skip(ctx, old_song, new_song, False)
 
     def skip_backwards(self, ctx):
         #Skip a song backwards
@@ -488,9 +502,7 @@ class iPod:
             self.shuffle = True
             self.reshuffle_list(self.partially_loaded_playlist)
             self.on_shuffle_enable(ctx)
-        if not self.preloading_running:
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        self.ensure_preload(ctx)
 
     def toggle_pause(self, ctx):
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
@@ -632,9 +644,7 @@ class iPod:
             self.receive_loaded_spotify_album(ctx, loaded_item, add_to_queue)
         if isinstance(loaded_item, LoadedSpotifyPlaylist):
             self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
-        if not self.preloading_running: 
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        self.ensure_preload(ctx)
             
     def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
         parsed_input = self.parse_input(input)
@@ -1167,7 +1177,7 @@ class iPod:
     async def on_move_command(self, ctx, song_list_name, index_of_first_song, index_of_last_song, index_to_move_to):
         logger.info('Move command receive')
         self.last_context = ctx
-        if song_list_name == 'playlist': 
+        if song_list_name == 'playlist':
             song_list = self.partially_loaded_playlist
             other_list = self.partially_loaded_queue
             other_list_name = 'queue'
@@ -1185,11 +1195,13 @@ class iPod:
             embed = discord.Embed(description=f'The {song_list_name} is empty!')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
+        if self.shuffle and song_list_name == 'playlist':
+            embed = discord.Embed(description=f'Sorry, moving songs from the playlist does not work while shuffle is on.')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
         else:
             self.move_items_between_lists(song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
-            if not self.preloading_running:
-                preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-                preloading_thread.start()
+            self.ensure_preload(ctx)
             await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
 
     async def on_play_message_context(self, ctx, message, add_to_queue):
@@ -1288,8 +1300,8 @@ class iPod:
         #if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
         bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
-    def on_preload_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
-        logger.info(f'Succeeded preloading item {unloaded_item} into {loaded_item}')
+    def on_preload_succeed(self, ctx, unloaded_item, loaded_item):
+        if unloaded_item != loaded_item: logger.info(f'Succeeded preloading item {type(unloaded_item)}{unloaded_item} into {type(loaded_item)}{loaded_item}')
         try: self.play_next_if_nothing_playing(ctx)
         except TriedPlayingWhenOutOfVC: return
         #if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
@@ -1306,9 +1318,7 @@ class iPod:
 
     def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
         logger.error(f'Play failed during song {song}', exc_info=exception)
-        if not self.preloading_running:
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        self.ensure_preload(ctx)
 
     def on_song_end_unknown(self, ctx, song, exception=None):
         #When a song ends due to an unknown cause, either an exception or the song completed
@@ -1322,9 +1332,7 @@ class iPod:
 
     def on_song_end_succeed(self, ctx, song):
         logger.info('Song ended')
-        if not self.preloading_running:
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        self.ensure_preload(ctx)
 
     def on_shuffle_enable(self, ctx):
         logger.info('Shuffle on')
@@ -1350,9 +1358,9 @@ class iPod:
         logger.info('Search complete')
         bot.loop.create_task(self.respond_to_search(ctx, items))
 
-    def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
+    def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
         logger.info('Song skipped')
-        bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song))
+        bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song, loading))
 
     def on_song_skip_backwards(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         logger.info('Song skipped back')
@@ -1463,8 +1471,8 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
-    async def respond_to_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
-        embed = self.get_skip_message_embed(old_song, new_song)
+    async def respond_to_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
+        embed = self.get_skip_message_embed(old_song, new_song, loading)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -1555,8 +1563,12 @@ class iPod:
         embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
         return embed
 
-    def get_skip_message_embed(self, old_song: YTDLSource, new_song: YTDLSource):
-        if new_song == None: 
+    def get_skip_message_embed(self, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
+        if loading:
+            embed = discord.Embed(title='Next song is loading...', description='Please wait for a few seconds', color=7528669)
+            if old_song != None:
+                embed.set_footer(text=f'Skipped {old_song.title}')
+        elif new_song == None: 
             embed = discord.Embed(title='No more songs to play!', description='Add more with /play or /add!', color=7528669)
             if old_song != None:
                 embed.set_footer(text=f'Skipped {old_song.title}')
@@ -1762,11 +1774,11 @@ class Groovy(commands.Cog):
         if song_list_list.lower().startswith('q'): song_list_list = 'queue'
 
         try: index_of_first_song = max(0, int(index_of_first_song)-1)
-        except ValueError: index_of_first_song = 0
+        except (ValueError, TypeError): index_of_first_song = 0
         try: index_of_last_song = max(index_of_first_song, int(index_of_last_song)-1)
-        except ValueError: index_of_last_song = index_of_first_song
+        except (ValueError, TypeError): index_of_last_song = index_of_first_song
         try: index_to_move_to = max(0, int(index_to_move_to)-1)
-        except ValueError: index_to_move_to = 0
+        except (ValueError, TypeError): index_to_move_to = 0
 
         await player.on_move_command(ctx, song_list_list, index_of_first_song, index_of_last_song, index_to_move_to)
 
