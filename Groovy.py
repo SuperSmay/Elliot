@@ -176,7 +176,7 @@ class LoadedYoutubeSong(PartiallyLoadedSong):
         self.youtube_data = youtube_data
 
     def get_youtube_dl(self):
-        data = ytdl.extract_info(self.youtube_data['url'], download=False)
+        data = ytdl.extract_info(self.youtube_data['webpage_url'], download=False)
         return LoadedYoutubeSong(data, self.loading_context, self.song_list, self.random_value)
 
     def __str__(self) -> str:
@@ -212,8 +212,9 @@ class LoadedSpotifyTrack(PartiallyLoadedSong):
         self.spotify_track_data = spotify_track_data
 
     def get_youtube_dl(self):
-        data = ytdl.extract_info(title = f"{self.spotify_track_data['artists'][0]['name']} - {self.spotify_track_data['name']}", download=False)
-        return LoadedYoutubeSong(data, self.loading_context, self.song_list, self.random_value)
+        title = f"{self.spotify_track_data['artists'][0]['name']} - {self.spotify_track_data['name']}"
+        data = ytdl.extract_info(title, download=False)
+        return LoadedYoutubeSong(data['entries'][0], self.loading_context, self.song_list, self.random_value)
 
     def __str__(self):
         return self.spotify_track_data['name']
@@ -631,6 +632,9 @@ class iPod:
             self.receive_loaded_spotify_album(ctx, loaded_item, add_to_queue)
         if isinstance(loaded_item, LoadedSpotifyPlaylist):
             self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
+        if not self.preloading_running: 
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
             
     def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
         parsed_input = self.parse_input(input)
@@ -931,15 +935,11 @@ class iPod:
 
     def on_item_added_to_partially_loaded_queue(self, ctx, partially_loaded_item):
         logger.info(f'Song added to partially loaded queue event {partially_loaded_item}')
-        if not self.preloading_running: 
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        
 
     def on_item_added_to_partially_loaded_playlist(self, ctx, partially_loaded_item):
         logger.info(f'Song added to partially loaded playlist event {partially_loaded_item}')
-        if not self.preloading_running: 
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        
 
     async def on_play_command(self, ctx, input, add_to_queue=False):
         logger.info(f'Play command received')
