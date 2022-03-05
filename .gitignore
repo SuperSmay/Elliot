@@ -13,9 +13,10 @@ lib64
 .cache
 token*
 extratokens
-test*.py
+test*
 use-dev-mode
 InteractionCountDict
 youtube-api-key
 spotify-secret
 spotify-id
+output*

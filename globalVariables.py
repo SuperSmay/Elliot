@@ -7,11 +7,11 @@ intents.members = True
 intents.voice_states = True
 
 client = discord.Client(intents= intents)
-bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Test description", intents=intents)
+bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Robo Barista for The Gayming Café!", intents=intents)
 
 prefix = "eli "
 
-bot_version = '0.3.3b'
+bot_version = '0.3.5'
 
 last_start_time = datetime.datetime.utcnow()
 
@@ -108,8 +108,6 @@ botRole = {
 }
 
 loadedInventories = {}
-
-music_players = {}
 
 bumpChannel = {
     811369107181666343 : 812166022073024552,

@@ -3,7 +3,6 @@ import asyncio
 import datetime
 import logging
 import pathlib
-from pathlib import Path
 from time import sleep
 
 import discord
@@ -11,7 +10,6 @@ from discord.commands import Option, OptionChoice
 
 import BotInfo
 import BumpReminder
-import CommandInterpreter
 import globalFiles
 import Groovy
 import ImageScan
@@ -23,9 +21,9 @@ from globalVariables import bot, joinChannel, last_start_time, unverifiedRole
 
 logging.basicConfig()
 
-use_dev_mode = pathlib.Path.exists(Path('use-dev-mode')) and open(Path('use-dev-mode'), 'r').read().lower() == 'true'
+use_dev_mode = pathlib.Path.exists(pathlib.Path('use-dev-mode')) and open(pathlib.Path('use-dev-mode'), 'r').read().lower() == 'true'
 
-tokenFile = open(Path('token'), 'r') if not use_dev_mode else open(Path('token-dev'), 'r')
+tokenFile = open(pathlib.Path('token'), 'r') if not use_dev_mode else open(pathlib.Path('token-dev'), 'r')
 TOKEN = tokenFile.read()
 
 @bot.event
@@ -35,8 +33,6 @@ async def on_ready():
   last_start_time = datetime.datetime.utcnow()
   async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
-  # bot.loop.create_task(Groovy.CheckLoop.loop())
-
   
 @bot.event
 async def on_message(message: discord.Message):
@@ -89,133 +85,6 @@ async def leaderboard(ctx, leaderboard='leaver'):
   embed = await interaction.getLeaderboardEmbed()
   await ctx.reply(embed=embed, mention_author= False)
 
-# @bot.slash_command(name="play", description="Plays a song/playlist from Youtube/Spotify")
-# async def play(ctx, input:Option(str, description='A link or search term', required=False, default='')):
-#   await ctx.defer()
-#   embeds = await CommandInterpreter.playCommand(ctx, input)
-#   for embed in embeds:
-#     await ctx.respond(embed=embed)
-
-# @bot.command(name="play", aliases=['p'], description="Plays a song/playlist from Youtube/Spotify")
-# async def play(ctx, input = '', *moreWords):
-#   input = input + ' ' + ' '.join(moreWords).strip()
-#   embeds = await CommandInterpreter.playCommand(ctx, input)
-#   for embed in embeds:
-#     await ctx.reply(embed=embed, mention_author= False)
-
-# @bot.slash_command(name='join', description="Have the bot join your current VC")
-# async def join(ctx):
-#     embeds = await CommandInterpreter.joinCommand(ctx)
-#     for embed in embeds:
-#       await ctx.respond(embed=embed, mention_author= False)
-
-# @bot.command(name='join', description="Have the bot join your current VC")
-# async def join(ctx):
-#     embeds = await CommandInterpreter.joinCommand(ctx)
-#     for embed in embeds:
-#       await ctx.reply(embed=embed, mention_author= False)
-
-# @bot.slash_command(name="add", description="Adds a song/playlist to the queue from Youtube/Spotify")
-# async def add(ctx, input:Option(str, description='A link or search term', required=False, default='')):
-#   await ctx.defer()
-#   embeds = await CommandInterpreter.addCommand(ctx, input)
-#   for embed in embeds:
-#     await ctx.respond(embed=embed)
-
-# @bot.command(name="add", aliases=['a'], description="Adds a song/playlist to the queue from Youtube/Spotify")
-# async def add(ctx, input = '', *moreWords):
-#   input = input + ' ' + ' '.join(moreWords).strip()
-#   embeds = await CommandInterpreter.addCommand(ctx, input)
-#   for embed in embeds:
-#     await ctx.reply(embed=embed, mention_author= False)
-
-# @bot.slash_command(name="playlist", description="Shows the current playlist")
-# async def playlist(ctx):
-#   await ctx.defer()
-#   playlist = Groovy.Playlist(ctx)
-#   await ctx.respond(playlist.run())
-
-# @bot.command(name="playlist", aliases=['pl'], description="Shows the current playlist")
-# async def playlist(ctx):
-#   playlist = Groovy.Playlist(ctx)
-#   await ctx.reply(playlist.run(),  mention_author=False)
-
-# @bot.slash_command(name="skip", description="Skips the song")
-# async def skip(ctx):
-#   await ctx.defer()
-#   command = Groovy.Skip(ctx)
-#   await ctx.respond(embed=await command.skip())
-
-# @bot.command(name="skip", aliases=['s'], description="Skips the song")
-# async def skip(ctx):
-#   command = Groovy.Skip(ctx)
-#   await ctx.reply(embed=await command.skip(), mention_author=False)
-
-# @bot.slash_command(name="pause", description="Pause/Unpause the music")
-# async def pause(ctx):
-#   command = Groovy.Pause(ctx)
-#   await ctx.respond(embed=await command.pause())
-
-# @bot.command(name="pause", description="Pause/Unpause the music")
-# async def pause(ctx):
-#   command = Groovy.Pause(ctx)
-#   await ctx.reply(embed=await command.pause(), mention_author=False)
-
-# @bot.slash_command(name='disconnect', description="Leave the vc")
-# async def disconnect(ctx):
-#   command = Groovy.MusicCommand(ctx)
-#   await command.player.disconnect(ctx)
-
-# @bot.command(aliases=['dc'], description="Leave the vc")
-# async def disconnect(ctx):
-#   command = Groovy.MusicCommand(ctx)
-#   await command.player.disconnect(ctx)
-
-# @bot.slash_command(name='reset', description="Reset the music player")
-# async def reset(ctx):
-#   command = Groovy.MusicCommand(ctx)
-#   await command.player.reset(ctx)
-
-# @bot.command(name='reset', description="Reset the music player")
-# async def reset(ctx):
-#   command = Groovy.MusicCommand(ctx)
-#   await command.player.reset(ctx)
-
-# @bot.slash_command(name="nowplaying", description="Show the now playing song")
-# async def np(ctx):
-#   await ctx.defer()
-#   np = Groovy.NowPlaying(ctx)
-#   await ctx.respond(embed=np.getNowPlayingEmbed())
-
-# @bot.command(name="nowplaying", aliases=['np'], description="Show the now playing song")
-# async def np(ctx):
-#   np = Groovy.NowPlaying(ctx)
-#   await ctx.reply(embed=np.getNowPlayingEmbed(), mention_author=False)
-
-# @bot.slash_command(name="shuffle", description="Toggle shuffle mode")
-# async def shuffle(ctx):
-#   await ctx.defer()
-#   command = Groovy.Shuffle(ctx)
-#   await ctx.respond(embed=await command.shuffle())
-
-# @bot.command(name="shuffle", aliases=['sh'], description="Toggle shuffle mode")
-# async def shuffle(ctx):
-#   command = Groovy.Shuffle(ctx)
-#   await ctx.reply(embed=await command.shuffle(), mention_author=False)
-
-# @bot.slash_command(name="search", description="Search youtube for something to play")
-# async def play(ctx, input:Option(str, description='Search term', required=True)):
-#   await ctx.defer()
-#   embeds = await CommandInterpreter.searchCommand(ctx, input)
-#   for embed in embeds:
-#     await ctx.respond(embed=embed)
-
-# @bot.command(name="search", description="Search youtube for something to play")
-# async def play(ctx, input = '', *moreWords):
-#   input = (input + ' ' + ' '.join(moreWords)).strip()
-#   embeds = await CommandInterpreter.searchCommand(ctx, input)
-#   for embed in embeds:
-#     await ctx.reply(embed=embed, mention_author= False)
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
@@ -255,32 +124,10 @@ async def on_member_join(user):
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
 
-# @bot.event
-# async def on_voice_state_update(member, before, after):
-#   if (member.id == bot.user.id and before.channel != None and after.channel == None and member.guild.id in musicPlayers.keys()):
-#     player = musicPlayers[member.guild.id]
-#     await player.disconnect()
-
-# @bot.event
-# async def on_raw_reaction_add(payload):  #When reaction added
-#   try:
-#     emoji = payload.emoji  #Get emoji from the reaction payload
-#     channel = await bot.fetch_channel(payload.channel_id)  #Get channel from the reaction payload
-#     message = await channel.fetch_message(payload.message_id)  #Get message from the reaction payload
-#     user = await bot.fetch_user(payload.user_id)  #Get user from the reaction payload
-#     if message.id in activeMessages.keys():
-#       await activeMessages[message.id].onReact(emoji, user)
-#   except:
-#     traceback.print_exc()
-#     print(emoji, "Channel:", payload.channel_id, "Message:", payload.message_id)
-
-
 bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
-
-
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
@@ -290,5 +137,6 @@ except KeyboardInterrupt:
     # cancel all tasks lingering
 finally:
     bot.loop.close()
+    globalFiles.save()
     sleep(1)
     print("Closing up, have a nice day!")

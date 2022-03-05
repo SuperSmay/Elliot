@@ -1,5 +1,4 @@
 import asyncio
-from code import interact
 import concurrent.futures
 import datetime
 import logging
@@ -17,7 +16,7 @@ from discord.ext import commands, tasks
 from discord.commands import Option, OptionChoice
 from youtubesearchpython import VideosSearch
 
-from globalVariables import bot, music_players
+from globalVariables import bot
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
@@ -28,9 +27,9 @@ from globalVariables import bot, music_players
     ## Play youtube-dl'd input correctly ✓
     ## Add command ✓
     ## Skip command ✓
-    ## Playlist command ✓ (Properly this time)
-    ## Skip backwards command
-    ## Play history (Youtube link or dl'd dict?) 
+    ## Playlist command (Properly this time) ✓
+    ## Skip backwards command ✓
+    ## Play history (Youtube link or dl'd dict?) ✓
 ##
 
 #region Variables and setup
@@ -66,6 +65,8 @@ client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=c
 sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
 
 yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
+
+music_players = {}
 #endregion
 
 class YTDLSource(discord.PCMVolumeTransformer):
