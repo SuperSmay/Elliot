@@ -152,38 +152,90 @@ class UnloadedSpotifyPlaylist:
         return self.spotify_playlist_url
 
 
-class LoadedYoutubeSong:
-    def __init__(self, youtube_data: dict, loading_context: SongLoadingContext) -> None:
+class PartiallyLoadedSong:
+    def __init__(self) -> None:
+        self.title = None
+        self.duration = None
+
+        self.random_value = None
+        self.song_list = None
+        self.loading_context = None
+
+    def get_youtube_dl(self):
+        pass
+
+class LoadedYoutubeSong(PartiallyLoadedSong):
+    def __init__(self, youtube_data: dict, loading_context: SongLoadingContext, song_list=None, random_value=None) -> None:
+        self.title = youtube_data['title']
+        self.duration = youtube_data['duration']
+
+        self.loading_context = loading_context
+        self.random_value = random.randint(0, 10000) if random_value != None else random_value
+        self.song_list = song_list if song_list != None else []
+
         self.youtube_data = youtube_data
+
+    def get_youtube_dl(self):
+        data = ytdl.extract_info(self.youtube_data['url'], download=False)
+        return LoadedYoutubeSong(data, self.loading_context, self.song_list, self.random_value)
+
+    def __str__(self) -> str:
+        return self.title
+
+class LoadedYoutubePlaylistSong(PartiallyLoadedSong):
+    def __init__(self, youtube_snippet_from_playlist: dict, loading_context: SongLoadingContext) -> None:
+        self.title = youtube_snippet_from_playlist['title']
+        self.duration = 0
+
         self.loading_context = loading_context
         self.random_value = random.randint(0, 10000)
         self.song_list = []
+
+        self.youtube_snippet_from_playlist = youtube_snippet_from_playlist
+
+    def get_youtube_dl(self):
+        data = ytdl.extract_info(f'https://www.youtube.com/watch?v={self.youtube_snippet_from_playlist["resourceId"]["videoId"]}', download=False)
+        return LoadedYoutubeSong(data ,self.loading_context, self.song_list, self.random_value)
+
     def __str__(self) -> str:
-        return self.youtube_data['title']
+        return self.title
+
+class LoadedSpotifyTrack(PartiallyLoadedSong):
+    def __init__(self, spotify_track_data: dict, loading_context: SongLoadingContext) -> None:
+        self.title = spotify_track_data['name']
+        self.duration = spotify_track_data['duration_ms']//1000
+
+        self.random_value = random.randint(0, 10000)
+        self.song_list = []
+        self.loading_context = loading_context
+
+        self.spotify_track_data = spotify_track_data
+
+    def get_youtube_dl(self):
+        data = ytdl.extract_info(title = f"{self.spotify_track_data['artists'][0]['name']} - {self.spotify_track_data['name']}", download=False)
+        return LoadedYoutubeSong(data, self.loading_context, self.song_list, self.random_value)
+
+    def __str__(self):
+        return self.spotify_track_data['name']
 
 class LoadedYoutubePlaylist:
-    def __init__(self, youtube_playlist_split_urls: list, title: str, loading_context: SongLoadingContext) -> None:
-        self.youtube_playlist_split_urls = youtube_playlist_split_urls
+    def __init__(self, youtube_playlist_snippets: list, title: str, loading_context: SongLoadingContext) -> None:
+        self.youtube_playlist_snippets = youtube_playlist_snippets
         self.title = title
         self.loading_context = loading_context
         self.loading_context.parent_playlist = self
+        self.total_count = len(youtube_playlist_snippets)
         self.count = 0
         self.error_count = 0
     def __str__(self) -> str:
         return self.title
-
-class LoadedSpotifyTrack:
-    def __init__(self, spotify_track_data: dict, loading_context: SongLoadingContext) -> None:
-        self.spotify_track_data = spotify_track_data
-        self.loading_context = loading_context
-    def __str__(self):
-        return self.spotify_track_data['name']
 
 class LoadedSpotifyAlbum:
     def __init__(self, spotify_album_data: dict, loading_context: SongLoadingContext) -> None:
         self.spotify_album_data = spotify_album_data
         self.loading_context = loading_context
         self.loading_context.parent_playlist = self
+        self.total_count = len(spotify_album_data['tracks']['items'])
         self.count = 0
         self.error_count = 0
     def __str__(self):
@@ -194,6 +246,7 @@ class LoadedSpotifyPlaylist:
         self.spotify_playlist_data = spotify_playlist_data
         self.loading_context = loading_context
         self.loading_context.parent_playlist = self
+        self.total_count = len(spotify_playlist_data['tracks']['items'])
         self.count = 0
         self.error_count = 0
     def __str__(self):
@@ -214,12 +267,18 @@ class iPod:
         
         self.loaded_playlist = []
         self.loaded_queue = []
+
+        self.partially_loaded_playlist = []
+        self.partially_loaded_queue = []
+
         self.unloaded_playlist = []
         self.unloaded_queue = []
+
         self.past_songs_played = []
 
         self.shuffle = False
         self.loading_running = False
+        self.preloading_running = False
 
         self.last_search = None
         self.last_context = None
@@ -230,6 +289,7 @@ class iPod:
         logger.info(f'iPod {self} created for {ctx.guild.name}')
         
     def loading_loop(self, ctx):
+        logger.info('Loading loop started')
         self.loading_running = True
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -261,6 +321,63 @@ class iPod:
             logger.error(f'Loading loop failed', exc_info=e)
         self.loading_running = False
 
+    def preloading_loop(self, ctx):
+        logger.info('Preloading loop started')
+        self.preloading_running = True
+        
+        if self.shuffle: partially_loaded_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)  #FIXME please god fix this
+        else: partially_loaded_playlist = self.partially_loaded_playlist
+
+        partially_loaded_queue = self.partially_loaded_queue
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {executor.submit(partially_loaded_item.get_youtube_dl): partially_loaded_item for partially_loaded_item in partially_loaded_playlist[0:3]}
+
+                for future in concurrent.futures.as_completed(futures):
+                    partially_loaded_item = futures[future]
+                    try:
+                        if isinstance(partially_loaded_item, LoadedYoutubeSong):  #FIXME 403
+                            self.on_preload_succeed(ctx, partially_loaded_item, partially_loaded_item, True)
+                            continue
+                        loaded_item = future.result()
+                        try: self.partially_loaded_playlist[self.partially_loaded_playlist.index(partially_loaded_item)] = loaded_item
+                        except ValueError: continue
+                        self.on_preload_succeed(ctx, partially_loaded_item, loaded_item, False)
+                    except Exception as e:
+                        if partially_loaded_item in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(partially_loaded_item)])
+                        self.on_load_fail(ctx, partially_loaded_item, e)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {executor.submit(partially_loaded_item.get_youtube_dl): partially_loaded_item for partially_loaded_item in partially_loaded_queue[0:3]}
+
+                for future in concurrent.futures.as_completed(futures):
+                    partially_loaded_item = futures[future]
+                    try:
+                        if isinstance(partially_loaded_item, LoadedYoutubeSong):  #FIXME 403
+                            self.on_preload_succeed(ctx, partially_loaded_item, partially_loaded_item, True)
+                            continue
+                        loaded_item = future.result()
+                        try: self.partially_loaded_queue[self.partially_loaded_queue.index(partially_loaded_item)] = loaded_item 
+                        except ValueError: continue
+                        self.on_preload_succeed(ctx, partially_loaded_item, loaded_item, True)
+                    except Exception as e:
+                        if partially_loaded_item in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(partially_loaded_item)])
+                        self.on_load_fail(ctx, partially_loaded_item, e)
+
+            do_loop = False
+            for item in partially_loaded_playlist[0:3]:  #FIXME 403
+                if not isinstance(item, LoadedYoutubeSong):
+                    do_loop = True
+            for item in partially_loaded_queue[0:3]:
+                if not isinstance(item, LoadedYoutubeSong):
+                    do_loop = True
+            if do_loop: self.preloading_loop(ctx)
+
+        except Exception as e:
+            logger.error(f'Preloading loop failed', exc_info=e)
+
+        self.preloading_running = False
+
     #region "Buttons"
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong, is_skip_backwards: bool):
         #Change player to this song
@@ -285,28 +402,37 @@ class iPod:
     def play_next_item(self, ctx):
         #Play next item
         #Returns whether or not a new song was started
-        if len(self.loaded_queue) > 0:
-            new_song = self.loaded_queue[0]
-            if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
-            if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
+        if self.shuffle: partially_loaded_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
+        else: partially_loaded_playlist = self.partially_loaded_playlist
+
+
+        if len(self.partially_loaded_queue) > 0 and isinstance(self.partially_loaded_queue[0], LoadedYoutubeSong):  #FIXME use self.is_valid_to_play() instead
+            new_song = self.partially_loaded_queue[0]
+            if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
+            if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
             self.play(ctx, new_song, False)
             return True
-        elif len(self.loaded_playlist) > 0:
+        elif len(self.partially_loaded_playlist) > 0 and isinstance(partially_loaded_playlist[0], LoadedYoutubeSong):
             if self.shuffle:
-                shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
+                shuffled_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
                 new_song = shuffled_playlist[0]
-                if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
-                if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
+                if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
+                if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
                 self.play(ctx, new_song, False)
                 return True
             else:
-                new_song = self.loaded_playlist[0]
-                if new_song in self.loaded_playlist: del(self.loaded_playlist[self.loaded_playlist.index(new_song)])
-                if new_song in self.loaded_queue: del(self.loaded_queue[self.loaded_queue.index(new_song)])
+                new_song = self.partially_loaded_playlist[0]
+                if new_song in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(new_song)])
+                if new_song in self.partially_loaded_queue: del(self.partially_loaded_queue[self.partially_loaded_queue.index(new_song)])
                 self.play(ctx, new_song, False)
                 return True
         else:
-            return False
+            if len(self.partially_loaded_queue) > 0 or len(self.partially_loaded_playlist) > 0:
+                ctx.guild.voice_client.stop()
+                if not self.preloading_running:
+                    preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+                    preloading_thread.start()
+        return False
 
     def play_previous_item(self, ctx):
         #Play next item
@@ -323,11 +449,14 @@ class iPod:
         #Play next item if nothing is currently playing
         if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
         if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
-            self.play_next_item(ctx)
+            if not self.play_next_item(ctx):
+                if not self.preloading_running: 
+                    preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+                    preloading_thread.start()
             
     def skip(self, ctx):
         #Skip a song
-        if len(self.loaded_playlist) > 0 or len(self.loaded_queue) > 0:
+        if len(self.partially_loaded_playlist) > 0 or len(self.partially_loaded_queue) > 0:
             old_song = ctx.guild.voice_client.source
             self.play_next_item(ctx)
             new_song = ctx.guild.voice_client.source
@@ -356,8 +485,11 @@ class iPod:
             self.on_shuffle_disable(ctx)
         else:
             self.shuffle = True
-            self.reshuffle_list(self.loaded_playlist)
+            self.reshuffle_list(self.partially_loaded_playlist)
             self.on_shuffle_enable(ctx)
+        if not self.preloading_running:
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
 
     def toggle_pause(self, ctx):
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
@@ -445,34 +577,46 @@ class iPod:
     #region Receive loaded
     def receive_loaded_youtube_data(self, ctx, loaded_song: LoadedYoutubeSong, add_to_queue: bool = False):
         if add_to_queue:
-            self.loaded_queue.append(loaded_song)
-            loaded_song.song_list = self.loaded_queue
-            self.on_item_added_to_loaded_queue(ctx, loaded_song)
+            self.partially_loaded_queue.append(loaded_song)
+            loaded_song.song_list = self.partially_loaded_queue
+            self.on_item_added_to_partially_loaded_queue(ctx, loaded_song)
         else:
-            self.loaded_playlist.append(loaded_song)
-            loaded_song.song_list = self.loaded_playlist
-            self.on_item_added_to_loaded_playlist(ctx, loaded_song)
+            self.partially_loaded_playlist.append(loaded_song)
+            loaded_song.song_list = self.partially_loaded_playlist
+            self.on_item_added_to_partially_loaded_playlist(ctx, loaded_song)
 
     def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
-        for url in loaded_playlist.youtube_playlist_split_urls:
-            self.receive_youtube_url(ctx, url, add_to_queue, loaded_playlist.loading_context)
+        for snippet in loaded_playlist.youtube_playlist_snippets:
+            self.receive_loaded_youtube_playlist_snippet(ctx, snippet, add_to_queue, loaded_playlist.loading_context)
+
+    def receive_loaded_youtube_playlist_snippet(self, ctx, youtube_snippet: str, add_to_queue: bool = False, loading_context = None):  #Correctly process and call events for a youtube link. Below functions are similar
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = LoadedYoutubePlaylistSong(youtube_snippet, loading_context)
+            self.partially_loaded_queue.append(new_item)
+            self.on_item_added_to_partially_loaded_queue(ctx, new_item)
+        else:
+            new_item = LoadedYoutubePlaylistSong(youtube_snippet, loading_context)
+            self.partially_loaded_playlist.append(new_item)
+            self.on_item_added_to_partially_loaded_playlist(ctx, new_item)
 
     def receive_loaded_spotify_track(self, ctx, loaded_track: LoadedSpotifyTrack, add_to_queue: bool = False):
-        track = loaded_track.spotify_track_data
-        title = f"{track['artists'][0]['name']} - {track['name']}"
-        self.receive_search_term(ctx, title, add_to_queue, loaded_track.loading_context)
+        if add_to_queue:
+            self.partially_loaded_queue.append(loaded_track)
+            self.on_item_added_to_partially_loaded_queue(ctx, loaded_track)
+        else:
+            self.partially_loaded_playlist.append(loaded_track)
+            self.on_item_added_to_partially_loaded_playlist(ctx, loaded_track)
 
     def receive_loaded_spotify_album(self, ctx, loaded_album: LoadedSpotifyAlbum, add_to_queue: bool = False):
         album = loaded_album.spotify_album_data
         for loaded_track in album['tracks']['items']:
-            title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
-            self.receive_search_term(ctx, title, add_to_queue, loaded_album.loading_context)
+            self.receive_loaded_spotify_track(ctx, LoadedSpotifyTrack(loaded_track, loaded_album.loading_context), add_to_queue)
 
     def receive_loaded_spotify_playlist(self, ctx, loaded_playlist: LoadedSpotifyPlaylist, add_to_queue: bool = False):
         playlist = loaded_playlist.spotify_playlist_data
         for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
-            title = f"{loaded_track['artists'][0]['name']} - {loaded_track['name']}"
-            self.receive_search_term(ctx, title, add_to_queue, loaded_playlist.loading_context)
+            self.receive_loaded_spotify_track(ctx, LoadedSpotifyTrack(loaded_track, loaded_playlist.loading_context), add_to_queue)
     #endregion
     
     #region Loaders
@@ -567,7 +711,7 @@ class iPod:
         search = VideosSearch(text_to_search, limit=limit)
         return search.result()['result']
 
-    def reshuffle_list(self, playlist:list[LoadedYoutubeSong]):
+    def reshuffle_list(self, playlist:list[PartiallyLoadedSong]):
         for song in playlist:
             song.random_value = random.randint(0, 10000)
 
@@ -633,7 +777,7 @@ class iPod:
 
         title_response = request.execute()
 
-        return [f'https://www.youtube.com/watch?v={t["snippet"]["resourceId"]["videoId"]}' for t in playlist_items], title_response['items'][0]['snippet']['title'] 
+        return [t["snippet"] for t in playlist_items], title_response['items'][0]['snippet']['title'] 
 
     def load_spotify_track_url(self, ctx, unloaded_item: UnloadedSpotifyTrack, add_to_queue = False):  #Loads spotify track and returns track dict
         if not isinstance(unloaded_item, UnloadedSpotifyTrack): raise TypeError(unloaded_item)
@@ -680,7 +824,7 @@ class iPod:
         index_length = 0
         for song in list[10*page: 10*(page + 1)]:
             if len(str(list.index(song) + 1)) > index_length: index_length = len(str(list.index(song) + 1))
-        return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {self.get_consistent_length_title(song.youtube_data["title"])}  {self.parse_duration(song.youtube_data["duration"])}' for song in list[0 + (10*page): 10 + (10*page)]]
+        return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {self.get_consistent_length_title(song.title)}  {self.parse_duration(song.duration)}' for song in list[0 + (10*page): 10 + (10*page)]]
             
     def get_consistent_length_title(self, song_title):
         if len(song_title) < 35:
@@ -737,8 +881,8 @@ class iPod:
         return new_time
 
     def clear_list(self, ctx, list_name):
-        if list_name == 'both' or list_name == 'playlist': self.loaded_playlist.clear()
-        if list_name == 'both' or list_name == 'queue': self.loaded_queue.clear()
+        if list_name == 'both' or list_name == 'playlist': self.partially_loaded_playlist.clear()
+        if list_name == 'both' or list_name == 'queue': self.partially_loaded_queue.clear()
         self.on_list_clear(ctx, list_name)
 
     def remove_item_from_list(self, ctx, list_name, song_list, loaded_song):
@@ -784,6 +928,18 @@ class iPod:
         logger.info(f'Song added to loaded playlist event {loaded_item}')
         try: self.play_next_if_nothing_playing(ctx)
         except TriedPlayingWhenOutOfVC: return
+
+    def on_item_added_to_partially_loaded_queue(self, ctx, partially_loaded_item):
+        logger.info(f'Song added to partially loaded queue event {partially_loaded_item}')
+        if not self.preloading_running: 
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
+
+    def on_item_added_to_partially_loaded_playlist(self, ctx, partially_loaded_item):
+        logger.info(f'Song added to partially loaded playlist event {partially_loaded_item}')
+        if not self.preloading_running: 
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
 
     async def on_play_command(self, ctx, input, add_to_queue=False):
         logger.info(f'Play command received')
@@ -987,12 +1143,12 @@ class iPod:
         logger.info('Clear command receive')
         self.last_context = ctx
         await self.respond_to_clear(ctx, list)
-#endregion
+
     async def on_remove_command(self, ctx, list_name, index):
         logger.info('Remove command receive')
         self.last_context = ctx
-        if list_name == 'playlist': song_list = self.loaded_playlist
-        elif list_name == 'queue': song_list = self.loaded_queue
+        if list_name == 'playlist': song_list = self.partially_loaded_playlist
+        elif list_name == 'queue': song_list = self.partially_loaded_queue
         else: 
             embed = discord.Embed(description=f'List name must be `playlist` or `queue`, not `{list_name}`!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -1012,12 +1168,12 @@ class iPod:
         logger.info('Move command receive')
         self.last_context = ctx
         if song_list_name == 'playlist': 
-            song_list = self.loaded_playlist
-            other_list = self.loaded_queue
+            song_list = self.partially_loaded_playlist
+            other_list = self.partially_loaded_queue
             other_list_name = 'queue'
         elif song_list_name == 'queue': 
-            song_list = self.loaded_queue
-            other_list = self.loaded_playlist
+            song_list = self.partially_loaded_queue
+            other_list = self.partially_loaded_playlist
             other_list_name = 'playlist'
         else: 
             embed = discord.Embed(description=f'List name must be `playlist` or `queue`, not `{song_list_name}`!')
@@ -1031,6 +1187,9 @@ class iPod:
             except: await ctx.respond(embed=embed)
         else:
             self.move_items_between_lists(song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
+            if not self.preloading_running:
+                preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+                preloading_thread.start()
             await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
 
     async def on_play_message_context(self, ctx, message, add_to_queue):
@@ -1126,8 +1285,15 @@ class iPod:
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
         logger.info(f'Succeeded loading item {unloaded_item} into {loaded_item}')
-        if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
+        #if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
         bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
+
+    def on_preload_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
+        logger.info(f'Succeeded preloading item {unloaded_item} into {loaded_item}')
+        try: self.play_next_if_nothing_playing(ctx)
+        except TriedPlayingWhenOutOfVC: return
+        #if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
+        #bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
     def on_vc_connect(self, ctx, channel):
         logger.info(f'Connected to channel {channel}')
@@ -1140,6 +1306,9 @@ class iPod:
 
     def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
         logger.error(f'Play failed during song {song}', exc_info=exception)
+        if not self.preloading_running:
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
 
     def on_song_end_unknown(self, ctx, song, exception=None):
         #When a song ends due to an unknown cause, either an exception or the song completed
@@ -1153,6 +1322,9 @@ class iPod:
 
     def on_song_end_succeed(self, ctx, song):
         logger.info('Song ended')
+        if not self.preloading_running:
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
 
     def on_shuffle_enable(self, ctx):
         logger.info('Shuffle on')
@@ -1220,7 +1392,6 @@ class iPod:
 
     #region Discord interactions
     async def respond_to_add_unloaded_item(self, ctx, item_added):
-        if item_added.loading_context.parent_playlist != None: return
         embed = discord.Embed(description=f'Loading {item_added}...')
         await item_added.loading_context.send_message(ctx, embed)
 
@@ -1234,11 +1405,12 @@ class iPod:
         else:
             embed = discord.Embed(description=f'{item_added} failed to load due to an unknown error.')
             embed.color = 16741747
-        await item_added.loading_context.send_message(ctx, embed)
+        await ctx.send(embed=embed)
 
     async def respond_to_load_item(self, ctx, item_loaded, add_to_queue):
-        if item_loaded.loading_context.parent_playlist != None: 
-            embed = self.get_playlist_state_embed(item_loaded.loading_context.parent_playlist, add_to_queue)
+        if isinstance(item_loaded, LoadedYoutubePlaylist) or isinstance(item_loaded, LoadedSpotifyAlbum) or isinstance(item_loaded, LoadedSpotifyPlaylist): 
+            embed = discord.Embed(description=f'Successfully added {item_loaded.total_count} songs to {"queue" if add_to_queue else "playlist"}')
+            embed.color = 7528669
         else:
             embed = discord.Embed(description=f'Successfully added {item_loaded} to {"queue" if add_to_queue else "playlist"}')
             embed.color = 7528669
@@ -1253,7 +1425,7 @@ class iPod:
         embed = discord.Embed(description='Shuffle enabled', color=3093080)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
-        if len(self.loaded_queue) > len(self.loaded_playlist):
+        if len(self.partially_loaded_queue) > len(self.partially_loaded_playlist):
             embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. To add songs to the playlist, use `/add {song}` ~~If you want to move existing songs to the playlist and use shuffle, use `/move queue all`~~ NOT IMPLEMENTED YET', color=3093080)  #FIXME
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
@@ -1324,30 +1496,24 @@ class iPod:
     #endregion
 
     #region Message contructors
-    def get_playlist_state_embed(self, loaded_playlist, add_to_queue):
-        embed = discord.Embed(description=f'Successfully added {loaded_playlist.count} songs from {loaded_playlist} to {"queue" if add_to_queue else "playlist"}')
-        embed.color = 7528669
-        if loaded_playlist.error_count > 0: embed.set_footer(text=f'{loaded_playlist.error_count} songs failed to load')
-        return embed
-
     def compile_playlist(self, list: str, page=0) -> discord.Embed:
         if list != 'both' and list != 'playlist' and list != 'queue' and list != 'history': raise ValueError(list)
         #Set lists of strings
         if self.shuffle:
-            shuffled_playlist = self.sort_for_shuffle(self.loaded_playlist)
+            shuffled_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
             playlist_title_list = self.get_formatted_playlist(shuffled_playlist, page)
         else:
-            playlist_title_list = self.get_formatted_playlist(self.loaded_playlist, page)
-        queue_title_list = self.get_formatted_playlist(self.loaded_queue, page)
+            playlist_title_list = self.get_formatted_playlist(self.partially_loaded_playlist, page)
+        queue_title_list = self.get_formatted_playlist(self.partially_loaded_queue, page)
         history_title_list = self.get_formatted_playlist(self.past_songs_played, page)
         #Max page numbers (For footer)
-        max_page_queue = max((len(self.loaded_queue) - 1)//10, 0)
-        max_page_playlist = max((len(self.loaded_playlist) - 1)//10, 0)
+        max_page_queue = max((len(self.partially_loaded_queue) - 1)//10, 0)
+        max_page_playlist = max((len(self.partially_loaded_playlist) - 1)//10, 0)
         max_page_history = max((len(self.past_songs_played) - 1)//10, 0)
         #Do the title
         if list == 'both': title= 'Upcoming Queue/Playlist'
         elif list == 'queue': title= 'Upcoming Queue'
-        elif list == 'playlist': title= f'Upcoming Playlist{f" (will play after {len(self.loaded_queue)} songs currently in queue)" if len(self.loaded_queue) > 0 else ""}'
+        elif list == 'playlist': title= f'Upcoming Playlist{f" (will play after {len(self.partially_loaded_queue)} songs currently in queue)" if len(self.partially_loaded_queue) > 0 else ""}'
         elif list == 'history': title= f'Song History (sorted by most recent first)'
         #Do the footer
         if list == 'both': footer=f'Page {min(page+1, max(max_page_playlist, max_page_queue) + 1)} of {max(max_page_playlist, max_page_queue) + 1}'
@@ -1359,12 +1525,12 @@ class iPod:
         if list == 'both': description += 'Queue:\n'
         if list == 'both' or list == 'queue':
             if len(queue_title_list) > 0: description += ('```\n' + '\n'.join(queue_title_list) + '```\n')
-            elif len(self.loaded_queue) > 0: description += '`There is nothing on this page of the queue`\n'
+            elif len(self.partially_loaded_queue) > 0: description += '`There is nothing on this page of the queue`\n'
             else: description += '`The queue is empty`\n'
         if list == 'both': description += '\nPlaylist:\n'
         if list == 'both' or list == 'playlist': 
             if len(playlist_title_list) > 0: description += ('```\n' + '\n'.join(playlist_title_list) + '```\n')
-            elif len(self.loaded_playlist) > 0: description += '`There is nothing on this page of the playlist`\n'
+            elif len(self.partially_loaded_playlist) > 0: description += '`There is nothing on this page of the playlist`\n'
             else: description += '`Playlist is empty`\n'
         if list == 'history': 
             if len(history_title_list) > 0: description += ('```\n' + '\n'.join(history_title_list) + '```\n')
