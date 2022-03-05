@@ -18,7 +18,7 @@ class BumpReminder(commands.Cog):
 
         #Find last "bump success" message
         def bump_message_check(message):
-            return (message.author.id == 302050872383242240 and hasattr(message, 'embeds') and "Bump done! :thumbsup:" in message.embeds[0].description)
+            return (message.author.id == 302050872383242240 and hasattr(message, 'embeds') and "Bump done!" in message.embeds[0].description)
 
         def bump_remind_check(message):
             return (message.author.id == bot.user.id and hasattr(message, 'embeds') and "Bump the server" in message.embeds[0].description)
