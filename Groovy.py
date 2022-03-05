@@ -170,8 +170,8 @@ class LoadedYoutubeSong(PartiallyLoadedSong):
         self.duration = youtube_data['duration']
 
         self.loading_context = loading_context
-        self.random_value = random.randint(0, 10000) if random_value != None else random_value
-        self.song_list = song_list if song_list != None else []
+        self.random_value = random.randint(0, 10000) if random_value == None else random_value
+        self.song_list = song_list if song_list == None else []
 
         self.youtube_data = youtube_data
 
@@ -1779,23 +1779,23 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_move_command(ctx, list, index_to_start, index_to_end, index_to_move_to)
 
-    # @commands.message_command(name='play')
-    # async def context_play(self, ctx, message: discord.Message):
-    #     await ctx.defer()
-    #     player = self.get_player(ctx)
-    #     await player.on_play_message_context(ctx, message, True)
+    @commands.message_command(name='play')
+    async def context_play(self, ctx, message: discord.Message):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_play_message_context(ctx, message, True)
 
-    # @commands.message_command(name='add')
-    # async def context_add(self, ctx, message: discord.Message):
-    #     await ctx.defer()
-    #     player = self.get_player(ctx)
-    #     await player.on_play_message_context(ctx, message, False)
+    @commands.message_command(name='add')
+    async def context_add(self, ctx, message: discord.Message):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_play_message_context(ctx, message, False)
 
-    # @commands.message_command(name='search')
-    # async def context_search(self, ctx, message: discord.Message):
-    #     await ctx.defer()
-    #     player = self.get_player(ctx)
-    #     await player.on_search_message_context(ctx, message)
+    @commands.message_command(name='search')
+    async def context_search(self, ctx, message: discord.Message):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_search_message_context(ctx, message)
         
     #endregion
         
