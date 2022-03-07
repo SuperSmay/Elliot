@@ -111,47 +111,24 @@ class SongLoadingContext:
                 await self.send_message(ctx, next)
 
 #region Song Classes
-class UnloadedYoutubeSong:
-    def __init__(self, youtube_url, loading_context: SongLoadingContext) -> None:
-        self.youtube_url = youtube_url
+class UnloadedSong:
+    def __init__(self, url, loading_context: SongLoadingContext) -> None:
+        self.url = url
         self.loading_context = loading_context
     def __str__(self):
-        return self.youtube_url
+        return self.url
 
-class UnloadedYoutubePlaylist:
-    def __init__(self, youtube_playlist_url, loading_context: SongLoadingContext) -> None:
-        self.youtube_playlist_url = youtube_playlist_url
-        self.loading_context = loading_context
-    def __str__(self):
-        return self.youtube_playlist_url
+class UnloadedYoutubeSong(UnloadedSong): pass
 
-class UnloadedYoutubeSearch:
-    def __init__(self, youtube_search, loading_context: SongLoadingContext) -> None:
-        self.youtube_search = youtube_search
-        self.loading_context = loading_context
-    def __str__(self):
-        return self.youtube_search
+class UnloadedYoutubePlaylist(UnloadedSong): pass
 
-class UnloadedSpotifyTrack:
-    def __init__(self, spotify_track_url, loading_context: SongLoadingContext) -> None:
-        self.spotify_track_url = spotify_track_url
-        self.loading_context = loading_context
-    def __str__(self):
-        return self.spotify_track_url
+class UnloadedYoutubeSearch(UnloadedSong): pass
 
-class UnloadedSpotifyAlbum:
-    def __init__(self, spotify_album_url, loading_context: SongLoadingContext) -> None:
-        self.spotify_album_url = spotify_album_url
-        self.loading_context = loading_context
-    def __str__(self):
-        return self.spotify_album_url
+class UnloadedSpotifyTrack(UnloadedSong): pass
 
-class UnloadedSpotifyPlaylist:
-    def __init__(self, spotify_playlist_url, loading_context: SongLoadingContext) -> None:
-        self.spotify_playlist_url = spotify_playlist_url
-        self.loading_context = loading_context
-    def __str__(self):
-        return self.spotify_playlist_url
+class UnloadedSpotifyAlbum(UnloadedSong): pass
+
+class UnloadedSpotifyPlaylist(UnloadedSong): pass
 
 
 class PartiallyLoadedSong:
@@ -267,9 +244,6 @@ class NotPlaying(Exception): pass
 
 class iPod:
     def __init__(self, ctx):
-        
-        self.loaded_playlist = []
-        self.loaded_queue = []
 
         self.partially_loaded_playlist = []
         self.partially_loaded_queue = []
@@ -290,10 +264,21 @@ class iPod:
         music_players[ctx.guild.id] = self
         
         logger.info(f'iPod {self} created for {ctx.guild.name}')
+
+
         
     def loading_loop(self, ctx):
+        '''
+        Loops through the unloaded lists and loads any songs
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the load
+
+        
+        '''
         logger.info('Loading loop started')
         self.loading_running = True
+
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 futures = {executor.submit(self.load_data_in_thread, ctx, unloaded_item, False): unloaded_item for unloaded_item in self.unloaded_playlist}
@@ -320,11 +305,19 @@ class iPod:
                     except Exception as e:
                         self.on_load_fail(ctx, unloaded_item, e)
             if len(self.unloaded_playlist) > 0 or len(self.unloaded_queue) > 0: self.loading_loop(ctx)
+        
         except Exception as e:
             logger.error(f'Loading loop failed', exc_info=e)
+        
         self.loading_running = False
 
     def preloading_loop(self, ctx):
+        '''
+        Loops through the partially loaded lists and fully loads the next three songs from both
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the load
+        '''
         logger.info('Preloading loop started')
         
         items_to_preload = self.get_items_to_preload()
@@ -351,55 +344,37 @@ class iPod:
                 if not self.is_valid_to_play(item):
                     do_loop = True
             if do_loop: self.preloading_loop(ctx)
-
+        
         except Exception as e:
             logger.error(f'Preloading loop failed', exc_info=e)
-
+        
         self.preloading_running = False
 
-    def get_items_to_preload(self):
-        items_to_preload = []
-        items_to_preload.extend(self.partially_loaded_queue[0:3])
-        if self.shuffle: items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])  #FIXME please god fix this
-        else: items_to_preload.extend(self.partially_loaded_playlist[0:3])
-        return items_to_preload
+    def run_youtube_multi_search_in_thread(self, ctx, search_term):
+        '''
+        Calls functions to properly handle a youtube search command
 
-    def replace_item_in_partially_loaded_lists(self, partially_loaded_item, loaded_item):
-        if partially_loaded_item in self.partially_loaded_playlist:
-            index = self.partially_loaded_playlist.index(partially_loaded_item)
-            self.partially_loaded_playlist[index] = loaded_item
-        elif partially_loaded_item in self.partially_loaded_queue:
-            index = self.partially_loaded_queue.index(partially_loaded_item)
-            self.partially_loaded_queue[index] = loaded_item
+        Parameters:
+            - `ctx`: discord.commands.Context; The context of the command
+            - `search_term`: str; The input
+        '''
+        items = self.search_youtube(search_term, 10)
+        self.last_search = items
+        self.on_search_complete(ctx, items)
 
-    def remove_item_in_partially_loaded_lists(self, partially_loaded_item):
-        if partially_loaded_item in self.partially_loaded_playlist:
-            index = self.partially_loaded_playlist.index(partially_loaded_item)
-            del self.partially_loaded_playlist[index]
-        elif partially_loaded_item in self.partially_loaded_queue:
-            index = self.partially_loaded_queue.index(partially_loaded_item)
-            del self.partially_loaded_queue[index]
+    #region "Buttons" - Interal Player Actions
+    def play(self, ctx: commands.Context, song: LoadedYoutubeSong, return_song_to_list: bool) -> None:
+        '''
+        Change the player for `ctx.voice_client` to `song`
 
-    def ensure_preload(self, ctx):
-        if not self.preloading_running:
-            self.preloading_running = True
-            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
-            preloading_thread.start()
+        Parameters:
+            - `ctx`: discord.commands.Context; The context to play the song in
+            - `song`: LoadedYoutubeSong; The new song to play
+            - `return_song_to_list`: bool; Whether to return the song back to it's `song_list`
 
-    def is_valid_to_play(self, partially_loaded_song):
-        if isinstance(partially_loaded_song, LoadedYoutubeSong) and not self.check_403(partially_loaded_song): return True
-        else: return False
-
-    def check_403(self, loaded_youtube_song: LoadedYoutubeSong):
-        request = requests.head(loaded_youtube_song.youtube_data['url'])
-        code = request.status_code
-        if code == 403: return True
-        else: return False
-
-
-    #region "Buttons"
-    def play(self, ctx: commands.Context, song: LoadedYoutubeSong, is_skip_backwards: bool):
-        #Change player to this song
+        Raises:
+            `TriedPlayingWhenOutOfVC`
+        '''
         logger.info(f'Playing {song}')
         try:
             if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
@@ -408,7 +383,7 @@ class iPod:
                 old_source =  ctx.guild.voice_client.source
                 ctx.guild.voice_client.source = source
                 self.on_song_end_succeed(ctx, old_source.loaded_song)
-                if is_skip_backwards:
+                if return_song_to_list:
                     self.return_song_to_original_list(old_source.loaded_song)
                 else:
                     self.add_song_to_play_history(old_source.loaded_song)
@@ -418,9 +393,19 @@ class iPod:
         except Exception as e:
             self.on_start_play_fail(ctx, song, e)
  
-    def play_next_item(self, ctx):
-        #Play next item
-        #Returns whether or not a new song was started
+    def play_next_item(self, ctx: commands.Context) -> bool:
+        '''
+        Change the player for `ctx.voice_client` to the next song in the queue or playlist
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context to play the song in
+
+        Returns:
+            `bool`; Whether or not a new song was started
+
+        Raises:
+            `TriedPlayingWhenOutOfVC`
+        '''
         if self.shuffle: partially_loaded_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
         else: partially_loaded_playlist = self.partially_loaded_playlist
 
@@ -447,9 +432,19 @@ class iPod:
                 self.ensure_preload(ctx)
             return False
 
-    def play_previous_item(self, ctx):
-        #Play next item
-        #Returns whether or not a new song was started
+    def play_previous_item(self, ctx: commands.Context) -> None:
+        '''
+        Change the player for `ctx.voice_client` to the first song in the play history
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context to play the song in
+
+        Returns:
+            `bool`; Whether or not a new song was started
+
+        Raises:
+            `TriedPlayingWhenOutOfVC`
+        '''
         if len(self.past_songs_played) > 0 and self.is_valid_to_play(self.past_songs_played[0]):
             new_song = self.past_songs_played[0]
             if new_song in self.past_songs_played: del(self.past_songs_played[self.past_songs_played.index(new_song)])
@@ -464,14 +459,30 @@ class iPod:
         else:
             return False
 
-    def play_next_if_nothing_playing(self, ctx):
-        #Play next item if nothing is currently playing
+    def play_next_if_nothing_playing(self, ctx: commands.Context) -> None:
+        '''
+        Change the player for `ctx.voice_client` to the next song in the queue or playlist if nothing is currently playing
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context to play the song in
+
+        Raises:
+            `TriedPlayingWhenOutOfVC`
+        '''
         if ctx.guild.voice_client == None: raise TriedPlayingWhenOutOfVC
         if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
             self.play_next_item(ctx)
             
-    def skip(self, ctx):
-        #Skip a song
+    def skip(self, ctx: commands.Context) -> None:
+        '''
+        Skips the current song and plays the next song in the queue or playlist if availible, else stops playing
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context to play the song in
+
+        Raises:
+            `TriedPlayingWhenOutOfVC`
+        '''
         if len(self.partially_loaded_playlist) > 0 or len(self.partially_loaded_queue) > 0:
             old_song = ctx.guild.voice_client.source
             is_song_playing = self.play_next_item(ctx)
@@ -483,8 +494,16 @@ class iPod:
             new_song = None
             self.on_song_skip(ctx, old_song, new_song, False)
 
-    def skip_backwards(self, ctx):
-        #Skip a song backwards
+    def skip_backwards(self, ctx: commands.Context) -> None:
+        '''
+        Skips the current song and plays the first song in the play history if availible, else stops playing
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context to play the song in
+
+        Raises:
+            `TriedPlayingWhenOutOfVC`
+        '''
         if len(self.past_songs_played) > 0:
             old_song = ctx.guild.voice_client.source
             self.play_previous_item(ctx)
@@ -495,7 +514,13 @@ class iPod:
             new_song = None
             self.on_song_skip_backwards(ctx, old_song, new_song)
 
-    def toggle_shuffle(self, ctx):
+    def toggle_shuffle(self, ctx: commands.Context) -> None:
+        '''
+        Toggle shuffle mode for current player
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the change    
+        '''
         if self.shuffle:
             self.shuffle = False
             self.on_shuffle_disable(ctx)
@@ -505,7 +530,13 @@ class iPod:
             self.on_shuffle_enable(ctx)
         self.ensure_preload(ctx)
 
-    def toggle_pause(self, ctx):
+    def toggle_pause(self, ctx: commands.Context) -> None:
+        '''
+        Toggle pause for current player
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the change      
+        '''
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
         if ctx.guild.voice_client.is_paused():
             ctx.guild.voice_client.resume()
@@ -514,140 +545,41 @@ class iPod:
             ctx.guild.voice_client.pause()
             self.on_pause_enable(ctx)
 
-    def disconnect(self, ctx, auto=False):
+    def disconnect(self, ctx: commands.Context, auto=False) -> None:
+        '''
+        Causes `ctx.voice_client` to disconnect, if one is available
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the disconnect
+            - `auto`: bool; If the disconnection was automatic or not       
+        '''
         if ctx.guild.voice_client == None: return
         bot.loop.create_task(ctx.guild.voice_client.disconnect())
         self.on_disconnect(ctx, auto)
-    #endregion
-
-    #region "USB cable" Yeah this anaology is falling apart a bit but whatever
-    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):  #Correctly process and call events for a youtube link. Below functions are similar
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = UnloadedYoutubeSong(youtube_url, loading_context)
-            self.unloaded_queue.append(new_item)
-            self.on_item_added_to_unloaded_queue(ctx, new_item)
-        else:
-            new_item = UnloadedYoutubeSong(youtube_url, loading_context)
-            self.unloaded_playlist.append(new_item)
-            self.on_item_added_to_unloaded_playlist(ctx, new_item)
-
-    def receive_youtube_playlist_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = UnloadedYoutubePlaylist(youtube_url, loading_context)
-            self.unloaded_queue.append(new_item)
-            self.on_item_added_to_unloaded_queue(ctx, new_item)
-        else:
-            new_item = UnloadedYoutubePlaylist(youtube_url, loading_context)
-            self.unloaded_playlist.append(new_item)
-            self.on_item_added_to_unloaded_playlist(ctx, new_item)
-
-    def receive_spotify_track_url(self, ctx, spotify_url: str, add_to_queue: bool = False, loading_context = None):
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = UnloadedSpotifyTrack(spotify_url, loading_context)
-            self.unloaded_queue.append(new_item)
-            self.on_item_added_to_unloaded_queue(ctx, new_item)
-        else:
-            new_item = UnloadedSpotifyTrack(spotify_url, loading_context)
-            self.unloaded_playlist.append(new_item)
-            self.on_item_added_to_unloaded_playlist(ctx, new_item)
-
-    def receive_spotify_album_url(self, ctx, spotify_album_url: str, add_to_queue: bool = False, loading_context = None):
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = UnloadedSpotifyAlbum(spotify_album_url, loading_context)
-            self.unloaded_queue.append(new_item)
-            self.on_item_added_to_unloaded_queue(ctx, new_item)
-        else:
-            new_item = UnloadedSpotifyAlbum(spotify_album_url, loading_context)
-            self.unloaded_playlist.append(new_item)
-            self.on_item_added_to_unloaded_playlist(ctx, new_item)
-
-    def receive_spotify_playlist_url(self, ctx, spotify_playlist_url: str, add_to_queue: bool = False, loading_context = None):
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, loading_context)
-            self.unloaded_queue.append(new_item)
-            self.on_item_added_to_unloaded_queue(ctx, new_item)
-        else:
-            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, loading_context)
-            self.unloaded_playlist.append(new_item)
-            self.on_item_added_to_unloaded_playlist(ctx, new_item)
-
-    def receive_search_term(self, ctx, search_term: str, add_to_queue: bool = False, loading_context = None):
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = UnloadedYoutubeSearch(search_term, loading_context)
-            self.unloaded_queue.append(new_item)
-            self.on_item_added_to_unloaded_queue(ctx, new_item)
-        else:
-            new_item = UnloadedYoutubeSearch(search_term, loading_context)
-            self.unloaded_playlist.append(new_item)
-            self.on_item_added_to_unloaded_playlist(ctx, new_item)
-    #endregion
     
-    #region Receive loaded
-    def receive_loaded_youtube_data(self, ctx, loaded_song: LoadedYoutubeSong, add_to_queue: bool = False):
-        if add_to_queue:
-            self.partially_loaded_queue.append(loaded_song)
-            loaded_song.song_list = self.partially_loaded_queue
-            self.on_item_added_to_partially_loaded_queue(ctx, loaded_song)
-        else:
-            self.partially_loaded_playlist.append(loaded_song)
-            loaded_song.song_list = self.partially_loaded_playlist
-            self.on_item_added_to_partially_loaded_playlist(ctx, loaded_song)
+    def ensure_preload(self, ctx: commands.Context):
+        '''
+        Starts the preloading loop if the loop is not already running
 
-    def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
-        for snippet in loaded_playlist.youtube_playlist_snippets:
-            self.receive_loaded_youtube_playlist_snippet(ctx, snippet, add_to_queue, loaded_playlist.loading_context)
-
-    def receive_loaded_youtube_playlist_snippet(self, ctx, youtube_snippet: str, add_to_queue: bool = False, loading_context = None):  #Correctly process and call events for a youtube link. Below functions are similar
-        if loading_context == None: loading_context = SongLoadingContext()
-        if add_to_queue:
-            new_item = LoadedYoutubePlaylistSong(youtube_snippet, loading_context)
-            self.partially_loaded_queue.append(new_item)
-            self.on_item_added_to_partially_loaded_queue(ctx, new_item)
-        else:
-            new_item = LoadedYoutubePlaylistSong(youtube_snippet, loading_context)
-            self.partially_loaded_playlist.append(new_item)
-            self.on_item_added_to_partially_loaded_playlist(ctx, new_item)
-
-    def receive_loaded_spotify_track(self, ctx, loaded_track: LoadedSpotifyTrack, add_to_queue: bool = False):
-        if add_to_queue:
-            self.partially_loaded_queue.append(loaded_track)
-            self.on_item_added_to_partially_loaded_queue(ctx, loaded_track)
-        else:
-            self.partially_loaded_playlist.append(loaded_track)
-            self.on_item_added_to_partially_loaded_playlist(ctx, loaded_track)
-
-    def receive_loaded_spotify_album(self, ctx, loaded_album: LoadedSpotifyAlbum, add_to_queue: bool = False):
-        album = loaded_album.spotify_album_data
-        for loaded_track in album['tracks']['items']:
-            self.receive_loaded_spotify_track(ctx, LoadedSpotifyTrack(loaded_track, loaded_album.loading_context), add_to_queue)
-
-    def receive_loaded_spotify_playlist(self, ctx, loaded_playlist: LoadedSpotifyPlaylist, add_to_queue: bool = False):
-        playlist = loaded_playlist.spotify_playlist_data
-        for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
-            self.receive_loaded_spotify_track(ctx, LoadedSpotifyTrack(loaded_track, loaded_playlist.loading_context), add_to_queue)
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the load       
+        '''
+        if not self.preloading_running:
+            self.preloading_running = True
+            preloading_thread = threading.Thread(target=self.preloading_loop, args=[ctx])
+            preloading_thread.start()
     #endregion
-    
-    #region Loaders
-    def distrubute_loaded_input(self, ctx, loaded_item, add_to_queue):
-        if isinstance(loaded_item, LoadedYoutubeSong):
-            self.receive_loaded_youtube_data(ctx, loaded_item, add_to_queue)
-        if isinstance(loaded_item, LoadedYoutubePlaylist):
-            self.receive_loaded_youtube_playlist(ctx, loaded_item, add_to_queue)
-        if isinstance(loaded_item, LoadedSpotifyTrack):
-            self.receive_loaded_spotify_track(ctx, loaded_item, add_to_queue)
-        if isinstance(loaded_item, LoadedSpotifyAlbum):
-            self.receive_loaded_spotify_album(ctx, loaded_item, add_to_queue)
-        if isinstance(loaded_item, LoadedSpotifyPlaylist):
-            self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
-        self.ensure_preload(ctx)
-            
-    def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None:  #Calls functions processing each type of supported link
+
+    #region "USB cable" Yeah this anaology is falling apart a bit but whatever - Handle different forms of raw input data
+    def process_input(self, ctx, input: str, add_to_queue: bool = False) -> None: 
+        '''
+        Calls functions to properly handle any type of supported input link (Youtube and Spotify)
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `input`: str; The input link
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+        '''
         parsed_input = self.parse_input(input)
         for youtube_url in parsed_input['youtube_links']:
             self.receive_youtube_url(ctx, youtube_url, add_to_queue)
@@ -662,75 +594,237 @@ class iPod:
         for search_term in parsed_input['search_terms']:
             self.receive_search_term(ctx, search_term, add_to_queue)
 
-    def parse_input(self, input: str) -> dict:
-        output_dict = {'youtube_links' : [], 'youtube_playlist_links' : [], 'spotify_track_links' : [], 'spotify_album_links' : [], 'spotify_playlist_links' : [],'search_terms' : []}
-        if input == "":
-            return output_dict
-        if input.startswith("www.") and not ((input.startswith("https://") or input.startswith("http://") or input.startswith("//"))):
-            input = "//" + input
-        parsed_url = urllib.parse.urlparse(input)
-        website = parsed_url.netloc.removeprefix("www.").removesuffix(".com").removeprefix("open.")
-        if website == "":
-            try:
-                input = int(input)
-                if input <= 10 and input > 0 and self.last_search != None:
-                    output_dict['youtube_links'].append(self.last_search[input-1]['link'])
-                input = ''
-            except ValueError:
-                output_dict['search_terms'].append(input)
-        elif website == "youtube":
-            temp_dict = self.parse_youtube_link(parsed_url)
-            output_dict.update(temp_dict)
-        elif website == "youtu.be":
-            temp_dict = self.handle_youtube_short_link(parsed_url) 
-            output_dict.update(temp_dict)
-        elif website == "spotify":
-            temp_dict = self.handle_spotify_link(parsed_url)
-            output_dict.update(temp_dict)
-        return output_dict
+    def receive_youtube_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):  
+        '''
+        Correctly process and call events for a youtube link
 
-    def parse_youtube_link(self, parsed_url):
-        query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
-        path = parsed_url.path
-        if "v" in query:
-            return {'youtube_links' : [f"https://www.youtube.com/watch?v={query['v'][0]}"]}
-        elif "list" in query:
-            return {'youtube_playlist_links' : [f"https://www.youtube.com/watch?list={query['list'][0]}"]}
-        elif "url" in query:
-            return {'youtube_links' : [query['url'][0]]}
-        elif len(path) > 10:
-            return {'youtube_links' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `input`: str; The input link
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = UnloadedYoutubeSong(youtube_url, loading_context)
+            self.unloaded_queue.append(new_item)
+            self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            return {'search_terms' : [urllib.parse.urlunparse(parsed_url)]}
+            new_item = UnloadedYoutubeSong(youtube_url, loading_context)
+            self.unloaded_playlist.append(new_item)
+            self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def handle_youtube_short_link(self, parsed_url):
-        path = parsed_url.path
-        return {'youtube_links' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
+    def receive_youtube_playlist_url(self, ctx, youtube_url: str, add_to_queue: bool = False, loading_context = None):
+        '''
+        Correctly process and call events for a youtube link
 
-    def handle_youtube_image_link(self, parsed_url):  #Doesn't work an I haven't tried to fix it
-        return {'youtube_links' : [f"https://www.youtube.com/watch?v={parsed_url.path[4:15]}"]}  #FIXME
-
-    def handle_spotify_link(self, parsed_url):
-        url = urllib.parse.urlunparse(parsed_url)
-        path = parsed_url.path
-        if "playlist" in path:
-            return {'spotify_playlist_links' : [url]}
-        elif "track" in path:
-            return {'spotify_track_links' : [url]}
-        elif "album" in path:
-            return {'spotify_album_links' : [url]}
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `youtube_url`: str; The input link
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = UnloadedYoutubePlaylist(youtube_url, loading_context)
+            self.unloaded_queue.append(new_item)
+            self.on_item_added_to_unloaded_queue(ctx, new_item)
         else:
-            return {'search_terms' : [url]}
+            new_item = UnloadedYoutubePlaylist(youtube_url, loading_context)
+            self.unloaded_playlist.append(new_item)
+            self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def search_youtube(self, text_to_search, limit=10):
-        search = VideosSearch(text_to_search, limit=limit)
-        return search.result()['result']
+    def receive_spotify_track_url(self, ctx, spotify_url: str, add_to_queue: bool = False, loading_context = None):
+        '''
+        Correctly process and call events for a spotify track link
 
-    def reshuffle_list(self, playlist:list[PartiallyLoadedSong]):
-        for song in playlist:
-            song.random_value = random.randint(0, 10000)
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `spotify_url`: str; The input link
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = UnloadedSpotifyTrack(spotify_url, loading_context)
+            self.unloaded_queue.append(new_item)
+            self.on_item_added_to_unloaded_queue(ctx, new_item)
+        else:
+            new_item = UnloadedSpotifyTrack(spotify_url, loading_context)
+            self.unloaded_playlist.append(new_item)
+            self.on_item_added_to_unloaded_playlist(ctx, new_item)
 
-    def load_data_in_thread(self, ctx, unloaded_item, add_to_queue = False):  #Blocking function to be called in a thread. Loads given input and returns constructed Loaded{Type} object
+    def receive_spotify_album_url(self, ctx, spotify_album_url: str, add_to_queue: bool = False, loading_context = None):
+        '''
+        Correctly process and call events for a spotify album link
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `spotify_album_url`: str; The input link
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = UnloadedSpotifyAlbum(spotify_album_url, loading_context)
+            self.unloaded_queue.append(new_item)
+            self.on_item_added_to_unloaded_queue(ctx, new_item)
+        else:
+            new_item = UnloadedSpotifyAlbum(spotify_album_url, loading_context)
+            self.unloaded_playlist.append(new_item)
+            self.on_item_added_to_unloaded_playlist(ctx, new_item)
+
+    def receive_spotify_playlist_url(self, ctx, spotify_playlist_url: str, add_to_queue: bool = False, loading_context = None):
+        '''
+        Correctly process and call events for a spotify playlist link
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `spotify_playlist_url`: str; The input link
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, loading_context)
+            self.unloaded_queue.append(new_item)
+            self.on_item_added_to_unloaded_queue(ctx, new_item)
+        else:
+            new_item = UnloadedSpotifyPlaylist(spotify_playlist_url, loading_context)
+            self.unloaded_playlist.append(new_item)
+            self.on_item_added_to_unloaded_playlist(ctx, new_item)
+
+    def receive_search_term(self, ctx, search_term: str, add_to_queue: bool = False, loading_context = None):
+        '''
+        Correctly process and call events for a search input
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `search_term`: str; The input
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = UnloadedYoutubeSearch(search_term, loading_context)
+            self.unloaded_queue.append(new_item)
+            self.on_item_added_to_unloaded_queue(ctx, new_item)
+        else:
+            new_item = UnloadedYoutubeSearch(search_term, loading_context)
+            self.unloaded_playlist.append(new_item)
+            self.on_item_added_to_unloaded_playlist(ctx, new_item)
+    #endregion
+    
+    #region Receive loaded - Handle different types of data after it has been loaded
+    def receive_loaded_youtube_data(self, ctx, loaded_song: LoadedYoutubeSong, add_to_queue: bool = False):
+        '''
+        Correctly process and call events for a loaded YouTube song
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `loaded_song`: LoadedYoutubeSong; The loaded song
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+        '''
+        if add_to_queue:
+            self.partially_loaded_queue.append(loaded_song)
+            loaded_song.song_list = self.partially_loaded_queue
+            self.on_item_added_to_partially_loaded_queue(ctx, loaded_song)
+        else:
+            self.partially_loaded_playlist.append(loaded_song)
+            loaded_song.song_list = self.partially_loaded_playlist
+            self.on_item_added_to_partially_loaded_playlist(ctx, loaded_song)
+
+    def receive_loaded_youtube_playlist(self, ctx, loaded_playlist: LoadedYoutubePlaylist, add_to_queue: bool = False):
+        '''
+        Correctly process and call events for a loaded YouTube playlist
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `loaded_playlist`: LoadedYoutubePlaylist; The loaded playlist
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+        '''
+        for snippet in loaded_playlist.youtube_playlist_snippets:
+            self.receive_loaded_youtube_playlist_snippet(ctx, snippet, add_to_queue, loaded_playlist.loading_context)
+
+    def receive_loaded_youtube_playlist_snippet(self, ctx, youtube_snippet: str, add_to_queue: bool = False, loading_context = None):
+        '''
+        Correctly process and call events for a loaded YouTube song
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `youtube_snippet`: str; The loaded youtube playlist snippet
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+            - `loading_context`: LoadingContext | None; The loading context for the url
+        '''
+        if loading_context == None: loading_context = SongLoadingContext()
+        if add_to_queue:
+            new_item = LoadedYoutubePlaylistSong(youtube_snippet, loading_context)
+            self.partially_loaded_queue.append(new_item)
+            self.on_item_added_to_partially_loaded_queue(ctx, new_item)
+        else:
+            new_item = LoadedYoutubePlaylistSong(youtube_snippet, loading_context)
+            self.partially_loaded_playlist.append(new_item)
+            self.on_item_added_to_partially_loaded_playlist(ctx, new_item)
+
+    def receive_loaded_spotify_track(self, ctx, loaded_track: LoadedSpotifyTrack, add_to_queue: bool = False):
+        '''
+        Correctly process and call events for a loaded YouTube playlist
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `loaded_track`: LoadedSpotifyTrack; The loaded track
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+        '''
+        if add_to_queue:
+            self.partially_loaded_queue.append(loaded_track)
+            self.on_item_added_to_partially_loaded_queue(ctx, loaded_track)
+        else:
+            self.partially_loaded_playlist.append(loaded_track)
+            self.on_item_added_to_partially_loaded_playlist(ctx, loaded_track)
+
+    def receive_loaded_spotify_album(self, ctx, loaded_album: LoadedSpotifyAlbum, add_to_queue: bool = False):
+        '''
+        Correctly process and call events for a loaded YouTube playlist
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `loaded_album`: LoadedSpotifyAlbum; The loaded album
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+        '''
+        album = loaded_album.spotify_album_data
+        for loaded_track in album['tracks']['items']:
+            self.receive_loaded_spotify_track(ctx, LoadedSpotifyTrack(loaded_track, loaded_album.loading_context), add_to_queue)
+
+    def receive_loaded_spotify_playlist(self, ctx, loaded_playlist: LoadedSpotifyPlaylist, add_to_queue: bool = False):
+        '''
+        Correctly process and call events for a loaded YouTube playlist
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `loaded_playlist`: LoadedSpotifyPlaylist; The loaded playlist
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+        '''
+        playlist = loaded_playlist.spotify_playlist_data
+        for loaded_track in [item['track'] for item in playlist['tracks']['items']]:
+            self.receive_loaded_spotify_track(ctx, LoadedSpotifyTrack(loaded_track, loaded_playlist.loading_context), add_to_queue)
+    #endregion
+    
+    #region Loaders - Load different types of data into a consistent form
+    def load_data_in_thread(self, ctx, unloaded_item, add_to_queue = False):
+        '''
+        Blocking function to be called in a thread. Loads given unloaded_item and returns constructed loaded object
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedSong; The unloaded item
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `PartiallyLoadedSong | LoadedYoutubePlaylist | LoadedSpotifyAlbum | LoadedSpotifyPlaylist`; The loaded result 
+        
+        Raises:
+            `TypeError`
+        '''
         if isinstance(unloaded_item, UnloadedYoutubeSong):
             data = self.load_youtube_url(ctx, unloaded_item, add_to_queue)
             return LoadedYoutubeSong(data, unloaded_item.loading_context)
@@ -752,22 +846,53 @@ class iPod:
         else:
             raise TypeError(unloaded_item)
 
-    def run_youtube_multi_search_in_thread(self, ctx, search_term):
-        items = self.search_youtube(search_term, 10)
-        self.last_search = items
-        self.on_search_complete(ctx, items)
+    def search_youtube(self, text_to_search: str, limit: int = 10) -> list[dict]:
+        '''
+        Blocking function to be called in a thread. Searches YouTube for the given search term
 
-    def load_youtube_url(self, ctx, unloaded_item: UnloadedYoutubeSong, add_to_queue = False) -> dict:  #Loads single youtube url and returns data dict
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `text_to_search`: str; The loaded album
+            - `limit`: int; The number of results to get
+
+        Returns:
+            `list[dict]`; The result of the search
+        '''
+        search = VideosSearch(text_to_search, limit=limit)
+        return search.result()['result']
+
+    def load_youtube_url(self, ctx, unloaded_item: UnloadedYoutubeSong, add_to_queue = False) -> dict:
+        '''
+        Blocking function to be called in a thread. Loads single youtube url and returns data dict
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedYoutubeSong; The unloaded song to load
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `dict`; The result of the YouTubeDL query
+        '''
         if not isinstance(unloaded_item, UnloadedYoutubeSong): raise TypeError(unloaded_item)
         self.on_load_start(ctx, unloaded_item, add_to_queue)
-        data = ytdl.extract_info(unloaded_item.youtube_url, download=False)
+        data = ytdl.extract_info(unloaded_item.url, download=False)
         return data
 
-    def load_youtube_playlist_url(self, ctx, unloaded_item: UnloadedYoutubePlaylist, add_to_queue = False) -> list:  #Loads youtube playlist and returns list of youtube urls
-        #extract playlist id from url
+    def load_youtube_playlist_url(self, ctx, unloaded_item: UnloadedYoutubePlaylist, add_to_queue = False) -> tuple[list, str]:  #Loads youtube playlist and returns list of youtube urls
+        '''
+        Blocking function to be called in a thread. Loads a youtube playlist and returns list of song snippets
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedYoutubeSong; The unloaded song to load
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `list`; The list of song snippets from the YouTube API query, `str`; The name of the playlist
+        '''
         if not isinstance(unloaded_item, UnloadedYoutubePlaylist): raise TypeError(unloaded_item)
         self.on_load_start(ctx, unloaded_item, add_to_queue)
-        url = unloaded_item.youtube_playlist_url
+        url = unloaded_item.url
         parsed_url = urllib.parse.urlparse(url)
         query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
         playlist_id = query["list"][0]
@@ -794,23 +919,56 @@ class iPod:
 
         return [t["snippet"] for t in playlist_items], title_response['items'][0]['snippet']['title'] 
 
-    def load_spotify_track_url(self, ctx, unloaded_item: UnloadedSpotifyTrack, add_to_queue = False):  #Loads spotify track and returns track dict
+    def load_spotify_track_url(self, ctx, unloaded_item: UnloadedSpotifyTrack, add_to_queue = False) -> dict:
+        '''
+        Blocking function to be called in a thread. Loads a Spotify track and returns the result
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedSpotifyTrack; The unloaded track to load
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `dict`; The result of the Spotify API query
+        '''
         if not isinstance(unloaded_item, UnloadedSpotifyTrack): raise TypeError(unloaded_item)
-        url = unloaded_item.spotify_track_url
+        url = unloaded_item.url
         self.on_load_start(ctx, unloaded_item, add_to_queue)
         track = sp.track(url)
         return track
 
-    def load_spotify_album_url(self, ctx, unloaded_item: UnloadedSpotifyAlbum, add_to_queue = False):  #Loads spotify album and returns album dict
+    def load_spotify_album_url(self, ctx, unloaded_item: UnloadedSpotifyAlbum, add_to_queue = False) -> dict:
+        '''
+        Blocking function to be called in a thread. Loads a Spotify album and returns the result
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedSpotifyAlbum; The unloaded album to load
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `dict`; The result of the Spotify API query
+        '''
         if not isinstance(unloaded_item, UnloadedSpotifyAlbum): raise TypeError(unloaded_item)
-        url = unloaded_item.spotify_album_url
+        url = unloaded_item.url
         self.on_load_start(ctx, unloaded_item, add_to_queue)
         album = sp.album(url)
         return album
     
-    def load_spotify_playlist_url(self, ctx, unloaded_item: UnloadedSpotifyPlaylist, add_to_queue = False):  #Loads spotify playlist and returns playlist dict
+    def load_spotify_playlist_url(self, ctx, unloaded_item: UnloadedSpotifyPlaylist, add_to_queue = False) -> dict:  #Loads spotify playlist and returns playlist dict
+        '''
+        Blocking function to be called in a thread. Loads a Spotify playlist and returns the result
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedSpotifyPlaylist; The unloaded album to load
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `dict`; The result of the Spotify API query
+        '''
         if not isinstance(unloaded_item, UnloadedSpotifyPlaylist): raise TypeError(unloaded_item)
-        url = unloaded_item.spotify_playlist_url
+        url = unloaded_item.url
         self.on_load_start(ctx, unloaded_item, add_to_queue)
         results = sp.playlist(url)
         tracks = results['tracks']
@@ -820,13 +978,108 @@ class iPod:
         return results
 
     def load_youtube_search(self, ctx, unloaded_item: UnloadedYoutubeSearch, add_to_queue = False):  #Loads single youtube search and returns data dict
+        '''
+        Blocking function to be called in a thread. Loads a YouTube search and returns data dict
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context the input came from
+            - `unloaded_item`: UnloadedSpotifyPlaylist; The unloaded album to load
+            - `add_to_queue`: bool; Whether to add the song to the queue or not
+
+        Returns:
+            `dict`; The result of the YouTubeDL query
+        '''
         if not isinstance(unloaded_item, UnloadedYoutubeSearch): raise TypeError(unloaded_item)
         self.on_load_start(ctx, unloaded_item, add_to_queue)
-        data = ytdl.extract_info(unloaded_item.youtube_search, download=False)['entries'][0]
+        data = ytdl.extract_info(unloaded_item.url, download=False)['entries'][0]
         return data
     #endregion
     
-    #region Data processing
+    #region Link processing
+    def parse_input(self, input: str) -> dict[str, list]:
+        '''
+        Takes an input string and returns a dictionary with the normalized link in the right spot
+
+        Parameters:
+            - `input`: str; The input link
+
+        Returns:
+            `dict[str: list]`; A dictionary containing lists of different types of links
+        '''
+        output_dict = {'youtube_links' : [], 'youtube_playlist_links' : [], 'spotify_track_links' : [], 'spotify_album_links' : [], 'spotify_playlist_links' : [],'search_terms' : []}
+        if input == "":
+            return output_dict
+        if input.startswith("www.") and not ((input.startswith("https://") or input.startswith("http://") or input.startswith("//"))):
+            input = "//" + input
+        parsed_url = urllib.parse.urlparse(input)
+        website = parsed_url.netloc.removeprefix("www.").removesuffix(".com").removeprefix("open.")
+        if website == "":
+            try:
+                input = int(input)
+                if input <= 10 and input > 0 and self.last_search != None:
+                    output_dict['youtube_links'].append(self.last_search[input-1]['link'])
+                input = ''
+            except ValueError:
+                output_dict['search_terms'].append(input)
+        elif website == "youtube":
+            temp_dict = self.parse_youtube_link(parsed_url)
+            output_dict.update(temp_dict)
+        elif website == "youtu.be":
+            temp_dict = self.handle_youtube_short_link(parsed_url) 
+            output_dict.update(temp_dict)
+        elif website == "i.ytimg":
+            temp_dict = self.handle_youtube_image_link(parsed_url) 
+            output_dict.update(temp_dict)
+        elif website == "spotify":
+            temp_dict = self.handle_spotify_link(parsed_url)
+            output_dict.update(temp_dict)
+        return output_dict
+
+    def parse_youtube_link(self, parsed_url):
+        '''
+        Takes an parsed url and returns a dictionary with the normalized link in the right spot to be updated onto a larger link dictionary
+
+        Parameters:
+            - `parsed_url`: str; The input link
+
+        Returns:
+            `dict[str: list]`; A dictionary containing lists of different types of links
+        '''
+        query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
+        path = parsed_url.path
+        if "v" in query:
+            return {'youtube_links' : [f"https://www.youtube.com/watch?v={query['v'][0]}"]}
+        elif "list" in query:
+            return {'youtube_playlist_links' : [f"https://www.youtube.com/watch?list={query['list'][0]}"]}
+        elif "url" in query:
+            return {'youtube_links' : [query['url'][0]]}
+        elif len(path) > 10:
+            return {'youtube_links' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
+        else:
+            return {'search_terms' : [urllib.parse.urlunparse(parsed_url)]}
+
+    def handle_youtube_short_link(self, parsed_url):
+        path = parsed_url.path
+        return {'youtube_links' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
+
+    def handle_youtube_image_link(self, parsed_url):  #Doesn't work an I haven't tried to fix it
+        parsed_url_path_list = parsed_url.path.split('/')
+        return {'youtube_links' : [f"https://www.youtube.com/watch?v={parsed_url_path_list[2]}"]}  #FIXME
+
+    def handle_spotify_link(self, parsed_url):
+        url = urllib.parse.urlunparse(parsed_url)
+        path = parsed_url.path
+        if "playlist" in path:
+            return {'spotify_playlist_links' : [url]}
+        elif "track" in path:
+            return {'spotify_track_links' : [url]}
+        elif "album" in path:
+            return {'spotify_album_links' : [url]}
+        else:
+            return {'search_terms' : [url]}
+    #endregion
+
+    #region Data Processing
     def get_shuffle_number(self, loaded_youtube_song: LoadedYoutubeSong):
         return loaded_youtube_song.random_value
 
@@ -895,6 +1148,66 @@ class iPod:
 
         return new_time
 
+    def is_valid_to_play(self, partially_loaded_song: PartiallyLoadedSong) -> bool:
+        '''
+        Checks if the given `partially_loaded_item` is playable
+
+        Parameters:
+            - `partially_loaded_item`: PartiallyLoadedSong; The partially loaded song to check
+
+        Returns:
+            `bool`; Whether the song can be played or not
+        '''
+        if isinstance(partially_loaded_song, LoadedYoutubeSong) and not self.check_403(partially_loaded_song): return True
+        else: return False
+
+    def check_403(self, loaded_youtube_song: LoadedYoutubeSong):
+        '''
+        Checks if the given `loaded_youtube_song` returns an HTTP 403 error
+
+        Parameters:
+            - `loaded_youtube_song`: LoadedYoutubeSong; The loaded song to check
+
+        Returns:
+            `bool`; Whether the song returns a 403 or not
+        '''
+        request = requests.head(loaded_youtube_song.youtube_data['url'])
+        code = request.status_code
+        if code == 403: return True
+        else: return False
+
+    def get_items_to_preload(self) -> list[PartiallyLoadedSong]:
+        '''
+        Gets a list of the items needed for preload, that being the top three items from the playlist (or shuffled playlist) and the queue
+
+        Returns:
+            `list`; The list of partially loaded songs
+        '''
+        items_to_preload = []
+        items_to_preload.extend(self.partially_loaded_queue[0:3])
+        if self.shuffle: items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])  #FIXME please god fix this
+        else: items_to_preload.extend(self.partially_loaded_playlist[0:3])
+        return items_to_preload
+    #endregion
+
+    #region Data Management
+    def distrubute_loaded_input(self, ctx, loaded_item, add_to_queue):
+        if isinstance(loaded_item, LoadedYoutubeSong):
+            self.receive_loaded_youtube_data(ctx, loaded_item, add_to_queue)
+        if isinstance(loaded_item, LoadedYoutubePlaylist):
+            self.receive_loaded_youtube_playlist(ctx, loaded_item, add_to_queue)
+        if isinstance(loaded_item, LoadedSpotifyTrack):
+            self.receive_loaded_spotify_track(ctx, loaded_item, add_to_queue)
+        if isinstance(loaded_item, LoadedSpotifyAlbum):
+            self.receive_loaded_spotify_album(ctx, loaded_item, add_to_queue)
+        if isinstance(loaded_item, LoadedSpotifyPlaylist):
+            self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
+        self.ensure_preload(ctx)
+
+    def reshuffle_list(self, playlist:list[PartiallyLoadedSong]):
+        for song in playlist:
+            song.random_value = random.randint(0, 10000)
+    
     def clear_list(self, ctx, list_name):
         if list_name == 'both' or list_name == 'playlist': self.partially_loaded_playlist.clear()
         if list_name == 'both' or list_name == 'queue': self.partially_loaded_queue.clear()
@@ -919,38 +1232,42 @@ class iPod:
     def return_song_to_original_list(self, loaded_song):
         loaded_song.song_list.insert(0, loaded_song)
 
+    def replace_item_in_partially_loaded_lists(self, partially_loaded_item: PartiallyLoadedSong, loaded_item: LoadedYoutubeSong):
+        '''
+        Replaces the given `partially_loaded_item` in any partially loaded lists with the given `loaded_item`
+
+        Parameters:
+            - `partially_loaded_item`: PartiallyLoadedSong; The partially loaded song to replace
+            - `loaded_item`: LoadedYoutubeSong; The loaded song to replace with
+
+        
+        '''
+        if partially_loaded_item in self.partially_loaded_playlist:
+            index = self.partially_loaded_playlist.index(partially_loaded_item)
+            self.partially_loaded_playlist[index] = loaded_item
+        elif partially_loaded_item in self.partially_loaded_queue:
+            index = self.partially_loaded_queue.index(partially_loaded_item)
+            self.partially_loaded_queue[index] = loaded_item
+
+    def remove_item_in_partially_loaded_lists(self, partially_loaded_item):
+        '''
+        Removes the given `partially_loaded_item` in any partially loaded lists 
+
+        Parameters:
+            - `partially_loaded_item`: PartiallyLoadedSong; The partially loaded song to remove
+
+        
+        '''
+        if partially_loaded_item in self.partially_loaded_playlist:
+            index = self.partially_loaded_playlist.index(partially_loaded_item)
+            del self.partially_loaded_playlist[index]
+        elif partially_loaded_item in self.partially_loaded_queue:
+            index = self.partially_loaded_queue.index(partially_loaded_item)
+            del self.partially_loaded_queue[index]
     #endregion
 
     #region Command Events
-    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
-        logger.info(f'Song added to unloaded queue event {unloaded_item}')
-        if not self.loading_running: 
-            loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
-            loading_thread.start()
 
-    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong):
-        logger.info(f'Song added to unloaded playlist event {unloaded_item}')
-        if not self.loading_running: 
-            loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
-            loading_thread.start()
-
-    def on_item_added_to_loaded_queue(self, ctx, loaded_item):
-        logger.info(f'Song added to loaded queue event {loaded_item}')
-        try: self.play_next_if_nothing_playing(ctx)
-        except TriedPlayingWhenOutOfVC: return
-
-    def on_item_added_to_loaded_playlist(self, ctx, loaded_item):
-        logger.info(f'Song added to loaded playlist event {loaded_item}')
-        try: self.play_next_if_nothing_playing(ctx)
-        except TriedPlayingWhenOutOfVC: return
-
-    def on_item_added_to_partially_loaded_queue(self, ctx, partially_loaded_item):
-        logger.info(f'Song added to partially loaded queue event {partially_loaded_item}')
-        
-
-    def on_item_added_to_partially_loaded_playlist(self, ctx, partially_loaded_item):
-        logger.info(f'Song added to partially loaded playlist event {partially_loaded_item}')
-        
 
     async def on_play_command(self, ctx, input, add_to_queue=False):
         logger.info(f'Play command received')
@@ -1282,6 +1599,24 @@ class iPod:
     #endregion
     
     #region Internal events
+    def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
+        logger.info(f'Song added to unloaded queue event {unloaded_item}')
+        if not self.loading_running: 
+            loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
+            loading_thread.start()
+
+    def on_item_added_to_unloaded_playlist(self, ctx, unloaded_item: UnloadedYoutubeSong):
+        logger.info(f'Song added to unloaded playlist event {unloaded_item}')
+        if not self.loading_running: 
+            loading_thread = threading.Thread(target=self.loading_loop, args=[ctx])
+            loading_thread.start()
+
+    def on_item_added_to_partially_loaded_queue(self, ctx, partially_loaded_item):
+        logger.info(f'Song added to partially loaded queue event {partially_loaded_item}')
+        
+    def on_item_added_to_partially_loaded_playlist(self, ctx, partially_loaded_item):
+        logger.info(f'Song added to partially loaded playlist event {partially_loaded_item}')
+        
     def on_load_fail(self, ctx, unloaded_item, exception):
         if isinstance(exception, youtube_dl.utils.DownloadError) and exception.args[0] == 'ERROR: Sign in to confirm your age\nThis video may be inappropriate for some users.':
             logger.info(f'Age restricted video {unloaded_item} cannot be loaded')
@@ -1305,8 +1640,6 @@ class iPod:
         if unloaded_item != loaded_item: logger.info(f'Succeeded preloading item {type(unloaded_item)}{unloaded_item} into {type(loaded_item)}{loaded_item}')
         try: self.play_next_if_nothing_playing(ctx)
         except TriedPlayingWhenOutOfVC: return
-        #if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
-        #bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
     def on_vc_connect(self, ctx, channel):
         logger.info(f'Connected to channel {channel}')
@@ -1684,7 +2017,7 @@ class Groovy(commands.Cog):
     page: Option(discord.enums.SlashCommandOptionType.integer, description='Specify page number', required=False, default=1, min_value=1)
     ):
         player = self.get_player(ctx)
-        await player.on_playlist_command(ctx, list, page)
+        await player.on_playlist_command(ctx, list, page-1)
 
     @commands.command(name='shuffle', aliases=['sh'], description='Toggle shuffle mode')
     async def prefix_shuffle(self, ctx):
