@@ -4,6 +4,7 @@ import datetime
 import logging
 import pathlib
 import random
+from typing import Literal
 import requests
 import threading
 import urllib.parse
@@ -20,7 +21,7 @@ from globalVariables import bot
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
-    ## Rearrange ✓ish
+    ## Rearrange ✓
     ## Split youtube playlists ✓
     ## Convert simple spotify tracks ✓
     ## Split spotify playlists and albums ✓
@@ -30,6 +31,10 @@ from globalVariables import bot
     ## Playlist command (Properly this time) ✓
     ## Skip backwards command ✓
     ## Play history (Youtube link or dl'd dict?) ✓
+    ## Message on new song start option
+    ## Guess the song?
+    ## Karaoke mode?
+
 ##
 
 #region Variables and setup
@@ -257,6 +262,8 @@ class iPod:
         self.loading_running = False
         self.preloading_running = False
 
+        self.announce_songs = False
+
         self.last_search = None
         self.last_context = None
         self.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
@@ -390,12 +397,14 @@ class iPod:
             else:
                 ctx.guild.voice_client.play(source, after= lambda e: self.on_song_end_unknown(ctx, song, e))
             self.on_song_play(ctx, song)
+        except TriedPlayingWhenOutOfVC as e:
+            self.add_song_to_play_history(song)
         except Exception as e:
             self.on_start_play_fail(ctx, song, e)
  
     def play_next_item(self, ctx: commands.Context) -> bool:
         '''
-        Change the player for `ctx.voice_client` to the next song in the queue or playlist
+        Change the player for `ctx.voice_client` to the next song in the queue or playlist. Removes that item from the queue/playlist
 
         Parameters:
             - `ctx`: discord.commands.Context; The context to play the song in
@@ -529,6 +538,20 @@ class iPod:
             self.reshuffle_list(self.partially_loaded_playlist)
             self.on_shuffle_enable(ctx)
         self.ensure_preload(ctx)
+
+    def toggle_announce(self, ctx: commands.Context) -> None:
+        '''
+        Toggle announce now playing mode for current player
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the change    
+        '''
+        if self.announce_songs:
+            self.announce_songs = False
+            self.on_announce_disable(ctx)
+        else:
+            self.announce_songs = True
+            self.on_announce_enable(ctx)
 
     def toggle_pause(self, ctx: commands.Context) -> None:
         '''
@@ -1037,13 +1060,13 @@ class iPod:
 
     def parse_youtube_link(self, parsed_url):
         '''
-        Takes an parsed url and returns a dictionary with the normalized link in the right spot to be updated onto a larger link dictionary
+        Takes a parsed url and returns a dictionary with the normalized link in the right spot to be updated onto a larger link dictionary
 
         Parameters:
             - `parsed_url`: str; The input link
 
         Returns:
-            `dict[str: list]`; A dictionary containing lists of different types of links
+            `dict[str: list]`; A dictionary containing lists of different types of links to be updated onto a larger link dictionary
         '''
         query = urllib.parse.parse_qs(parsed_url.query, keep_blank_values=True)
         path = parsed_url.path
@@ -1059,14 +1082,41 @@ class iPod:
             return {'search_terms' : [urllib.parse.urlunparse(parsed_url)]}
 
     def handle_youtube_short_link(self, parsed_url):
+        '''
+        Takes a parsed YouTube short url and returns a dictionary with the normalized link in the right spot to be updated onto a larger link dictionary
+
+        Parameters:
+            - `parsed_url`: str; The input link
+
+        Returns:
+            `dict[str: list]`; A dictionary containing lists of different types of links to be updated onto a larger link dictionary
+        '''
         path = parsed_url.path
         return {'youtube_links' : [f"https://www.youtube.com/watch?v={path[-11:]}"]}
 
-    def handle_youtube_image_link(self, parsed_url):  #Doesn't work an I haven't tried to fix it
+    def handle_youtube_image_link(self, parsed_url):
+        '''
+        Takes a parsed url YouTube image url and returns a dictionary with the normalized link in the right spot to be updated onto a larger link dictionary
+
+        Parameters:
+            - `parsed_url`: str; The input link
+
+        Returns:
+            `dict[str: list]`; A dictionary containing lists of different types of links to be updated onto a larger link dictionary
+        '''
         parsed_url_path_list = parsed_url.path.split('/')
         return {'youtube_links' : [f"https://www.youtube.com/watch?v={parsed_url_path_list[2]}"]}  #FIXME
 
     def handle_spotify_link(self, parsed_url):
+        '''
+        Takes a parsed Spotify url and returns a dictionary with the normalized link in the right spot to be updated onto a larger link dictionary
+
+        Parameters:
+            - `parsed_url`: str; The input link
+
+        Returns:
+            `dict[str: list]`; A dictionary containing lists of different types of links to be updated onto a larger link dictionary
+        '''
         url = urllib.parse.urlunparse(parsed_url)
         path = parsed_url.path
         if "playlist" in path:
@@ -1080,21 +1130,58 @@ class iPod:
     #endregion
 
     #region Data Processing
-    def get_shuffle_number(self, loaded_youtube_song: LoadedYoutubeSong):
+    def get_shuffle_number(self, loaded_youtube_song: LoadedYoutubeSong) -> int:
+        '''
+        Takes a loaded YouTube song and returns it's `random_value`
+
+        Parameters:
+            - `loaded_youtube_song`: LoadedYoutubeSong; The input song
+
+        Returns:
+            `int`; The random value stored in the song object
+        '''
         return loaded_youtube_song.random_value
 
-    def sort_for_shuffle(self, playlist:list[LoadedYoutubeSong]):
+    def sort_for_shuffle(self, playlist: list[LoadedYoutubeSong]) -> list[LoadedYoutubeSong]:
+        '''
+        Returns the list sorted by the `random_value` of each song
+
+        Parameters:
+            - `playlist`: list[LoadedYoutubeSong]; The list to sort
+
+        Returns:
+            `list[LoadedYoutubeSong]`; The sorted list
+        '''
         new_list = playlist.copy()
         new_list.sort(key=self.get_shuffle_number)
         return new_list
 
-    def get_formatted_playlist(self, list, page):
+    def get_formatted_playlist(self, list: list[LoadedYoutubeSong], page: int) -> list[str]:
+        '''
+        Returns the list formatted for use in the playlist command, with an index and duration attached
+
+        Parameters:
+            - `list`: list[LoadedYoutubeSong]; The list to format
+            - `page`: int; The page number (10 songs per page) to format
+
+        Returns:
+            `list[str]`; The formatted list
+        '''
         index_length = 0
         for song in list[10*page: 10*(page + 1)]:
             if len(str(list.index(song) + 1)) > index_length: index_length = len(str(list.index(song) + 1))
         return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {self.get_consistent_length_title(song.title)}  {self.parse_duration(song.duration)}' for song in list[0 + (10*page): 10 + (10*page)]]
             
-    def get_consistent_length_title(self, song_title):
+    def get_consistent_length_title(self, song_title: str):
+        '''
+        Returns the song title truncated to a defined length or extended with '----' to meet that same length
+
+        Parameters:
+            - `song_title`: str; The name of the song
+
+        Returns:
+            `str`; The formatted song name
+        '''
         if len(song_title) < 35:
             song_title += ' '
             while len(song_title) < 35: song_title += '-'
@@ -1103,6 +1190,16 @@ class iPod:
         return song_title
 
     def get_consistent_length_index(self, index, length):
+        '''
+        Returns the index number with spaces before it and ')' after it matched to the length provided (if the number has fewer digets than the length)
+
+        Parameters:
+            - `index`: int; The index number
+            - `length`: int; The length of the string to return
+
+        Returns:
+            `str`; The formatted index 
+        '''
         pos = f'{index})'
         while len(pos) < length + 1:
             pos = ' ' + pos
@@ -1112,11 +1209,11 @@ class iPod:
         '''
         Converts a time, in seconds, to a string in the format hr:min:sec, or min:sec if less than one hour.
     
-        @type  duration: int
-        @param duration: The time, in seconds
+        Parameters:
+            - `duration`: int; The time, in seconds
 
-        @rtype:   string
-        @return:  The new time, hr:min:sec or min:sec
+        Returns:
+            `str`; The new time, hr:min:sec or min:sec
         '''
 
         #Divides everything into hours, minutes, and seconds
@@ -1255,8 +1352,6 @@ class iPod:
 
         Parameters:
             - `partially_loaded_item`: PartiallyLoadedSong; The partially loaded song to remove
-
-        
         '''
         if partially_loaded_item in self.partially_loaded_playlist:
             index = self.partially_loaded_playlist.index(partially_loaded_item)
@@ -1269,7 +1364,15 @@ class iPod:
     #region Command Events
 
 
-    async def on_play_command(self, ctx, input, add_to_queue=False):
+    async def on_play_command(self, ctx, input: str, add_to_queue: bool):
+        '''
+        Event to be called when the play command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `input`: str; The input string
+            - `add_to_queue`: bool; Whether to add the input to the queue or not
+        '''
         logger.info(f'Play command received')
         self.last_context = ctx
         try:
@@ -1307,7 +1410,15 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
-    async def on_playlist_command(self, ctx, list, page):
+    async def on_playlist_command(self, ctx, list: Literal["playlist", "queue", "both", "history"], page: int):
+        '''
+        Event to be called when the playlist command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `list`: str; The list input string
+            - `page`: int; Page input
+        '''
         logger.info('Playlist command receive')
         self.last_context = ctx
         try:
@@ -1319,6 +1430,12 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_skip_command(self, ctx):
+        '''
+        Event to be called when the skip command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
         logger.info('Skip command receive')
         self.last_context = ctx
         try:
@@ -1352,6 +1469,12 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_skip_backwards_command(self, ctx):
+        '''
+        Event to be called when the skip backwards command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
         logger.info('Skip back command receive')
         self.last_context = ctx
         try:
@@ -1385,6 +1508,12 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_shuffle_command(self, ctx):
+        '''
+        Event to be called when the shuffle command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
         logger.info('Shuffle command receive')
         self.last_context = ctx
         try:
@@ -1396,6 +1525,12 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_pause_command(self, ctx):
+        '''
+        Event to be called when the pause command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
         logger.info('Pause command receive')
         self.last_context = ctx
         try:
@@ -1432,7 +1567,30 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
+    async def on_announce_command(self, ctx):
+        '''
+        Event to be called when the toggle annoucement command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Shuffle command receive')
+        self.last_context = ctx
+        try:
+            self.toggle_announce(ctx)
+        except Exception as e:
+            logger.error(f'Annouce command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
     async def on_disconnect_command(self, ctx):
+        '''
+        Event to be called when the disconnect command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
         logger.info('Disconnect command receive')
         self.last_context = ctx
         try:
@@ -1444,12 +1602,25 @@ class iPod:
             except: await ctx.respond(embed=embed)
 
     async def on_search_command(self, ctx, search_term):
+        '''
+        Event to be called when the search command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `search_term`: str; The search input string
+        '''
         logger.info('Search command receive')
         self.last_context = ctx
         thread = threading.Thread(target=self.run_youtube_multi_search_in_thread, args=(ctx, search_term))
         thread.start()
 
     async def on_nowplaying_command(self, ctx):
+        '''
+        Event to be called when the now playing command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
         logger.info('Now playing command receive')
         self.last_context = ctx
         try:
@@ -1467,12 +1638,27 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
     
-    async def on_clear_command(self, ctx, list):
+    async def on_clear_command(self, ctx, list_name: Literal["playlist", "queue", "both"]):
+        '''
+        Event to be called when the clear command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `list_name`: str; The list name input string
+        '''
         logger.info('Clear command receive')
         self.last_context = ctx
-        await self.respond_to_clear(ctx, list)
+        await self.respond_to_clear(ctx, list_name)
 
-    async def on_remove_command(self, ctx, list_name, index):
+    async def on_remove_command(self, ctx, list_name: Literal["playlist", "queue"], index: int):
+        '''
+        Event to be called when the remove command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `list_name`: str; The list name input string
+            - `index`: int; The index to remove
+        '''
         logger.info('Remove command receive')
         self.last_context = ctx
         if list_name == 'playlist': song_list = self.partially_loaded_playlist
@@ -1492,7 +1678,17 @@ class iPod:
             loaded_song = song_list[index]
             await self.respond_to_remove_command(ctx, list_name, song_list, loaded_song)
 
-    async def on_move_command(self, ctx, song_list_name, index_of_first_song, index_of_last_song, index_to_move_to):
+    async def on_move_command(self, ctx, song_list_name: Literal["playlist", "queue"], index_of_first_song: int, index_of_last_song: int, index_to_move_to: int):
+        '''
+        Event to be called when the move command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `song_list_name`: str; The list name to move songs from
+            - `index_of_first_song`: int; The index to start at (inclusive)
+            - `index_of_last_song`: int; The index to end at (inclusive)
+            - `index_to_move_to`: int; The index to move to
+        '''
         logger.info('Move command receive')
         self.last_context = ctx
         if song_list_name == 'playlist':
@@ -1522,7 +1718,15 @@ class iPod:
             self.ensure_preload(ctx)
             await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
 
-    async def on_play_message_context(self, ctx, message, add_to_queue):
+    async def on_play_message_context(self, ctx, message, add_to_queue: bool):
+        '''
+        Event to be called when the play context command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `message`: discord.Message; The message that the context command was invoked from
+            - `add_to_queue`: bool; Whether to add the input to the queue or not
+        '''
         logger.info('Play context command receive')
         if message.content == '':
             embed = discord.Embed(description='Message must have text')
@@ -1532,6 +1736,13 @@ class iPod:
             await self.on_play_command(ctx, input, add_to_queue)
 
     async def on_search_message_context(self, ctx, message):
+        '''
+        Event to be called when the search context command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `message`: discord.Message; The message that the context command was invoked from
+        '''
         logger.info('Search context command receive')
         if message.content == '':
             embed = discord.Embed(description='Message must have text')
@@ -1540,13 +1751,29 @@ class iPod:
             search_term = message.content
             await self.on_search_command(ctx, search_term)
 
-    async def on_clear_button(self, interaction, list_name):
+    async def on_clear_button(self, interaction, list_name: Literal["playlist", "queue", "both"]):
+        '''
+        Event to be called when the confirm clear button is clicked
+
+        Parameters:
+            - `interaction`: discord.commands.Interaction; The interaction of the button
+            - `list_name`: str; The name of the list to clear
+        '''
         ctx = await bot.get_context(interaction.message)
         self.clear_list(ctx, list_name)
         embed = discord.Embed(description=f'Cleared all songs from {"playlist and queue" if list_name == "both" else list_name}', color=8180120)
         await interaction.message.edit(embed=embed, view=None)
 
-    async def on_remove_button(self, interaction, list_name, song_list, loaded_song):
+    async def on_remove_button(self, interaction, list_name: str, song_list: list, loaded_song: LoadedYoutubeSong):
+        '''
+        Event to be called when the confirm remove button is clicked
+
+        Parameters:
+            - `interaction`: discord.commands.Interaction; The interaction of the button
+            - `list_name`: str; The list name input string
+            - `song_list`: list; The actual song list
+            - `loaded_song`: LoadedYoutubeSong; The song to remove
+        '''
         try:
             ctx = await bot.get_context(interaction.message)
             self.remove_item_from_list(ctx, list_name, song_list, loaded_song)
@@ -1598,7 +1825,7 @@ class iPod:
             await interaction.message.delete()
     #endregion
     
-    #region Internal events
+    #region Internal events to be called when certain things occur. Often used for responding
     def on_item_added_to_unloaded_queue(self, ctx, unloaded_item: UnloadedYoutubeSong):
         logger.info(f'Song added to unloaded queue event {unloaded_item}')
         if not self.loading_running: 
@@ -1633,7 +1860,6 @@ class iPod:
 
     def on_load_succeed(self, ctx, unloaded_item, loaded_item, add_to_queue):
         logger.info(f'Succeeded loading item {unloaded_item} into {loaded_item}')
-        #if loaded_item.loading_context.parent_playlist != None and loaded_item.loading_context.parent_playlist != loaded_item and isinstance(loaded_item, LoadedYoutubeSong): loaded_item.loading_context.parent_playlist.count += 1
         bot.loop.create_task(self.respond_to_load_item(ctx, loaded_item, add_to_queue))
 
     def on_preload_succeed(self, ctx, unloaded_item, loaded_item):
@@ -1646,6 +1872,8 @@ class iPod:
         
     def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
         logger.info(f'Song play succeed {new_song}')
+        if self.announce_songs:
+            bot.loop.create_task(self.respond_to_nowplaying(ctx, True))
 
     def on_start_play_fail(self, ctx, new_song: LoadedYoutubeSong, exception):
         logger.error(f'Song play fail {new_song}', exc_info=exception)
@@ -1660,6 +1888,9 @@ class iPod:
             self.on_song_end_succeed(ctx, song)
             self.add_song_to_play_history(song)
             self.play_next_item(ctx)
+        elif exception == discord.errors.ClientException:
+            self.on_during_play_fail(ctx, song, exception)
+            self.add_song_to_play_history(song)
         else:
             self.on_during_play_fail(ctx, song, exception)
             self.play_next_item(ctx)
@@ -1675,6 +1906,14 @@ class iPod:
     def on_shuffle_disable(self, ctx):
         logger.info('Shuffle off')
         bot.loop.create_task(self.respond_to_shuffle_disable(ctx))
+
+    def on_announce_enable(self, ctx):
+        logger.info('Announce on')
+        bot.loop.create_task(self.respond_to_announce_enable(ctx))
+
+    def on_announce_disable(self, ctx):
+        logger.info('Announce off')
+        bot.loop.create_task(self.respond_to_announce_disable(ctx))
 
     def on_pause_enable(self, ctx):
         logger.info('Pause on')
@@ -1709,6 +1948,9 @@ class iPod:
 
     #region Discord VC support
     async def setup_vc(self, ctx: commands.Context):  #Attempts to set up VC. Runs any associated events and sends any error messages
+        '''
+        UserNotInVC, MusicAlreadyPlayingInGuild, CannotConnectToVC, CannotSpeakInVC, asyncio.TimeoutError
+        '''
         #FIXME Don't error if already in the requested vc regardless of perms
         if ctx.author.voice == None: 
             raise UserNotInVC
@@ -1777,6 +2019,16 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
+    async def respond_to_announce_enable(self, ctx):
+        embed = discord.Embed(description='Announce songs enabled', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_announce_disable(self, ctx):
+        embed = discord.Embed(description='Announce songs disabled', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
     async def respond_to_pause_enable(self, ctx):
         embed = discord.Embed(description='Paused music', color=3093080)
         try: await ctx.reply(embed=embed, mention_author=False)
@@ -1800,10 +2052,13 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
-    async def respond_to_nowplaying(self, ctx):
-        embed = self.get_nowplaying_message_embed()
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+    async def respond_to_nowplaying(self, ctx, announce = False):
+        embed = self.get_nowplaying_message_embed(ctx)
+        if announce:
+            await ctx.send(embed=embed)
+        else:
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
 
     async def respond_to_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
         embed = self.get_skip_message_embed(old_song, new_song, loading)
@@ -1919,7 +2174,7 @@ class iPod:
         return embed
 
     def get_move_embed(self, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
-        moved_songs = index_of_last_song+1 - index_of_first_song
+        moved_songs = index_of_last_song+1 - index_of_first_song  #FIXME
         embed = discord.Embed(description=f'Moved {moved_songs} songs from {song_list_name} to {other_list_name}')
         return embed
     #endregion
@@ -2029,6 +2284,16 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_shuffle_command(ctx)
 
+    @commands.command(name='announcesongs', aliases=['an', 'as'], description='Toggle announcing when a song starts')
+    async def prefix_announce(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_announce_command(ctx)
+
+    @commands.slash_command(name='announcesongs', description='Toggle announcing when a song starts')
+    async def slash_announce(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_announce_command(ctx)
+
     @commands.command(name='pause', description='Toggle pause')
     async def prefix_pause(self, ctx):
         player = self.get_player(ctx)
@@ -2090,6 +2355,7 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         if list.lower().startswith('p'): list = 'playlist'
         if list.lower().startswith('q'): list = 'queue'
+        #FIXME Do an error or something if list name bad
         try: index = max(0, int(index)-1)
         except ValueError: index = 0
         await player.on_remove_command(ctx, list, index)
