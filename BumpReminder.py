@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import traceback
 import discord
 
 from discord.ext import commands, tasks
@@ -86,15 +87,19 @@ class BumpReminder(commands.Cog):
     @tasks.loop(minutes=15)
     async def bump_reminder_starter(self):
         # print("Attempting reminder task start...")
-        async for guild in bot.fetch_guilds():
-            if guild.id not in bumpChannel.keys(): return
-            if guild.id not in bumpRole.keys(): return
-            if guild.id not in self.bumpReminderTasks.keys(): self.bumpReminderTasks[guild.id] = False
-            if not self.bumpReminderTasks[guild.id]:
-                try:
-                    await self.bump_task_start(guild)  #Start new task
-                except Exception as e:
-                    print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later
+        try:
+            async for guild in bot.fetch_guilds():
+                if guild.id not in bumpChannel.keys(): return
+                if guild.id not in bumpRole.keys(): return
+                if guild.id not in self.bumpReminderTasks.keys(): self.bumpReminderTasks[guild.id] = False
+                if not self.bumpReminderTasks[guild.id]:
+                    try:
+                        await self.bump_task_start(guild)  #Start new task
+                    except Exception as e:
+                        print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later
+        except Exception as e:
+            print(f'Reminder task starter has failed. Trying again in 15 minutes. {e}')  #If something goes wrong, just wait and try restarting again later
+            traceback.print_exc()
 
     @bump_reminder_starter.before_loop
     async def before_bump(self):
