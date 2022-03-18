@@ -6,6 +6,7 @@ import logging
 import pathlib
 import random
 import re
+import time
 from tokenize import maybe
 from typing import Literal
 import requests
@@ -282,6 +283,8 @@ class iPod:
         self.game_mode = False
         self.auto_skip_game_mode = False
         self.can_guess = True
+        self.give_up_pending = False
+        self.seconds_until_give_up = 0
 
         self.last_search = None
         self.last_context = None
@@ -387,6 +390,32 @@ class iPod:
         items = self.search_youtube(search_term, 10)
         self.last_search = items
         self.on_search_complete(ctx, items)
+
+    async def respond_to_give_up_loop(self, ctx, member):
+        '''
+        Gives up game mode guessing after 10 seconds
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context of the command
+            - `member`: discord.Member; The member that gave up
+        '''
+        if not self.can_guess:
+            await self.respond_to_give_up_attempt(ctx, member)
+            return
+        if self.give_up_pending == True:
+            await self.respond_to_give_up_attempt(ctx, member, True)
+            return
+        self.give_up_pending = True
+        self.seconds_until_give_up = 10
+        message = await self.respond_to_give_up_attempt(ctx, member, False)
+        while self.seconds_until_give_up > 0:
+            await asyncio.sleep(1)
+            self.seconds_until_give_up -= 1
+            if self.give_up_pending == False:
+                return
+            await self.respond_to_give_up_attempt(ctx, member, False, message)
+        self.give_up_pending = False
+        self.give_up(ctx, member, message)
 
     #region "Buttons" - Interal Player Actions
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong, return_song_to_list: bool) -> None:
@@ -501,7 +530,7 @@ class iPod:
         if not ctx.guild.voice_client.is_playing() and not ctx.guild.voice_client.is_paused():
             self.play_next_item(ctx)
             
-    def skip(self, ctx: commands.Context) -> None:
+    def skip(self, ctx: commands.Context, silent=False) -> None:
         '''
         Skips the current song and plays the next song in the queue or playlist if availible, else stops playing
 
@@ -516,12 +545,12 @@ class iPod:
             old_song = ctx.guild.voice_client.source
             is_song_playing = self.play_next_item(ctx)
             new_song = ctx.guild.voice_client.source
-            self.on_song_skip(ctx, old_song, new_song, not is_song_playing)
+            self.on_song_skip(ctx, old_song, new_song, not is_song_playing, silent)
         else:
             old_song = ctx.guild.voice_client.source
             if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused(): ctx.guild.voice_client.stop()  #Stop current song
             new_song = None
-            self.on_song_skip(ctx, old_song, new_song, False)
+            self.on_song_skip(ctx, old_song, new_song, False, silent)
 
     def skip_backwards(self, ctx: commands.Context) -> None:
         '''
@@ -601,6 +630,20 @@ class iPod:
             self.game_mode = True
             self.on_game_mode_enable(ctx)
 
+    def toggle_autoskip(self, ctx: commands.Context) -> None:
+        '''
+        Toggle autoskip in game mode for current player
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the change    
+        '''
+        if self.auto_skip_game_mode:  #Do button shenanigans when game mode is on
+            self.auto_skip_game_mode = False
+            self.on_autoskip_disable(ctx)
+        else:
+            self.auto_skip_game_mode = True
+            self.on_autoskip_enable(ctx)
+
     def submit_song_guess(self, ctx, input, loaded_song: LoadedYoutubeSong, member) -> None:
         '''
         Submit a guess for game mode
@@ -619,6 +662,33 @@ class iPod:
                 self.on_incorrect_guess(ctx, input, loaded_song, member)
         else:
             self.on_invalid_guess(ctx, input, loaded_song, member)
+
+    def start_giveup(self, ctx: commands.Context, loaded_song, member) -> None:
+        '''
+        Start give up process for current player
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the change
+            - `loaded_song`: LoadedYoutubeSong; The correct song
+            - `member`: discord.Member; The member that tried to give up    
+        '''
+        bot.loop.create_task(self.respond_to_give_up_loop(ctx, member))
+
+    def give_up(self, ctx, member, message=None):
+        '''
+            give up
+
+            Parameters:
+                - `ctx`: discord.commands.Context; The context for the change
+                - `loaded_song`: LoadedYoutubeSong; The correct song
+                - `member`: discord.Member; The member that tried to give up
+                - `message`: discord.Message; The message that was counting down
+        '''
+        self.can_guess = False
+        loaded_song = ctx.guild.voice_client.source.loaded_song
+        bot.loop.create_task(self.respond_to_give_up(ctx, member, loaded_song, message))
+        self.on_give_up(ctx)
+
 
     def disconnect(self, ctx: commands.Context, auto=False) -> None:
         '''
@@ -1366,19 +1436,20 @@ class iPod:
             maybe_title = title
         if 'ft.' in maybe_title:
             index = maybe_title.index('ft.')
-            maybe_title = maybe_title[:index]
-        title_without_extras = maybe_title
+            maybe_title = maybe_title[:index] 
         if '(' in maybe_title and ')' in maybe_title:
+            title_without_extras = maybe_title
             index_1 = maybe_title.index('(')
             index_2 = maybe_title.index(')')
             title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
-            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 < index_2: maybe_title = title_without_extras
         if '[' in maybe_title and ']' in maybe_title:
+            title_without_extras = maybe_title
             index_1 = maybe_title.index('[')
             index_2 = maybe_title.index(']')
             title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
-            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
-        cleaned_title =  re.sub('[\W_]+', ' ', title_without_extras, flags=re.UNICODE)  #Make it letters/numbers only
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 < index_2: maybe_title = title_without_extras
+        cleaned_title =  re.sub('[\W_]+', ' ', maybe_title, flags=re.UNICODE)  #Make it letters/numbers only
         return cleaned_title.lower().strip()
 
     def get_clean_title_spotify(self, title):
@@ -1387,25 +1458,26 @@ class iPod:
         '''
         if '-' in title:
             maybe_title = title.split('-')[0].strip()
-        if '–' in title:
+        elif '–' in title:
             maybe_title = title.split('–')[0].strip()
         else:
             maybe_title = title
         if 'ft.' in maybe_title:
             index = maybe_title.index('ft.')
             maybe_title = maybe_title[:index]
-        title_without_extras = maybe_title
         if '(' in maybe_title and ')' in maybe_title:
+            title_without_extras = maybe_title
             index_1 = maybe_title.index('(')
             index_2 = maybe_title.index(')')
             title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
-            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 < index_2: maybe_title = title_without_extras
         if '[' in maybe_title and ']' in maybe_title:
+            title_without_extras = maybe_title
             index_1 = maybe_title.index('[')
             index_2 = maybe_title.index(']')
             title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
-            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
-        cleaned_title =  re.sub('[\W_]+', ' ', title_without_extras, flags=re.UNICODE)  #Make it letters/numbers only
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 < index_2: maybe_title = title_without_extras
+        cleaned_title =  re.sub('[\W_]+', ' ', maybe_title, flags=re.UNICODE)  #Make it letters/numbers only
         return cleaned_title.lower().strip()
     
     def get_score_for_member(self, game_member: GameMember):
@@ -1777,7 +1849,11 @@ class iPod:
         logger.info('Guess command receive')
         self.last_context = ctx
         try:  #FIXME When not in vc and when nothing playing
-            if self.game_mode:
+            if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
+                embed = discord.Embed(description=f'Play something first!')
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
+            elif self.game_mode:
                 loaded_song = ctx.guild.voice_client.source.loaded_song
                 self.submit_song_guess(ctx, input, loaded_song, ctx.author)
             else:
@@ -1785,10 +1861,48 @@ class iPod:
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
         except Exception as e:
-            logger.error(f'Game mode command failed', exc_info=e)
+            logger.error(f'Guess command failed', exc_info=e)
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
+
+    async def on_giveup_command(self, ctx):
+        '''
+        Event to be called when the give up command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Give up command receive')
+        self.last_context = ctx
+        try:
+            if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
+                embed = discord.Embed(description=f'Play something first!')
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
+            elif self.game_mode:
+                loaded_song = ctx.guild.voice_client.source.loaded_song
+                self.start_giveup(ctx, loaded_song, ctx.author)
+            else:
+                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
+        except Exception as e:
+            logger.error(f'Give up command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_autoskip_command(self, ctx):
+        '''
+        Event to be called when the game mode command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Game mode command receive')
+        self.last_context = ctx
+        self.toggle_autoskip(ctx)
 
     async def on_music_scoreboard_command(self, ctx):
         '''
@@ -2082,11 +2196,20 @@ class iPod:
             await self.iPod.on_game_mode_off_button(interaction)
 
     class GameModeOffCommandNoButton(discord.ui.Button):
-        def __init__(self, iPodg):
+        def __init__(self, iPod):
             self.iPod = iPod
             super().__init__(style=discord.enums.ButtonStyle.gray, label='Cancel')
 
         async def callback(self, interaction: discord.Interaction):
+            await interaction.message.delete()
+
+    class GiveUpCommandCancelButton(discord.ui.Button):
+        def __init__(self, iPod):
+            self.iPod = iPod
+            super().__init__(style=discord.enums.ButtonStyle.danger, label='Cancel')
+
+        async def callback(self, interaction: discord.Interaction):
+            self.iPod.give_up_pending = False
             await interaction.message.delete()
     #endregion
     
@@ -2198,11 +2321,21 @@ class iPod:
         logger.info('Game mode off')
         self.reset_scores()
 
+    def on_autoskip_enable(self, ctx):
+        logger.info('Autoskip on')
+        bot.loop.create_task(self.respond_to_autoskip_enable(ctx))
+
+    def on_autoskip_disable(self, ctx):
+        logger.info('Autoskip off')
+        bot.loop.create_task(self.respond_to_autoskip_disable(ctx))
+    
     def on_correct_guess(self, ctx, input, loaded_song, member):
         logger.info('Correct guess yay!')
         self.can_guess = False
         self.add_score_to_member(member)
-        bot.loop.create_task(self.respond_to_correct_guess(ctx))
+        bot.loop.create_task(self.respond_to_correct_guess(ctx, loaded_song))
+        if self.auto_skip_game_mode:
+            self.skip(ctx, True)
 
     def on_incorrect_guess(self, ctx, input, loaded_song, member):
         logger.info('Incorrect guess')
@@ -2211,6 +2344,11 @@ class iPod:
     def on_invalid_guess(self, ctx, input, loaded_song, member):
         logger.info('Incorrect guess')
         bot.loop.create_task(self.respond_to_invalid_guess(ctx))
+    
+    def on_give_up(self, ctx):
+        logger.info('Give up')
+        if self.auto_skip_game_mode:
+            self.skip(ctx, True)
 
     def on_disconnect(self, ctx, auto):
         logger.info('Disconnect')
@@ -2220,9 +2358,10 @@ class iPod:
         logger.info('Search complete')
         bot.loop.create_task(self.respond_to_search(ctx, items))
 
-    def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
+    def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool, silent = False):
         logger.info('Song skipped')
-        bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song, loading))
+        if not silent:
+            bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song, loading))
 
     def on_song_skip_backwards(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         logger.info('Song skipped back')
@@ -2328,6 +2467,16 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
+    async def respond_to_autoskip_enable(self, ctx):
+        embed = discord.Embed(description='Autoskip on', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_autoskip_disable(self, ctx):
+        embed = discord.Embed(description='Autoskip off', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
     async def respond_to_game_mode_enable(self, ctx):
         embed = discord.Embed(title='Game mode ON!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point! (Works best with larger playlists in shuffle mode. Supports all kinds of song input, but works most consistently with Spotify)', color=3137695)
         try: await ctx.reply(embed=embed, mention_author=False)
@@ -2341,8 +2490,34 @@ class iPod:
         try: await ctx.reply(embed=embed, view=view, mention_author=False)
         except: await ctx.respond(embed=embed, view=view)
 
-    async def respond_to_correct_guess(self, ctx):
-        embed = discord.Embed(title='Corect!', description='That guess was correct! Good job!', color=3137695)
+    async def respond_to_give_up_attempt(self, ctx, member, already_pending=False, message=None):
+        if not self.can_guess:
+            loaded_song = ctx.guild.voice_client.source.loaded_song
+            view = discord.ui.View()
+            embed = discord.Embed(description=f'The song was {loaded_song.title}', color=16741747)
+        elif not already_pending:
+            view = discord.ui.View()
+            view.add_item(self.GiveUpCommandCancelButton(self))
+            embed = discord.Embed(description=f'Revealing song name in {self.seconds_until_give_up} seconds! Any player can cancel!', color=16741747)
+        else:
+            view = discord.ui.View()
+            embed = discord.Embed(description=f'Giving up in {self.seconds_until_give_up} seconds', color=16741747)
+        if message != None: 
+            await message.edit(embed=embed)
+        else:
+            try: return await ctx.reply(embed=embed, view=view, mention_author=False)
+            except: return await ctx.respond(embed=embed, view=view)
+
+    async def respond_to_give_up(self, ctx, member, loaded_song, message=None):
+        embed = discord.Embed(title='You gave up!', description=f'No one knew the song! It was {loaded_song.title}', color=16741747)
+        if message != None: 
+            await message.edit(embed=embed, view=None)
+        else:
+            try: return await ctx.reply(embed=embed, mention_author=False)
+            except: return await ctx.respond(embed=embed)
+
+    async def respond_to_correct_guess(self, ctx, loaded_song: LoadedYoutubeSong):
+        embed = discord.Embed(title='Correct!', description=f'You guessed {loaded_song.title} correctly! Good job!', color=3137695)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -2505,7 +2680,7 @@ class iPod:
     def get_game_score_embed(self, scoreboard_dict: dict[int, GameMember]):
         if len(scoreboard_dict) > 0:
             sorted_scoreboard = list(scoreboard_dict.values())
-            sorted_scoreboard.sort(key=self.get_score_for_member)
+            sorted_scoreboard.sort(key=self.get_score_for_member, reverse=True)
             scoreboard_list = [f'{game_member.name} -- {game_member.score}' for game_member in sorted_scoreboard]
             formatted_scoreboard = '```\n' + '\n'.join(scoreboard_list) + '\n```'
             embed = discord.Embed(title='Current Scoreboard', description=formatted_scoreboard, color=7528669)
@@ -2663,6 +2838,26 @@ class Groovy(commands.Cog):
     async def slash_guess(self, ctx, input: Option(discord.enums.SlashCommandOptionType.string, description='Input your guess!', required=True)):
         player = self.get_player(ctx)
         await player.on_guess_command(ctx, input)
+
+    @commands.command(name='giveup', description='Give up guessing the song name for music game mode!')
+    async def prefix_giveup(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_giveup_command(ctx)
+
+    @commands.slash_command(name='giveup', description='Give up guessing the song name for music game mode!')
+    async def slash_giveup(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_giveup_command(ctx)
+
+    @commands.command(name='autoskip', description='Toggle music player autoskip in game mode')
+    async def prefix_autoskip(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_autoskip_command(ctx)
+
+    @commands.slash_command(name='autoskip', description='Toggle music player autoskip in game mode')
+    async def slash_autoskip(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_autoskip_command(ctx)
 
     @commands.command(name='musicscoreboard', aliases=['scoreboard', 'scb'], description='Show the current scoreboard!')
     async def prefix_musicscoreboard(self, ctx):
