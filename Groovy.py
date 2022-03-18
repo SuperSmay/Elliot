@@ -1,9 +1,12 @@
 import asyncio
 import concurrent.futures
 import datetime
+from difflib import SequenceMatcher
 import logging
 import pathlib
 import random
+import re
+from tokenize import maybe
 from typing import Literal
 import requests
 import threading
@@ -31,7 +34,7 @@ from globalVariables import bot
     ## Playlist command (Properly this time) ✓
     ## Skip backwards command ✓
     ## Play history (Youtube link or dl'd dict?) ✓
-    ## Message on new song start option
+    ## Message on new song start option ✓
     ## Guess the song?
     ## Karaoke mode?
 
@@ -115,6 +118,11 @@ class SongLoadingContext:
                 self._future_embeds = []
                 await self.send_message(ctx, next)
 
+class GameMember:
+    def __init__(self, member: discord.Member) -> None:
+        self.id = member.id
+        self.name = member.display_name
+        self.score = 0
 #region Song Classes
 class UnloadedSong:
     def __init__(self, url, loading_context: SongLoadingContext) -> None:
@@ -152,6 +160,9 @@ class LoadedYoutubeSong(PartiallyLoadedSong):
     def __init__(self, youtube_data: dict, loading_context: SongLoadingContext, song_list=None, random_value=None) -> None:
         self.title = youtube_data['title']
         self.duration = youtube_data['duration']
+
+        self.title_from_spotify = None
+        self.artist_from_spotify = None
 
         self.loading_context = loading_context
         self.random_value = random.randint(0, 10000) if random_value == None else random_value
@@ -198,7 +209,10 @@ class LoadedSpotifyTrack(PartiallyLoadedSong):
     def get_youtube_dl(self):
         title = f"{self.spotify_track_data['artists'][0]['name']} - {self.spotify_track_data['name']}"
         data = ytdl.extract_info(title, download=False)
-        return LoadedYoutubeSong(data['entries'][0], self.loading_context, self.song_list, self.random_value)
+        loaded_song = LoadedYoutubeSong(data['entries'][0], self.loading_context, self.song_list, self.random_value)
+        loaded_song.title_from_spotify = self.spotify_track_data['name']
+        loaded_song.artist_from_spotify = self.spotify_track_data['artists'][0]['name']
+        return loaded_song
 
     def __str__(self):
         return self.spotify_track_data['name']
@@ -258,11 +272,16 @@ class iPod:
 
         self.past_songs_played = []
 
+        self.game_scoreboard = {}
+
         self.shuffle = False
         self.loading_running = False
         self.preloading_running = False
 
         self.announce_songs = False
+        self.game_mode = False
+        self.auto_skip_game_mode = False
+        self.can_guess = True
 
         self.last_search = None
         self.last_context = None
@@ -389,13 +408,13 @@ class iPod:
             if ctx.guild.voice_client.is_playing() or ctx.guild.voice_client.is_paused():
                 old_source =  ctx.guild.voice_client.source
                 ctx.guild.voice_client.source = source
-                self.on_song_end_succeed(ctx, old_source.loaded_song)
+                self.on_song_end_unknown(ctx, old_source.loaded_song, True)
                 if return_song_to_list:
                     self.return_song_to_original_list(old_source.loaded_song)
                 else:
                     self.add_song_to_play_history(old_source.loaded_song)
             else:
-                ctx.guild.voice_client.play(source, after= lambda e: self.on_song_end_unknown(ctx, song, e))
+                ctx.guild.voice_client.play(source, after= lambda e: self.on_song_end_unknown(ctx, song, False, e))
             self.on_song_play(ctx, song)
         except TriedPlayingWhenOutOfVC as e:
             self.add_song_to_play_history(song)
@@ -492,6 +511,7 @@ class iPod:
         Raises:
             `TriedPlayingWhenOutOfVC`
         '''
+        #FIXME decide properly where all the skip stuff goes. Right now some of it is in play next, some is in there, and some is in the on_song_end event.
         if len(self.partially_loaded_playlist) > 0 or len(self.partially_loaded_queue) > 0:
             old_song = ctx.guild.voice_client.source
             is_song_playing = self.play_next_item(ctx)
@@ -567,6 +587,38 @@ class iPod:
         else:
             ctx.guild.voice_client.pause()
             self.on_pause_enable(ctx)
+
+    def toggle_game_mode(self, ctx: commands.Context) -> None:
+        '''
+        Toggle game mode for current player
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the change    
+        '''
+        if self.game_mode:  #Do button shenanigans when game mode is on
+            bot.loop.create_task(self.respond_to_game_mode_disable(ctx))
+        else:
+            self.game_mode = True
+            self.on_game_mode_enable(ctx)
+
+    def submit_song_guess(self, ctx, input, loaded_song: LoadedYoutubeSong, member) -> None:
+        '''
+        Submit a guess for game mode
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context for the guess  
+            - `input`: str; The input string
+            - `loaded_song`: LoadedYoutubeSong; The correct song
+            - `member`: discord.Member; The member that guessed
+        '''
+        logger.info(f'Guess received: {input} for {loaded_song}')
+        if self.can_guess:
+            if self.is_title_guess_correct(input, loaded_song):
+                self.on_correct_guess(ctx, input, loaded_song, member)
+            else:
+                self.on_incorrect_guess(ctx, input, loaded_song, member)
+        else:
+            self.on_invalid_guess(ctx, input, loaded_song, member)
 
     def disconnect(self, ctx: commands.Context, auto=False) -> None:
         '''
@@ -1105,7 +1157,7 @@ class iPod:
             `dict[str: list]`; A dictionary containing lists of different types of links to be updated onto a larger link dictionary
         '''
         parsed_url_path_list = parsed_url.path.split('/')
-        return {'youtube_links' : [f"https://www.youtube.com/watch?v={parsed_url_path_list[2]}"]}  #FIXME
+        return {'youtube_links' : [f"https://www.youtube.com/watch?v={parsed_url_path_list[2]}"]}
 
     def handle_spotify_link(self, parsed_url):
         '''
@@ -1170,7 +1222,7 @@ class iPod:
         index_length = 0
         for song in list[10*page: 10*(page + 1)]:
             if len(str(list.index(song) + 1)) > index_length: index_length = len(str(list.index(song) + 1))
-        return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {self.get_consistent_length_title(song.title)}  {self.parse_duration(song.duration)}' for song in list[0 + (10*page): 10 + (10*page)]]
+        return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {f"{self.get_consistent_length_title(song.title)}  {self.parse_duration(song.duration)}" if not self.game_mode else "Song titles are hidden in game mode"}' for song in list[0 + (10*page): 10 + (10*page)]]
             
     def get_consistent_length_title(self, song_title: str):
         '''
@@ -1282,9 +1334,82 @@ class iPod:
         '''
         items_to_preload = []
         items_to_preload.extend(self.partially_loaded_queue[0:3])
-        if self.shuffle: items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])  #FIXME please god fix this
+        if self.shuffle: items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])
         else: items_to_preload.extend(self.partially_loaded_playlist[0:3])
         return items_to_preload
+
+    def is_title_guess_correct(self, input, loaded_song: LoadedYoutubeSong) -> bool:
+        if loaded_song.title_from_spotify != None:
+            clean_title = self.get_clean_title_spotify(loaded_song.title_from_spotify)
+        else:
+            clean_title = self.get_clean_title_youtube(loaded_song.title)
+
+        clean_input = self.get_clean_title_youtube(input)
+
+        logger.info(f'Clean title is {clean_title}. Comparing to {clean_input}...')
+        ratio = SequenceMatcher(a=clean_title,b=clean_input).ratio()
+        logger.info(f'Ratio for compare is {ratio}')
+        if ratio > .8 :
+            return True
+        else:
+            return False
+                
+    def get_clean_title_youtube(self, title):
+        '''
+        Takes in a video title presumed to be from Youtube and returns a cleaned verison
+        '''
+        if '-' in title:
+            maybe_title = title.split('-')[1].strip()
+        elif '–' in title:
+            maybe_title = title.split('–')[1].strip()
+        else:
+            maybe_title = title
+        if 'ft.' in maybe_title:
+            index = maybe_title.index('ft.')
+            maybe_title = maybe_title[:index]
+        title_without_extras = maybe_title
+        if '(' in maybe_title and ')' in maybe_title:
+            index_1 = maybe_title.index('(')
+            index_2 = maybe_title.index(')')
+            title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
+        if '[' in maybe_title and ']' in maybe_title:
+            index_1 = maybe_title.index('[')
+            index_2 = maybe_title.index(']')
+            title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
+        cleaned_title =  re.sub('[\W_]+', ' ', title_without_extras, flags=re.UNICODE)  #Make it letters/numbers only
+        return cleaned_title.lower().strip()
+
+    def get_clean_title_spotify(self, title):
+        '''
+        Takes in a song title presumed to be from Spotify and returns a cleaned verison
+        '''
+        if '-' in title:
+            maybe_title = title.split('-')[0].strip()
+        if '–' in title:
+            maybe_title = title.split('–')[0].strip()
+        else:
+            maybe_title = title
+        if 'ft.' in maybe_title:
+            index = maybe_title.index('ft.')
+            maybe_title = maybe_title[:index]
+        title_without_extras = maybe_title
+        if '(' in maybe_title and ')' in maybe_title:
+            index_1 = maybe_title.index('(')
+            index_2 = maybe_title.index(')')
+            title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
+        if '[' in maybe_title and ']' in maybe_title:
+            index_1 = maybe_title.index('[')
+            index_2 = maybe_title.index(']')
+            title_without_extras = (maybe_title[:index_1] + maybe_title[index_2 + 1:]).strip()
+            if len(title_without_extras) > 0 and index_1 > 0 and index_1 > index_2: maybe_title = title_without_extras
+        cleaned_title =  re.sub('[\W_]+', ' ', title_without_extras, flags=re.UNICODE)  #Make it letters/numbers only
+        return cleaned_title.lower().strip()
+    
+    def get_score_for_member(self, game_member: GameMember):
+        return game_member.score
     #endregion
 
     #region Data Management
@@ -1315,13 +1440,17 @@ class iPod:
         del(song_list[index])
         self.on_remove_item_from_list(ctx, list_name, song_list, loaded_song)
 
-    def move_items_between_lists(self, song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
+    def move_items_between_lists(self, song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to) -> list[PartiallyLoadedSong]:
         index_of_first_song = max(0, min(index_of_first_song, len(song_list) - 1))
-        index_of_last_song = max(0, min(index_of_last_song, len(song_list) - 1))
-        other_list[index_to_move_to:index_to_move_to] = song_list[index_of_first_song:index_of_last_song+1]
-        for loaded_song in song_list[index_of_first_song:index_of_last_song+1]:
+        index_of_last_song = max(0, min(index_of_last_song, len(song_list) - 1)) if index_of_last_song != -1 else -1
+        if index_of_last_song == -1: moved_songs = song_list[index_of_first_song:]
+        else: moved_songs = song_list[index_of_first_song:index_of_last_song+1]
+        other_list[index_to_move_to:index_to_move_to] = moved_songs
+        for loaded_song in moved_songs:
             loaded_song.song_list = other_list
-        del(song_list[index_of_first_song:index_of_last_song+1])
+        if index_of_last_song == -1: del(song_list[index_of_first_song:])
+        else: del(song_list[index_of_first_song:index_of_last_song+1])
+        return moved_songs
 
     def add_song_to_play_history(self, loaded_song):
         self.past_songs_played.insert(0, loaded_song)
@@ -1335,9 +1464,7 @@ class iPod:
 
         Parameters:
             - `partially_loaded_item`: PartiallyLoadedSong; The partially loaded song to replace
-            - `loaded_item`: LoadedYoutubeSong; The loaded song to replace with
-
-        
+            - `loaded_item`: LoadedYoutubeSong; The loaded song to replace with 
         '''
         if partially_loaded_item in self.partially_loaded_playlist:
             index = self.partially_loaded_playlist.index(partially_loaded_item)
@@ -1359,6 +1486,17 @@ class iPod:
         elif partially_loaded_item in self.partially_loaded_queue:
             index = self.partially_loaded_queue.index(partially_loaded_item)
             del self.partially_loaded_queue[index]
+
+    def add_score_to_member(self, member):
+        if member.id in self.game_scoreboard:
+            self.game_scoreboard[member.id].score += 1
+        else:
+            game_member = GameMember(member)
+            game_member.score = 1
+            self.game_scoreboard[member.id] = game_member
+            
+    def reset_scores(self):
+        self.game_scoreboard.clear()
     #endregion
 
     #region Command Events
@@ -1479,7 +1617,12 @@ class iPod:
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
-            self.skip_backwards(ctx)
+            if not self.game_mode:
+                self.skip_backwards(ctx)
+            else:
+                embed = discord.Embed(description='You cannot skip backwards in game mode!')
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -1583,6 +1726,94 @@ class iPod:
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
+
+    async def on_game_mode_command(self, ctx):
+        '''
+        Event to be called when the game mode command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Game mode command receive')
+        self.last_context = ctx
+        try:
+            await self.setup_vc(ctx)
+            self.toggle_game_mode(ctx)
+        except UserNotInVC as e:
+            embed = discord.Embed(description='You need to join a vc!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except MusicAlreadyPlayingInGuild as e:
+            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except CannotConnectToVC as e:
+            embed = discord.Embed(description='I don\'t have access to that voice channel!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except CannotSpeakInVC as e:
+            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except asyncio.TimeoutError as e:
+            embed = discord.Embed(description='Connection timed out.')
+            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+        except Exception as e:
+            logger.error(f'Game mode command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_guess_command(self, ctx, input: str):
+        '''
+        Event to be called when the guess command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `input`: str; The input string
+        '''
+        logger.info('Guess command receive')
+        self.last_context = ctx
+        try:  #FIXME When not in vc and when nothing playing
+            if self.game_mode:
+                loaded_song = ctx.guild.voice_client.source.loaded_song
+                self.submit_song_guess(ctx, input, loaded_song, ctx.author)
+            else:
+                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
+        except Exception as e:
+            logger.error(f'Game mode command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+
+    async def on_music_scoreboard_command(self, ctx):
+        '''
+        Event to be called when the scoreboard command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Scoreboard command receive')
+        self.last_context = ctx
+        try:
+            if self.game_mode:
+                embed = self.get_game_score_embed(self.game_scoreboard)
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
+            else:
+                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+                try: await ctx.reply(embed=embed, mention_author=False)
+                except: await ctx.respond(embed=embed)
+        except Exception as e:
+            logger.error(f'Game mode command failed', exc_info=e)
+            embed = discord.Embed(description=f'An unknown error occured. {e}')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+            
 
     async def on_disconnect_command(self, ctx):
         '''
@@ -1714,9 +1945,9 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         else:
-            self.move_items_between_lists(song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
+            moved_songs = self.move_items_between_lists(song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
             self.ensure_preload(ctx)
-            await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
+            await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, moved_songs)
 
     async def on_play_message_context(self, ctx, message, add_to_queue: bool):
         '''
@@ -1781,6 +2012,24 @@ class iPod:
         except ValueError: 
             embed = discord.Embed(description=f'{loaded_song} is not in {list_name}', color=16741747)
         await interaction.message.edit(embed=embed, view=None)
+    
+    async def on_game_mode_off_button(self, interaction):
+        '''
+        Event to be called when the confirm game mode off button is clicked
+
+        Parameters:
+            - `interaction`: discord.commands.Interaction; The interaction of the button
+        '''
+        try:
+            ctx = await bot.get_context(interaction.message)
+            self.game_mode = False
+            self.reset_scores()
+            self.on_game_mode_disable(ctx)
+            embed = discord.Embed(description='Game mode off!', color=3093080)
+        except Exception as e: 
+            embed = discord.Embed(description=f'Something went wrong! {e}', color=16741747)
+        await interaction.message.edit(embed=embed, view=None)
+    
     #endregion
 
     #region Buttons
@@ -1819,6 +2068,22 @@ class iPod:
             self.list_name = list_name
             self.song_list = song_list
             self.loaded_song = loaded_song
+            super().__init__(style=discord.enums.ButtonStyle.gray, label='Cancel')
+
+        async def callback(self, interaction: discord.Interaction):
+            await interaction.message.delete()
+
+    class GameModeOffCommandYesButton(discord.ui.Button):
+        def __init__(self, iPod):
+            self.iPod = iPod
+            super().__init__(style=discord.enums.ButtonStyle.danger, label='Clear Scores and Disable')
+
+        async def callback(self, interaction: discord.Interaction):
+            await self.iPod.on_game_mode_off_button(interaction)
+
+    class GameModeOffCommandNoButton(discord.ui.Button):
+        def __init__(self, iPodg):
+            self.iPod = iPod
             super().__init__(style=discord.enums.ButtonStyle.gray, label='Cancel')
 
         async def callback(self, interaction: discord.Interaction):
@@ -1882,22 +2147,24 @@ class iPod:
         logger.error(f'Play failed during song {song}', exc_info=exception)
         self.ensure_preload(ctx)
 
-    def on_song_end_unknown(self, ctx, song, exception=None):
+    def on_song_end_unknown(self, ctx, song, skip=False, exception=None):
         #When a song ends due to an unknown cause, either an exception or the song completed
+        self.can_guess = True
         if exception == None:
             self.on_song_end_succeed(ctx, song)
             self.add_song_to_play_history(song)
-            self.play_next_item(ctx)
+            if not skip:
+                self.play_next_item(ctx)
         elif exception == discord.errors.ClientException:
             self.on_during_play_fail(ctx, song, exception)
             self.add_song_to_play_history(song)
         else:
             self.on_during_play_fail(ctx, song, exception)
             self.play_next_item(ctx)
+        self.ensure_preload(ctx)
 
     def on_song_end_succeed(self, ctx, song):
-        logger.info('Song ended')
-        self.ensure_preload(ctx)
+        logger.info('Song ended')      
 
     def on_shuffle_enable(self, ctx):
         logger.info('Shuffle on')
@@ -1922,6 +2189,28 @@ class iPod:
     def on_pause_disable(self, ctx):
         logger.info('Pause off')
         bot.loop.create_task(self.respond_to_pause_disable(ctx))
+
+    def on_game_mode_enable(self, ctx):
+        logger.info('Game mode on')
+        bot.loop.create_task(self.respond_to_game_mode_enable(ctx))
+
+    def on_game_mode_disable(self, ctx):
+        logger.info('Game mode off')
+        self.reset_scores()
+
+    def on_correct_guess(self, ctx, input, loaded_song, member):
+        logger.info('Correct guess yay!')
+        self.can_guess = False
+        self.add_score_to_member(member)
+        bot.loop.create_task(self.respond_to_correct_guess(ctx))
+
+    def on_incorrect_guess(self, ctx, input, loaded_song, member):
+        logger.info('Incorrect guess')
+        bot.loop.create_task(self.respond_to_incorrect_guess(ctx))
+
+    def on_invalid_guess(self, ctx, input, loaded_song, member):
+        logger.info('Incorrect guess')
+        bot.loop.create_task(self.respond_to_invalid_guess(ctx))
 
     def on_disconnect(self, ctx, auto):
         logger.info('Disconnect')
@@ -1996,7 +2285,7 @@ class iPod:
             embed = discord.Embed(description=f'Successfully added {item_loaded.total_count} songs to {"queue" if add_to_queue else "playlist"}')
             embed.color = 7528669
         else:
-            embed = discord.Embed(description=f'Successfully added {item_loaded} to {"queue" if add_to_queue else "playlist"}')
+            embed = discord.Embed(description=f'Successfully added {item_loaded if not self.game_mode else "`Song titles are hidden in game mode`"} to {"queue" if add_to_queue else "playlist"}')
             embed.color = 7528669
         await item_loaded.loading_context.send_message(ctx, embed)
         
@@ -2010,7 +2299,7 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
         if len(self.partially_loaded_queue) > len(self.partially_loaded_playlist):
-            embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. To add songs to the playlist, use `/add {song}` ~~If you want to move existing songs to the playlist and use shuffle, use `/move queue all`~~ NOT IMPLEMENTED YET', color=3093080)  #FIXME
+            embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. To add songs to the playlist, use `/add {song}` If you want to move existing songs to the playlist and use shuffle, use `/move queue` (Leave out the indexes to move all)', color=3093080)
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
@@ -2036,6 +2325,34 @@ class iPod:
 
     async def respond_to_pause_disable(self, ctx):
         embed = discord.Embed(description='Unpaused msuic', color=3093080)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_game_mode_enable(self, ctx):
+        embed = discord.Embed(title='Game mode ON!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point! (Works best with larger playlists in shuffle mode. Supports all kinds of song input, but works most consistently with Spotify)', color=3137695)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_game_mode_disable(self, ctx):
+        view = discord.ui.View()
+        view.add_item(self.GameModeOffCommandYesButton(self))
+        view.add_item(self.GameModeOffCommandNoButton(self))
+        embed = discord.Embed(description=f'Are you sure you want to turn game mode off and clear all scores?', color=16741747)
+        try: await ctx.reply(embed=embed, view=view, mention_author=False)
+        except: await ctx.respond(embed=embed, view=view)
+
+    async def respond_to_correct_guess(self, ctx):
+        embed = discord.Embed(title='Corect!', description='That guess was correct! Good job!', color=3137695)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_incorrect_guess(self, ctx):
+        embed = discord.Embed(description='Incorrect! Try again', color=16741747)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
+    async def respond_to_invalid_guess(self, ctx):
+        embed = discord.Embed(description='You can\'t guess right now', color=16741747)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -2086,8 +2403,8 @@ class iPod:
         try: await ctx.reply(embed=embed, view=view, mention_author=False)
         except: await ctx.respond(embed=embed, view=view)
 
-    async def respond_to_move(self, ctx, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
-        embed = self.get_move_embed(song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
+    async def respond_to_move(self, ctx, song_list_name, song_list, other_list_name, other_list, moved_songs):
+        embed = self.get_move_embed(song_list_name, song_list, other_list_name, other_list, moved_songs)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
     #endregion
@@ -2149,34 +2466,56 @@ class iPod:
 
     def get_nowplaying_message_embed(self, ctx):
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
-        embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
+        if not self.game_mode: embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
+        else: embed = discord.Embed(title='Now Playing ♫', description='`Song titles are hidden in game mode`', color=7528669)
         return embed
 
     def get_skip_message_embed(self, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
-        if loading:
+        if new_song != None:
+            if not self.game_mode: embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
+            else: embed = discord.Embed(title='Now Playing', description='`Song titles are hidden in game mode`', color=7528669)
+            embed.set_footer(text=f'Skipped {old_song.title}')
+        elif loading:
             embed = discord.Embed(title='Next song is loading...', description='Please wait for a few seconds', color=7528669)
             if old_song != None:
                 embed.set_footer(text=f'Skipped {old_song.title}')
-        elif new_song == None: 
+        else: 
             embed = discord.Embed(title='No more songs to play!', description='Add more with /play or /add!', color=7528669)
             if old_song != None:
                 embed.set_footer(text=f'Skipped {old_song.title}')
-        else: 
-            embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
-            embed.set_footer(text=f'Skipped {old_song.title}')
         return embed
 
     def get_skip_backward_message_embed(self, old_song: YTDLSource, new_song: YTDLSource):
         if new_song == None: 
             embed = discord.Embed(description='Nothing in the play history', color=7528669)
         else: 
-            embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
+            if not self.game_mode: embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
+            else: embed = discord.Embed(title='Now Playing', description='`Song titles are hidden in game mode`', color=7528669)
         return embed
 
-    def get_move_embed(self, song_list_name, song_list, other_list_name, other_list, index_of_first_song, index_of_last_song, index_to_move_to):
-        moved_songs = index_of_last_song+1 - index_of_first_song  #FIXME
-        embed = discord.Embed(description=f'Moved {moved_songs} songs from {song_list_name} to {other_list_name}')
+    def get_move_embed(self, song_list_name, song_list, other_list_name, other_list, moved_songs: list[PartiallyLoadedSong]):
+        if len(moved_songs) == 1:
+            embed = discord.Embed(description=f'Moved {moved_songs[0].title} from {song_list_name} to {other_list_name}')
+        else:
+            moved_songs_count = len(moved_songs)
+            embed = discord.Embed(description=f'Moved {moved_songs_count} songs from {song_list_name} to {other_list_name}')
+            
         return embed
+    
+    def get_game_score_embed(self, scoreboard_dict: dict[int, GameMember]):
+        if len(scoreboard_dict) > 0:
+            sorted_scoreboard = list(scoreboard_dict.values())
+            sorted_scoreboard.sort(key=self.get_score_for_member)
+            scoreboard_list = [f'{game_member.name} -- {game_member.score}' for game_member in sorted_scoreboard]
+            formatted_scoreboard = '```\n' + '\n'.join(scoreboard_list) + '\n```'
+            embed = discord.Embed(title='Current Scoreboard', description=formatted_scoreboard, color=7528669)
+            return embed
+        elif self.game_mode:
+            embed = discord.Embed(title='Current Scoreboard', description='Scoreboard is empty!', color=7528669)
+            return embed
+        else:
+            embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+            return embed
     #endregion
 
 class Groovy(commands.Cog):
@@ -2304,6 +2643,37 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         await player.on_pause_command(ctx)
 
+    @commands.command(name='gamemode', aliases=['gm'], description='Toggle music player game mode. Run for more info')
+    async def prefix_gamemode(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_game_mode_command(ctx)
+
+    @commands.slash_command(name='gamemode', description='Toggle music player game mode. Run for more info')
+    async def slash_gamemode(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_game_mode_command(ctx)
+
+    @commands.command(name='guess', aliases=['g', 'gu'], description='Guess the song name for music game mode!')
+    async def prefix_guess(self, ctx, input: str = '', *more_words):
+        input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
+        player = self.get_player(ctx)
+        await player.on_guess_command(ctx, input)
+
+    @commands.slash_command(name='guess', description='Guess the song name for music game mode!')
+    async def slash_guess(self, ctx, input: Option(discord.enums.SlashCommandOptionType.string, description='Input your guess!', required=True)):
+        player = self.get_player(ctx)
+        await player.on_guess_command(ctx, input)
+
+    @commands.command(name='musicscoreboard', aliases=['scoreboard', 'scb'], description='Show the current scoreboard!')
+    async def prefix_musicscoreboard(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_music_scoreboard_command(ctx)
+
+    @commands.slash_command(name='musicscoreboard', description='Show the current scoreboard')
+    async def slash_musicscoreboard(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_music_scoreboard_command(ctx)
+
     @commands.command(name='disconnect', aliases=['dc', 'dis'], description='Leave VC')
     async def prefix_disconnect(self, ctx):
         player = self.get_player(ctx)
@@ -2355,7 +2725,6 @@ class Groovy(commands.Cog):
         player = self.get_player(ctx)
         if list.lower().startswith('p'): list = 'playlist'
         if list.lower().startswith('q'): list = 'queue'
-        #FIXME Do an error or something if list name bad
         try: index = max(0, int(index)-1)
         except ValueError: index = 0
         await player.on_remove_command(ctx, list, index)
@@ -2368,14 +2737,14 @@ class Groovy(commands.Cog):
         await player.on_remove_command(ctx, list, index)
 
     @commands.command(name="move", aliases=['m', 'mv'], description="Move a song between playlist and queue")
-    async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song=None, index_to_move_to='1'):
+    async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song='0', index_to_move_to='1'):
         player = self.get_player(ctx)
         if song_list_list.lower().startswith('p'): song_list_list = 'playlist'
         if song_list_list.lower().startswith('q'): song_list_list = 'queue'
 
         try: index_of_first_song = max(0, int(index_of_first_song)-1)
         except (ValueError, TypeError): index_of_first_song = 0
-        try: index_of_last_song = max(index_of_first_song, int(index_of_last_song)-1)
+        try: index_of_last_song = max(index_of_first_song, int(index_of_last_song)-1) if int(index_of_last_song)-1 != -1 else -1
         except (ValueError, TypeError): index_of_last_song = index_of_first_song
         try: index_to_move_to = max(0, int(index_to_move_to)-1)
         except (ValueError, TypeError): index_to_move_to = 0
@@ -2385,9 +2754,12 @@ class Groovy(commands.Cog):
     @commands.slash_command(name="move", description="Move a song between playlist and queue")
     async def slash_move(self, ctx, 
     list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Move song from playlist', 'playlist'), OptionChoice('Move song from queue', 'queue')], required=True), 
-    index_to_start:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the first song to move', required=True, min_value=1),
-    index_to_end:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the last song to move', required=True, min_value=1),
+    index_to_start:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the first song to move', required=False, min_value=1, default=1),
+    index_to_end:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the last song to move', required=False, min_value=1, deafult=0),
     index_to_move_to:Option(discord.enums.SlashCommandOptionType.integer, description='Where to put the songs in the other list', required=False, default=1, min_value=1)):
+        index_to_start -= 1
+        index_to_end -= 1
+        index_to_move_to -= 1
         player = self.get_player(ctx)
         await player.on_move_command(ctx, list, index_to_start, index_to_end, index_to_move_to)
 
