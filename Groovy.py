@@ -2257,6 +2257,7 @@ class iPod:
 
     def on_vc_connect(self, ctx, channel):
         logger.info(f'Connected to channel {channel}')
+        self.reset_scores()
         
     def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
         logger.info(f'Song play succeed {new_song}')
