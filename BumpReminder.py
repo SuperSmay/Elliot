@@ -70,7 +70,7 @@ class BumpReminder(commands.Cog):
 
     #Make bump message
     def get_reminder_embed(self):
-        embed = discord.Embed(title= "⋅•⋅⊰∙∘☽ Its bump time! ☾∘∙⊱⋅•⋅", description= "Bump the server with `!d bump`!", color= 7528669)
+        embed = discord.Embed(title= "⋅•⋅⊰∙∘☽ Its bump time! ☾∘∙⊱⋅•⋅", description= "Bump the server with `/bump`!", color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
         return embed
 
@@ -89,12 +89,13 @@ class BumpReminder(commands.Cog):
         # print("Attempting reminder task start...")
         try:
             async for guild in bot.fetch_guilds():
-                if guild.id not in bumpChannel.keys(): return
-                if guild.id not in bumpRole.keys(): return
+                if guild.id not in bumpChannel.keys(): continue
+                if guild.id not in bumpRole.keys(): continue
                 if guild.id not in self.bumpReminderTasks.keys(): self.bumpReminderTasks[guild.id] = False
                 if not self.bumpReminderTasks[guild.id]:
                     try:
                         await self.bump_task_start(guild)  #Start new task
+                        print(f"Bump reminder task started for guild {guild.name}")
                     except Exception as e:
                         print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later
         except Exception as e:
@@ -105,6 +106,3 @@ class BumpReminder(commands.Cog):
     async def before_bump(self):
         print('Starting bump loop...')
         await bot.wait_until_ready()
-        async for guild in bot.fetch_guilds():
-            if guild.id in bumpChannel.keys() and bumpRole.keys():
-                print(f"Bump reminder task started for guild {guild.name}")
