@@ -18,7 +18,7 @@ class Verify:
         except discord.errors.Forbidden: await bot.get_channel(welcomeChannel[self.member.guild.id]).send(content= f"You've been verified. Welcome to The Gayming Café!!", mention_author= False) 
 
     async def ageDeny(self):
-        try: await self.member.send(f"Sorry, {self.guild.name} has an age limit of between 16 and 20. If you chose the 21+ or 15- role accidentally, feel free to join again.")
+        try: await self.member.send(f"Sorry, {self.guild.name} has an age range between 16 and 20. If you chose the 21+ or 15- role accidentally, feel free to join again.")
         except discord.errors.Forbidden: pass
         await self.guild.kick(user= self.member, reason= "Autokick - Over age limit")
         try: await self.logAction(f"Autokicked {self.member.mention} - Over age limit")
