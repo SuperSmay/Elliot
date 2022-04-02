@@ -1,5 +1,5 @@
 import discord
-from globalVariables import unverifiedRole, ageRoleList, pronounRoleList, tooOldRole, verifiedRole, logChannel, roleChannel, welcomeChannel, bot
+from globalVariables import unverifiedRole, ageRoleList, pronounRoleList, tooOldRole, tooYoungRole, verifiedRole, logChannel, roleChannel, welcomeChannel, bot
 import traceback
 
 class Verify:
@@ -18,7 +18,7 @@ class Verify:
         except discord.errors.Forbidden: await bot.get_channel(welcomeChannel[self.member.guild.id]).send(content= f"You've been verified. Welcome to The Gayming Café!!", mention_author= False) 
 
     async def ageDeny(self):
-        try: await self.member.send(f"Sorry, {self.guild.name} has an age limit of 20. If you chose the 21+ role accidentally, feel free to join again.")
+        try: await self.member.send(f"Sorry, {self.guild.name} has an age range between 16 and 20. If you chose the 21+ or 15- role accidentally, feel free to join again.")
         except discord.errors.Forbidden: pass
         await self.guild.kick(user= self.member, reason= "Autokick - Over age limit")
         try: await self.logAction(f"Autokicked {self.member.mention} - Over age limit")
@@ -31,6 +31,8 @@ class Verify:
         try:
             if unverifiedRole[self.guild.id] in [role.id for role in self.member.roles]:
                 if self.isTooOld():
+                    await self.ageDeny()
+                elif self.isTooYoung():
                     await self.ageDeny()
                 elif self.hasPronounRole() and self.hasAgeRole():
                     await self.verify()
@@ -64,6 +66,11 @@ class Verify:
         for roleID in pronounRoleList[self.guild.id]:
             if roleID in [role.id for role in self.member.roles]:
                 return True
+        return False
+
+    def isTooYoung(self):
+        if tooYoungRole[self.guild.id] in [role.id for role in self.member.roles]:
+            return True
         return False
 
     def isTooOld(self):
