@@ -96,6 +96,8 @@ class BumpReminder(commands.Cog):
                     try:
                         await self.bump_task_start(guild)  #Start new task
                         print(f"Bump reminder task started for guild {guild.name}")
+                    except discord.errors.Forbidden:
+                        pass
                     except Exception as e:
                         print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later
         except Exception as e:
