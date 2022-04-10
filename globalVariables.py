@@ -11,7 +11,7 @@ bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Robo Barista fo
 
 prefix = "eli "
 
-bot_version = '0.4.0'
+bot_version = '0.4.1'
 
 last_start_time = datetime.datetime.utcnow()
 
