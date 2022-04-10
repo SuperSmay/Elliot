@@ -5,8 +5,8 @@ import datetime
 intents = discord.Intents().default()
 intents.members = True
 intents.voice_states = True
+intents.message_content = True
 
-client = discord.Client(intents= intents)
 bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Robo Barista for The Gayming Café!", intents=intents)
 
 prefix = "eli "
