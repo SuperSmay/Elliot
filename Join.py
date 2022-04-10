@@ -77,7 +77,8 @@ class Leave(Join):
 
     async def checkIfBanned(self):
         try:
-            if self.member in [ban.user for ban in await self.member.guild.bans(after=datetime.datetime.utcnow() - datetime.timedelta(seconds=10)).flatten()]:
+            ban_list = [ban.user for ban in await self.member.guild.bans().flatten()]
+            if self.member in ban_list:
                 return True
         except discord.Forbidden:
             logger.info(f'Missing access to guild bans for {self.member.guild.name}')
