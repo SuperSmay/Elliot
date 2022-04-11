@@ -11,7 +11,6 @@ from discord.commands import Option, OptionChoice
 import BotInfo
 import Help
 import BumpReminder
-import globalFiles
 import Groovy
 import ImageScan
 import Interaction
@@ -44,9 +43,6 @@ async def on_message(message: discord.Message):
 
   if str(bot.user.id) in message.content:
     await message.add_reaction("<a:ping:866475995317534740>")
-
-  if(message.content.lower() == 'save' and message.author.id == 243759220057571328):  #Jank af keyboard inturrupt ""fix"" Also uneeded now but eh
-    globalFiles.save()
 
   await bot.process_commands(message)
 
@@ -136,11 +132,12 @@ bot.add_cog(Groovy.Groovy())
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
 except KeyboardInterrupt:
+    for cog in list(bot.cogs.keys()).copy():
+      bot.remove_cog(cog)
     bot.loop.run_until_complete(bot.close())
     
     # cancel all tasks lingering
 finally:
     bot.loop.close()
-    globalFiles.save()
     sleep(1)
     print("Closing up, have a nice day!")

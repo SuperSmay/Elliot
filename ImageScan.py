@@ -19,6 +19,7 @@ class MemberScanner:
         self.guild = member.guild
 
     async def scanImage(self):
+        if not hasattr(self.member.avatar, 'url'): return None
         params = {
             'url': str(self.member.avatar.url),
             'models': 'offensive',
@@ -32,7 +33,7 @@ class MemberScanner:
 
     async def hasBadPfp(self):
         output = await self.scanImage()
-        if output['offensive']['prob'] > 0.5 and len([box["label"] for box in self.output["offensive"]["boxes"] if box["prob"] > 0.5 and box["label"] != 'middlefinger']) > 0:
+        if output != None and output['offensive']['prob'] > 0.5 and len([box["label"] for box in self.output["offensive"]["boxes"] if box["prob"] > 0.5 and box["label"] != 'middlefinger']) > 0:
             return True
         return False
         

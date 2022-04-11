@@ -1,11 +1,16 @@
+import datetime
+import logging
 import random
 
 import discord
 from globalVariables import welcomeChannel, botRole, logChannel
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 class Join:
     def __init__(self, member):
-        self.member = member
+        self.member: discord.Member = member
         self.guild = member.guild
 
     async def getMessage(self):
@@ -34,19 +39,22 @@ class Join:
 
 
     async def send(self):
-        if self.member.id == 812156805244911647: return  #Ignore alt
+        #if self.member.id == 812156805244911647: return  #Ignore alt
         try: channel = self.guild.get_channel(welcomeChannel[self.guild.id])
-        except: return
+        except Exception as e: 
+            logger.warn('Failed to get channel for join message', exc_info=e)
+            return
         await channel.send(f"{await self.getMessage()}")
         await channel.send(f"`There are now {self.getMemberCount()} customers here at {self.guild.name}.`")
         await self.log()
+        logger.info('Join/Leave message sent')
 
     async def log(self):
         channel = self.guild.get_channel(logChannel[self.guild.id])
         embed = discord.Embed(title= "Member joined", description= f"User is {self.member.mention}", color= 15672122)
-        embed.set_author(name= self.member.display_name, url= self.member.avatar.url)
+        embed.set_author(name= self.member.display_name, url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         embed.set_footer(text= f"ID: {self.member.id}")
-        embed.set_thumbnail(url= self.member.avatar.url)
+        embed.set_thumbnail(url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         await channel.send(embed= embed)
 class Leave(Join):
 
@@ -68,14 +76,18 @@ class Leave(Join):
         return f"<:leave:868675783302975538> {random.choice(joinMessageList)}"
 
     async def checkIfBanned(self):
-        if self.member in [ban.user for ban in await self.member.guild.bans()]:
-            return True
+        try:
+            ban_list = [ban.user for ban in await self.member.guild.bans().flatten()]
+            if self.member in ban_list:
+                return True
+        except discord.Forbidden:
+            logger.info(f'Missing access to guild bans for {self.member.guild.name}')
         return False
 
     async def log(self):
         channel = self.guild.get_channel(logChannel[self.guild.id])
         embed = discord.Embed(title= "Member leave", description= f"User is {self.member.mention}", color= 15672122)
-        embed.set_author(name= self.member.display_name, url= self.member.avatar.url)
+        embed.set_author(name= self.member.display_name, url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         embed.set_footer(text= f"ID: {self.member.id}")
-        embed.set_thumbnail(url= self.member.avatar.url)
+        embed.set_thumbnail(url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         await channel.send(embed= embed)

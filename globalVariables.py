@@ -5,13 +5,13 @@ import datetime
 intents = discord.Intents().default()
 intents.members = True
 intents.voice_states = True
+intents.message_content = True
 
-client = discord.Client(intents= intents)
 bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Robo Barista for The Gayming Café!", intents=intents)
 
 prefix = "eli "
 
-bot_version = '0.4.0'
+bot_version = '0.4.1'
 
 last_start_time = datetime.datetime.utcnow()
 
@@ -120,6 +120,18 @@ botRole = {
 loadedInventories = {}
 
 bumpChannel = {
-    811369107181666343 : 812166022073024552,
-    866160840037236736 : 875584842631364708
+    811369107181666343 : 812166022073024552
 }
+
+code_contributors = [
+    243759220057571328,
+    332653982470242314
+]
+
+gif_contributors = [
+    253286336264536070,
+    332653982470242314,
+    456051303823441920,
+    634097307327135750,
+    505116146467602432
+]

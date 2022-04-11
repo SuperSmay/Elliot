@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands, tasks
 import datetime
 
-from globalVariables import bot, last_start_time, bot_version
+from globalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
 
 class BotInfo(commands.Cog):
     def __init__(self):
@@ -13,29 +13,56 @@ class BotInfo(commands.Cog):
 
     @commands.command(name='info', description='Show\'s some stats about Elliot')
     async def info_prefix(self, ctx):
-        await ctx.reply(embed=self.run_and_get_response(), mention_author=False)
+        await ctx.reply(embed=self.run_and_get_response_info(), mention_author=False)
 
     @commands.slash_command(name='info', description='Show\'s some stats about Elliot')
     async def info_slash(self, ctx):
-        await ctx.respond(embed=self.run_and_get_response())
+        await ctx.respond(embed=self.run_and_get_response_info())
 
-    def run_and_get_response(self):  #Replys with the embed or an error
+    @commands.command(name='contribute', aliases=['contrib', 'cont'], description='Elliot\'s GitHub page and contributors!')
+    async def contribute_prefix(self, ctx):
+        await ctx.reply(embed=self.run_and_get_response_contribute(), mention_author=False)
+
+    @commands.slash_command(name='contribute', description='Elliot\'s GitHub page and contributors!')
+    async def contribute_slash(self, ctx):
+        await ctx.respond(embed=self.run_and_get_response_contribute())
+
+    def run_and_get_response_info(self):  #Replys with the embed or an error
         try:
-            return self.embed()
+            return self.info_embed()
         except:
             error = traceback.format_exc()
-            error = error.replace("c:\\Users\\Smay\\Dropbox\\AmesBot", "bot")
+            error = error.replace("c:\\Users\\Smay\\Dropbox\\ElliotBot", "bot")
             embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
             traceback.print_exc()
             return embed
 
-    def embed(self):
+    def info_embed(self):
         embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name}\'s Stats ☾∘∙⊱⋅•⋅', description=f'Statistics for {bot.user.name}', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
         embed.add_field(name='Ping', value=f'{round(bot.latency*1000, 2)}ms')
         embed.add_field(name='Uptime', value=f'{self.parse_duration((datetime.datetime.utcnow() - last_start_time).total_seconds())}')
         embed.add_field(name='Version', value=f'v{bot_version}')
         embed.add_field(name='Commands', value=f'{len(bot.application_commands)}')
+        embed.set_footer(text=f'{bot.user.name}#{bot.user.discriminator} - {bot.user.id}')
+        return embed
+
+    def run_and_get_response_contribute(self):  #Replys with the embed or an error
+        try:
+            return self.contribute_embed()
+        except:
+            error = traceback.format_exc()
+            error = error.replace("c:\\Users\\Smay\\Dropbox\\ElliotBot", "bot")
+            embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
+            traceback.print_exc()
+            return embed
+
+    def contribute_embed(self):
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name}\'s Contribution Page ☾∘∙⊱⋅•⋅', description=f'Contribution info for the Café Elliot project', color= 7528669)
+        embed.set_thumbnail(url=bot.user.avatar.url)
+        embed.add_field(name='GitHub page', value=f'https://github.com/SuperSmay/Elliot\nOpen to contribution!', inline=False)
+        embed.add_field(name='Code Contributors', value='\n'.join([f'<@{id}>' for id in code_contributors]), inline=False)
+        embed.add_field(name='GIF Contributors', value='\n'.join([f'<@{id}>' for id in gif_contributors]), inline=False)
         embed.set_footer(text=f'{bot.user.name}#{bot.user.discriminator} - {bot.user.id}')
         return embed
 
