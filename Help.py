@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 
 from globalVariables import bot
-from discord import Option
+from discord import Option, SlashCommand
 
 class Help(commands.Cog):
     def __init__(self):
@@ -35,7 +35,7 @@ class Help(commands.Cog):
             return embed
 
     def full_help(self):
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype "eli help <command>" or "/help <command" for more information on a specific command.', color= 7528669)
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `eli help <command>` or `/help <command` for more information on a specific command.', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
         #For each grouping of commands
@@ -60,21 +60,28 @@ class Help(commands.Cog):
         #Searches for the command, making sure it exists
         contains_item = False
         for i in bot.application_commands:
-            if str(i) == command:
+            if (str(i) == command) and type(i) == SlashCommand:
                 contains_item = True
+                commandInfo = i
                 
         #Command was not found
         if not contains_item:
-            embed = discord.Embed(description=f'"{command}" is not a known command.')
+            embed = discord.Embed(description=f'`{command}` is not a known command.')
             return embed
 
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {command} ☾∘∙⊱⋅•⋅', description=f'Info on {command}', color= 7528669)
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {command} ☾∘∙⊱⋅•⋅', description=f'{commandInfo.description}\n`<>` = required\t`[]` = optional', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
-        info = 'temp info!' #TODO add info
+        options = ''
+        for i in commandInfo.options:
+            if i.required:
+                separator = ['<', '>']
+            else:
+                separator = ['[', ']']
+            options = (f'{options} {separator[0]}{i.name}{separator[1]}')
 
-        #bot.application_commands
+        info = f'`<eli {command}|/{command}>{options}`' #TODO add info
 
-        embed.add_field(name="Usage", value=info)
+        embed.add_field(name='Usage', value=info)
 
         return embed
