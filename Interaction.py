@@ -285,7 +285,7 @@ class BaseInteraction():
         self.includedMessage = ""
         self.footer = ""
 
-        self.interactionDict = (bot.get_cog('Interaction')).interactionDict
+        self.interactionDict = (bot.get_cog('Interactions')).interactionDict
 
     def run_and_get_response(self):  #Runs command and returns the embed or an error
         try:
