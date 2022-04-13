@@ -121,8 +121,6 @@ async def on_member_join(user):
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
 
-bot.remove_command("help")
-
 bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())

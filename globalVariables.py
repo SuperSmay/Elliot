@@ -8,6 +8,7 @@ intents.voice_states = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Robo Barista for The Gayming Café!", intents=intents)
+bot.remove_command("help")
 
 prefix = "eli "
 
