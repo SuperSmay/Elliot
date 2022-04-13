@@ -4,17 +4,12 @@ import math
 import discord
 from discord.ext import commands
 
-from globalVariables import bot
+from globalVariables import bot, prefix
 from discord import Option, SlashCommand
 
-class Help(commands.Cog):
+class Help(commands.Cog, name='Help'):
     def __init__(self):
-        self.ITEMS_PER_PAGE = 5
-        self.NUM_COGS = 1 #Starts at 1 to include this cog
-        for i in bot.cogs:
-            if len(bot.cogs.get(i).get_commands()) > 0:
-                self.NUM_COGS += 1
-        self.MAX_PAGES = math.floor(self.NUM_COGS / self.ITEMS_PER_PAGE)
+        pass
 
     @commands.command(name='help', description='A full list of commands for Elliot')
     async def help_prefix(self, ctx, *args):
@@ -31,10 +26,10 @@ class Help(commands.Cog):
             if (len(args) == 0): #No arguments
                 return self.full_help()
             elif args[0].isnumeric() or args[0][1:].isnumeric(): #Page number given
-                if int(args[0]) >= 1 and int(args[0]) <= self.MAX_PAGES + 1: #Argument is a single integer between 1 and the amount of pages there are
+                if int(args[0]) >= 1 and int(args[0]) <= self.max_pages + 1: #Argument is a single integer between 1 and the amount of pages there are
                     return self.full_help(int(args[0]) - 1)
                 else: #Invalid page
-                    return discord.Embed(description=f'`{args[0]}` is not a valid page between 1 and {self.MAX_PAGES + 1}.')
+                    return discord.Embed(description=f'`{args[0]}` is not a valid page between 1 and {self.max_pages + 1}.')
             else: #Argument is the name of a command
                 return self.command_help(args)
         except:
@@ -44,10 +39,20 @@ class Help(commands.Cog):
             traceback.print_exc()
             return embed
 
+    def calculate_pages(self):
+        '''Resets the cog count and max pages for help page calculation'''
+        self.ITEMS_PER_PAGE = 4
+        self.num_cogs = 0
+        for i in bot.cogs:
+            if len(bot.cogs.get(i).get_commands()) / 2 >= 4:
+                self.num_cogs += 1
+        self.max_pages = math.floor(self.num_cogs / self.ITEMS_PER_PAGE)
+
     def full_help(self, page: int = 0):
+        self.calculate_pages()
         self.page = page
 
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `eli help <command>` or `/help <command` for more information on a specific command.', color= 7528669)
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{prefix}help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
         cog_items = set() #Contains each command within a cog, so that non-cog commands may be gathered later
@@ -56,7 +61,7 @@ class Help(commands.Cog):
         index = 0
         for i in bot.cogs:
             commands = bot.cogs.get(i).get_commands() #Gets the commands for that group
-            if not (len(commands) == 0): #Some groups have no commands (namely, the BumpReminder cog); therefore, no group should be displayed
+            if (len(commands) / 2 >= 4): #Some groups have no commands (namely, the BumpReminder cog); therefore, no group should be displayed
                 if math.floor(index / self.ITEMS_PER_PAGE) == self.page: #If current cog should be displayed on this page
                     items = set() #A set of the command names, so that duplicates are removed (each name is added twice because both the normal commands and slash commands are accounted for)
                     for j in commands:
@@ -70,7 +75,7 @@ class Help(commands.Cog):
                 index += 1
 
         #For commands not grouped under a cog
-        if math.floor(self.NUM_COGS / self.ITEMS_PER_PAGE) == self.page: #Misc should be displayed on this page
+        if math.floor(self.num_cogs / self.ITEMS_PER_PAGE) == self.page: #Misc should be displayed on this page
             items = set()
             for i in bot.application_commands:
                 if not i.qualified_name in cog_items:
@@ -79,7 +84,7 @@ class Help(commands.Cog):
             display = ', '.join(sorted(items)) #Takes the set and puts them into a string that can be displayed
             embed.add_field(name="Misc", value=display)
         
-        embed.set_footer(text=f'Page {self.page + 1} of {self.MAX_PAGES + 1}')
+        embed.set_footer(text=f'{len(bot.application_commands)} commands   |   Page {self.page + 1} of {self.max_pages + 1}')
         return embed
 
     def command_help(self, args):
