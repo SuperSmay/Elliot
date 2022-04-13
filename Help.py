@@ -30,7 +30,7 @@ class Help(commands.Cog):
         try:
             if (len(args) == 0): #No arguments
                 return self.full_help()
-            elif args[0].isnumeric(): #Page number given
+            elif args[0].isnumeric() or args[0][1:].isnumeric(): #Page number given
                 if int(args[0]) >= 1 and int(args[0]) <= self.MAX_PAGES + 1: #Argument is a single integer between 1 and the amount of pages there are
                     return self.full_help(int(args[0]) - 1)
                 else: #Invalid page
