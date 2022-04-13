@@ -127,7 +127,7 @@ bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
-bot.add_cog(Help.Help()) #NOTE It is important that the Help cog is added last, so that its __init__ can count all of the cogs correctly
+bot.add_cog(Help.Help())
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
