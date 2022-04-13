@@ -1,15 +1,17 @@
 import discord
 from discord.ext import commands
 import datetime
+import Settings
 
 intents = discord.Intents().default()
 intents.members = True
 intents.voice_states = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix=['eli ', 'Eli '], description="Robo Barista for The Gayming Café!", intents=intents, help_command=None)
+def prefix(bot, message):
+    return Settings.fetch_setting(message.guild.id, 'prefix')
 
-prefix = "eli "
+bot = commands.Bot(command_prefix=prefix, description="Robo Barista for The Gayming Café!", intents=intents, help_command=None, case_insensitive=True)
 
 bot_version = '0.4.1'
 

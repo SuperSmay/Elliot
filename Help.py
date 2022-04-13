@@ -4,6 +4,8 @@ import math
 import discord
 from discord.ext import commands
 
+import Settings
+
 from globalVariables import bot, prefix
 from discord import Option, SlashCommand
 
@@ -13,7 +15,7 @@ class Help(commands.Cog, name='Help'):
 
     @commands.command(name='help', description='A full list of commands for Elliot')
     async def help_prefix(self, ctx, *args):
-        await ctx.reply(embed=self.run_and_get_response(args), mention_author=False)
+        await ctx.reply(embed=self.run_and_get_response(args, ctx), mention_author=False)
 
     @commands.slash_command(name='help', description='A full list of commands for Elliot')
     async def help_slash(self, ctx, command:Option(str, description='Which command to provide details for or the page number to display', required=False)):
@@ -21,13 +23,13 @@ class Help(commands.Cog, name='Help'):
         if command != None: args += command.split(' ')
         await ctx.respond(embed=self.run_and_get_response(args))
 
-    def run_and_get_response(self, args):  #Replys with the embed or an error
+    def run_and_get_response(self, args, ctx):  #Replys with the embed or an error
         try:
             if (len(args) == 0): #No arguments
-                return self.full_help()
+                return self.full_help(ctx)
             elif args[0].isnumeric() or args[0][1:].isnumeric(): #Page number given
                 if int(args[0]) >= 1 and int(args[0]) <= self.max_pages + 1: #Argument is a single integer between 1 and the amount of pages there are
-                    return self.full_help(int(args[0]) - 1)
+                    return self.full_help(ctx, int(args[0]) - 1)
                 else: #Invalid page
                     return discord.Embed(description=f'`{args[0]}` is not a valid page between 1 and {self.max_pages + 1}.')
             else: #Argument is the name of a command
@@ -48,11 +50,11 @@ class Help(commands.Cog, name='Help'):
                 self.num_cogs += 1
         self.max_pages = math.floor(self.num_cogs / self.ITEMS_PER_PAGE)
 
-    def full_help(self, page: int = 0):
+    def full_help(self, ctx, page: int = 0):
         self.calculate_pages()
         self.page = page
 
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{prefix}help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{Settings.fetch_setting(ctx.guild.id, "prefix")}help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
         cog_items = set() #Contains each command within a cog, so that non-cog commands may be gathered later
