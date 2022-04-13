@@ -7,7 +7,7 @@ import datetime
 
 from globalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
 
-class BotInfo(commands.Cog):
+class BotInfo(commands.Cog, name='Bot Info'):
     def __init__(self):
         pass
 

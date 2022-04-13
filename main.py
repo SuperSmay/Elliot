@@ -9,6 +9,7 @@ import discord
 from discord.commands import Option, OptionChoice
 
 import BotInfo
+import Help
 import BumpReminder
 import Groovy
 import ImageScan
@@ -124,6 +125,7 @@ bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
+bot.add_cog(Help.Help())
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))

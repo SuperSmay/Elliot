@@ -2694,7 +2694,7 @@ class iPod:
             return embed
     #endregion
 
-class Groovy(commands.Cog):
+class Groovy(commands.Cog, name='Groovy'):
     def __init__(self):
         self.voice_channel_leave.start()
 
