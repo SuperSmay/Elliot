@@ -13,7 +13,7 @@ from discord import Option
 from globalVariables import bot
 
 
-class Interaction(commands.Cog):
+class Interaction(commands.Cog, name='Interactions'):
 
     def __init__(self):
         self.interactionFile = pathlib.Path('interactionCountDict')

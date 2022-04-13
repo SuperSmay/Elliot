@@ -8,7 +8,7 @@ from discord.ext import commands, tasks
 from globalVariables import bot, bumpChannel, bumpRole
 
 
-class BumpReminder(commands.Cog):
+class BumpReminder(commands.Cog, name='Bump Reminder'):
 
     def __init__(self):
         self.bumpReminderTasks = {}
