@@ -11,7 +11,7 @@ intents.message_content = True
 def prefix(bot, message):
     return Settings.fetch_setting(message.guild.id, 'prefix')
 
-bot = commands.Bot(command_prefix=prefix, description="Robo Barista for The Gayming Café!", intents=intents, help_command=None, case_insensitive=True)
+bot = commands.Bot(command_prefix=prefix, description="Robo Barista for The Gayming Café!", intents=intents, help_command=None, case_insensitive=True, strip_after_prefix=True)
 
 bot_version = '0.4.1'
 

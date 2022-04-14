@@ -1,5 +1,7 @@
 import discord
 from discord.ext import commands, tasks
+from discord.commands import Option, OptionChoice, SlashCommandGroup
+
 import sqlite3
 import pathlib
 import logging
@@ -9,12 +11,16 @@ database_path = pathlib.Path(database_name)
 
 DEFAULT_SETTINGS = {
     'cafe_mode': 0,
-    'prefix': 'eli '
+    'prefix': 'eli'
 }
 
 SETTINGS_NAMES = {
     'cafe_mode': 'Café Mode',
     'prefix': 'Prefix'
+}
+
+SETTINGS_ALIASES = {
+    'cafe_mode' : ['cafe mode'],
 }
 
 SETTINGS_DESCRIPTIONS = {
@@ -35,23 +41,53 @@ class Settings(commands.Cog):
         ensure_table_exists()
         update_columns()
 
-    @commands.command(name='config', description='Show\'s the current config')
-    async def config_prefix(self, ctx):
-        await ctx.reply(embed=self.get_config_embed(ctx.guild.id, 0), mention_author=False)
+    config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])
 
-    @commands.slash_command(name='config', description='Show\'s the current config')
-    async def config_slash(self, ctx):
-        await ctx.respond(embed=self.get_config_embed(ctx.guild.id, 0))
+    @commands.command(name='config', description='Shows the current config')  #FIXME
+    async def config_prefix_command(self, ctx, input_name='list', value=''):
+        if input_name == 'list':
+            await ctx.reply(embed=self.get_config_list_embed(ctx.guild.id, 0), mention_author=False)
+        else:
+            await ctx.reply(embed=self.run_config_change_command(ctx, input_name, value), mention_author=False)
+
+    @config.command(name='list', description='Shows the current config')
+    async def config_list(self, ctx):
+        await ctx.respond(embed=self.get_config_list_embed(ctx.guild.id, 0))
+
+    @config.command(name='prefix', description='Change the current prefix')
+    async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='eli ')):
+        await ctx.respond(embed=self.run_config_change_command(ctx, 'prefix', prefix))
 
 
     
-    def get_config_embed(self, guild_id, page:int):
+    def get_config_list_embed(self, guild_id, page:int):
         max_page = max((len(DEFAULT_SETTINGS) - 1)//10, 0)
         embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Current Settings ☾∘∙⊱⋅•⋅', description='Shows current bot configuration')
         for setting in list(DEFAULT_SETTINGS.keys())[10*page: 10*(page + 1)]:
             embed.add_field(name=f'{SETTINGS_NAMES[setting]} - {fetch_setting(guild_id, setting)}', value=SETTINGS_DESCRIPTIONS[setting])
         embed.set_footer(text=f'Page {min(page+1, max_page + 1)} of {max_page + 1}')
         return embed
+
+    def run_config_change_command(self, ctx, input_name, value):
+        try:
+            setting_name = self.get_internal_setting_name(input_name)
+            try:
+                set_setting(ctx.guild.id, setting_name, value)
+                return discord.Embed(description=f'Changed {SETTINGS_NAMES[setting_name]} to `{value}`!')
+            except ValueError:
+                return discord.Embed(description=f'Invalid input value `{value}`!')
+        except ValueError:
+            return discord.Embed(description=f'Setting name `{input_name}` not found!')
+        
+    def get_internal_setting_name(self, input_name: str):
+        #Assumes internal names are lower case!
+        if input_name.lower() in SETTINGS_NAMES.keys(): return input_name.lower()
+        if input_name.lower() in SETTINGS_NAMES.values(): return list(SETTINGS_NAMES.keys())[list(SETTINGS_NAMES.values()).index(input_name)]
+        for alias_list in SETTINGS_ALIASES.values():
+            if input_name in alias_list:
+                list(SETTINGS_ALIASES.keys())[list(SETTINGS_ALIASES.values()).index(alias_list)]
+        raise ValueError(input_name)  #If all other searches fail then setting name can't be found
+
 
 
 #region Database handling
@@ -210,7 +246,7 @@ def set_setting(guild_id, setting, value):
         Parameters:
             - `guild_id`: int; The guild id to set the setting for
             - `setting`: str; The setting name
-            - `value`: Any; The setting name
+            - `value`: Any; The setting value
     '''
     if type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
     if not is_guild_known(guild_id):
