@@ -7,7 +7,7 @@ from discord.ext import commands
 import Settings
 
 from globalVariables import bot, prefix
-from discord import Option, SlashCommand
+from discord import Option, SlashCommand, SlashCommandGroup
 
 class Help(commands.Cog, name='Help'):
     def __init__(self):
@@ -50,7 +50,15 @@ class Help(commands.Cog, name='Help'):
                 self.num_cogs += 1
         self.max_pages = math.floor(self.num_cogs / self.ITEMS_PER_PAGE)
 
-    def full_help(self, ctx, page: int = 0):
+    def full_help(self, page: int = 0):
+        '''
+        Displays a full help page about a every command the bot has
+
+        Parameters
+        ---------
+        `page`: int = 0
+            The page number the user requested. Is formatted as an index starting at 0.
+        '''
         self.calculate_pages()
         self.page = page
 
@@ -90,33 +98,117 @@ class Help(commands.Cog, name='Help'):
         return embed
 
     def command_help(self, args):
+        '''
+        Displays a help page about a specific requested command
+
+        Parameters
+        ---------
+        `args`: tuple
+            The information the user provided after running the help command, split by spaces and stored in a tuple
+        '''
         command = ' '.join(args)
 
         #Searches for the command, making sure it exists
         contains_item = False
         for i in bot.application_commands:
-            if (str(i) == command) and type(i) == SlashCommand:
-                contains_item = True
-                commandInfo = i
+            if len(args) > 1: #User is looking for subcommands
+                if (type(i) == SlashCommandGroup) and str(i) == args[0]: #i has subcommands and is the command group the user wants
+                    commandInfo = self.search_for_subcommand(i, ' '.join(args))
+                    if not str(commandInfo) == '':
+                        contains_item = True
+                        break
+            else: #One word, either subcommand group or single command
+                if (str(i) == command) and (type(i) == SlashCommand or type(i) == SlashCommandGroup):
+                    contains_item = True
+                    commandInfo = i
+                    break
                 
         #Command was not found
         if not contains_item:
             embed = discord.Embed(description=f'`{command}` is not a known command.')
             return embed
 
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {command.replace(command[0], command[0].upper())} ☾∘∙⊱⋅•⋅', description=f'{commandInfo.description}\n`<>` = required\t`[]` = optional', color= 7528669)
+        #Creates embed info
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {command.replace(command[0], command[0].upper(), 1)} ☾∘∙⊱⋅•⋅', description=f'{commandInfo.description}\n`<>` = required\t`[]` = optional', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
-        #Adds brackets to indicate whether each parameter is optional or not and combines them into a string
+        if type(commandInfo) == SlashCommandGroup: #The command has subcommands
+            info = '\n'.join(sorted(self.gather_subcommands(commandInfo))) 
+        else: #No subcommands
+            options = self.create_options(commandInfo)
+            info = f'`/{command}{options}`'
+
+        embed.add_field(name='Usage', value=info)
+        return embed
+
+    def gather_subcommands(self, group: SlashCommandGroup) -> list[str]:
+        '''
+        Recursively searches the given command and its subcommands, and adds them all to the list info
+
+        Parameters
+        ----------
+        `group`: SlashCommandGroup
+            The group to search for more commands in
+
+        Returns
+        -------
+        A list containing each subcommand that was found as a string joined with its parameters
+        '''
+        info = []
+        for subcommand in group.subcommands:
+            if (type(subcommand) == SlashCommand):
+                options = self.create_options(subcommand);
+                info.append(f'`/{subcommand}{options}`')
+            else:
+                for i in self.gather_subcommands(subcommand):
+                    info.append(i)
+        return info
+
+    def search_for_subcommand(self, group: SlashCommandGroup, key: str):
+        '''
+        Searches the given SlashCommandGroup for subcommands within key.
+
+        Parameters
+        ----------
+        `group`: SlashCommandGroup
+            The group to look for commands in
+        `key`: str
+            The reqested command as a string of the user's input
+
+        Returns
+        -------
+        The SlashCommand found within group's subcommands, or an empty string otherwise
+        '''
+        item = ''
+        for subcommand in group.subcommands:
+            if (type(subcommand) == SlashCommand):
+                if str(subcommand) == key:
+                    item = subcommand
+                    break
+            else:
+                item = self.search_for_subcommand(subcommand, key)
+                if str(subcommand) in key and str(item) == '': #No subcommand was found, user just wants a general subgroup
+                    return subcommand
+        return item
+
+    def create_options(self, command: SlashCommand = None) -> str:
+        '''
+        Adds brackets to indicate whether each parameter is optional or not and combines them into a string
+        
+        Parameters
+        ----------
+        `command`: Optional[SlashCommand]
+            The command to gather options from
+
+        Returns
+        -------
+        A String of the command, its parameters, and how each is expected to be used
+        '''
         options = ''
-        for i in commandInfo.options:
+        for i in command.options:
             if i.required:
                 separator = ['<', '>']
             else:
                 separator = ['[', ']']
-            options = (f'{options} {separator[0]}{i.name}={i.description.lower()}{separator[1]}')
-
-        info = f'`/{command}{options}`'
-
-        embed.add_field(name='Usage', value=info)
-        return embed
+            options = f'{options} {separator[0]}{i.name}={i.description.lower()}{separator[1]}'
+        return options
