@@ -16,6 +16,7 @@ import ImageScan
 import Interaction
 import Join
 import Leaderboard
+import Settings
 import Verify
 from globalVariables import bot, joinChannel, last_start_time, unverifiedRole
 
@@ -125,6 +126,7 @@ bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
+bot.add_cog(Settings.Settings())
 bot.add_cog(Help.Help())
 
 try:
