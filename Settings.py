@@ -20,7 +20,7 @@ SETTINGS_NAMES = {
 }
 
 SETTINGS_ALIASES = {
-    'cafe_mode' : ['cafe mode'],
+    'cafe_mode' : ['cafe mode', 'cafemode', 'cafe', 'cafémode', 'café', 'café_mode'],
 }
 
 SETTINGS_DESCRIPTIONS = {
@@ -48,15 +48,15 @@ class Settings(commands.Cog):
         if input_name == 'list':
             await ctx.reply(embed=self.get_config_list_embed(ctx.guild.id, 0), mention_author=False)
         else:
-            await ctx.reply(embed=self.run_config_change_command(ctx, input_name, value), mention_author=False)
+            await ctx.reply(embed=self.run_simple_config_change_command(ctx, input_name, value), mention_author=False)
 
     @config.command(name='list', description='Shows the current config')
     async def config_list(self, ctx):
         await ctx.respond(embed=self.get_config_list_embed(ctx.guild.id, 0))
 
     @config.command(name='prefix', description='Change the current prefix')
-    async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='eli ')):
-        await ctx.respond(embed=self.run_config_change_command(ctx, 'prefix', prefix))
+    async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='')):
+        await ctx.respond(embed=self.run_simple_config_change_command(ctx, 'prefix', prefix))
 
 
     
@@ -68,12 +68,14 @@ class Settings(commands.Cog):
         embed.set_footer(text=f'Page {min(page+1, max_page + 1)} of {max_page + 1}')
         return embed
 
-    def run_config_change_command(self, ctx, input_name, value):
+    def run_simple_config_change_command(self, ctx, input_name, value):
         try:
-            setting_name = self.get_internal_setting_name(input_name)
+            setting_name = self.get_internal_setting_name(input_name)  #raises ValueError if input is invalid, so we can assume that setting_name is valid
+            setting_type = SETTINGS_TYPES[setting_name]
             try:
-                set_setting(ctx.guild.id, setting_name, value)
-                return discord.Embed(description=f'Changed {SETTINGS_NAMES[setting_name]} to `{value}`!')
+                converted_value = self.convert_input_to_type(value, setting_type)
+                set_setting(ctx.guild.id, setting_name, converted_value)
+                return discord.Embed(description=f'Changed {SETTINGS_NAMES[setting_name]} to `{converted_value}`!')
             except ValueError:
                 return discord.Embed(description=f'Invalid input value `{value}`!')
         except ValueError:
@@ -81,12 +83,29 @@ class Settings(commands.Cog):
         
     def get_internal_setting_name(self, input_name: str):
         #Assumes internal names are lower case!
-        if input_name.lower() in SETTINGS_NAMES.keys(): return input_name.lower()
-        if input_name.lower() in SETTINGS_NAMES.values(): return list(SETTINGS_NAMES.keys())[list(SETTINGS_NAMES.values()).index(input_name)]
+        if input_name.lower() in [name.lower() for name in SETTINGS_NAMES.keys()]: return input_name.lower()
+        if input_name.lower() in [name.lower() for name in SETTINGS_NAMES.values()]: 
+            return list(SETTINGS_NAMES.keys())[[name.lower() for name in SETTINGS_NAMES.values()].index(input_name)]
         for alias_list in SETTINGS_ALIASES.values():
             if input_name in alias_list:
                 list(SETTINGS_ALIASES.keys())[list(SETTINGS_ALIASES.values()).index(alias_list)]
-        raise ValueError(input_name)  #If all other searches fail then setting name can't be found
+        raise ValueError(input_name)  #If all other searches fail then setting name can't be found and is invalid
+
+    def convert_input_to_type(self, value, setting_type):
+        if setting_type == str:
+            return str(value)
+        elif setting_type == bool:
+            if value.lower == 'on': return True
+            if value.lower == 'off': return False
+            return bool(value)
+        elif setting_type == int:
+            return int(value)
+        elif setting_type == float:
+            return float(value)
+        elif setting_type == list:
+            return str(value).split('%list_separator;%')
+        else:
+            return value
 
 
 
