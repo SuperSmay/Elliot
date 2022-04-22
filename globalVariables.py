@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import datetime
-import Settings
+from Settings import fetch_setting
 
 intents = discord.Intents().default()
 intents.members = True
@@ -9,7 +9,7 @@ intents.voice_states = True
 intents.message_content = True
 
 def prefix(bot, message):
-    return Settings.fetch_setting(message.guild.id, 'prefix')
+    return fetch_setting(message.guild.id, 'prefix')
 
 bot = commands.Bot(command_prefix=prefix, description="Robo Barista for The Gayming Café!", intents=intents, help_command=None, case_insensitive=True, strip_after_prefix=True)
 

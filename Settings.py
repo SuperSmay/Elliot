@@ -12,6 +12,8 @@ database_path = pathlib.Path(database_name)
 
 ADD_ALIASES = ['add', 'a', 'append']
 REMOVE_ALIASES = ['remove', 'r', 'rm', 'delete', 'yeet']
+TRUE_ALIASES = ['on', 'enable', 'true']
+FALSE_ALIASES = ['off', 'disable', 'false']
 
 DEFAULT_SETTINGS = {  #Required settings dict, provides a default value and serves as the master list of settings
     'cafe_mode': 0,
@@ -71,6 +73,7 @@ logger.setLevel(logging.DEBUG)
 
 class Settings(commands.Cog):
     def __init__(self):
+        validate_settings_dicts()
         ensure_table_exists()
         update_columns()
 
@@ -86,11 +89,11 @@ class Settings(commands.Cog):
                 if value == '':
                     await ctx.reply(embed=self.get_config_info_embed(ctx.guild.id, setting_name), mention_author=False)
                 elif not self.has_settings_permission(ctx.guild, ctx.author):
-                    return discord.Embed(description=f'You don\'t have permission for that!')
+                    return discord.Embed(description=f'You don\'t have permission for that!', color=16741747)
                 else:
                     await ctx.reply(embed=self.run_config_change_command(ctx, setting_name, value, value_two), mention_author=False)
             except ValueError:
-                return discord.Embed(description=f'Setting name `{input_name}` not found!')
+                return discord.Embed(description=f'Setting name `{input_name}` not found!', color=16741747)
                 
 
     # @config.command(name='list', description='Shows the current config')
@@ -114,10 +117,10 @@ class Settings(commands.Cog):
     
     def get_config_list_embed(self, guild_id, page:int):
         max_page = max((len(DEFAULT_SETTINGS) - 1)//10, 0)
-        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Current Settings ☾∘∙⊱⋅•⋅', description='Shows current bot configuration')
+        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Current Settings ☾∘∙⊱⋅•⋅', description='Shows current bot configuration', color=7528669)
         for setting_name in list(DEFAULT_SETTINGS.keys())[10*page: 10*(page + 1)]:
             setting_value = fetch_setting(guild_id, setting_name)
-            embed.add_field(name=f'{SETTINGS_NAMES[setting_name]} - {self.get_formatted_value(setting_name, setting_value)}', value=SETTINGS_DESCRIPTIONS[setting_name])
+            embed.add_field(name=f'{SETTINGS_NAMES[setting_name]} - {self.get_formatted_value(setting_value, setting_name)}', value=SETTINGS_DESCRIPTIONS[setting_name])
         embed.set_footer(text=f'Page {min(page+1, max_page + 1)} of {max_page + 1}')
         return embed
 
@@ -129,38 +132,33 @@ class Settings(commands.Cog):
 
     def get_simple_config_info_embed(self, guild_id, setting_name):
         setting_value = fetch_setting(guild_id, setting_name)
-        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ {SETTINGS_NAMES[setting_name]} ☾∘∙⊱⋅•⋅', description=f'{SETTINGS_DESCRIPTIONS[setting_name]}')
+        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ {SETTINGS_NAMES[setting_name]} ☾∘∙⊱⋅•⋅', description=f'{SETTINGS_DESCRIPTIONS[setting_name]}', color=7528669)
         embed.add_field(name=f'Currently set to:', value=self.get_formatted_value(setting_name, setting_value))
         embed.set_footer(text=f'Change this with /config <{setting_name}> <value>')
         return embed
 
     def get_list_config_info_embed(self, guild_id, setting_name):
         setting_value = fetch_setting(guild_id, setting_name)
-        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ {SETTINGS_NAMES[setting_name]} ☾∘∙⊱⋅•⋅', description=f'{SETTINGS_DESCRIPTIONS[setting_name]}')
+        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ {SETTINGS_NAMES[setting_name]} ☾∘∙⊱⋅•⋅', description=f'{SETTINGS_DESCRIPTIONS[setting_name]}', color=7528669)
         embed.add_field(name=f'Current list:', value=self.get_formatted_value(setting_name, setting_value))
         embed.set_footer(text=f'Change this with /config <{setting_name}> add/remove <value>')
         return embed
 
     #region AAAAAAAA
 
-    def get_formatted_value(self, setting_name, converted_setting_value) -> str:  #Returns nicely formatted string  #FIXME kinda jank, wrote when tired
-        #Type checking block, could probably be improved
-        if SETTINGS_TYPES[setting_name] == list:
-            if not (isinstance(converted_setting_value, LIST_TYPES[setting_name]) or isinstance(converted_setting_value, list)):
-                raise TypeError(converted_setting_value)
-        elif not isinstance(converted_setting_value, SETTINGS_TYPES[setting_name]):
-            raise TypeError(converted_setting_value)
-
-
+    def get_formatted_value(self, converted_setting_value, setting_name=None) -> str:  #Returns nicely formatted string
+        #TSetting name is used for determining if the value should be formatted as a channel/role mention
+        if converted_setting_value is None:
+            return 'None'
         if isinstance(converted_setting_value, list):
-            return ', '.join([self.get_formatted_value(setting_name, value_from_list) for value_from_list in converted_setting_value])
-        elif setting_name in ROLE_ID_SETTINGS:
+            return ', '.join([self.get_formatted_value(value_from_list, setting_name) for value_from_list in converted_setting_value])
+        elif setting_name in ROLE_ID_SETTINGS and (isinstance(converted_setting_value, int) or isinstance(converted_setting_value, str)):
             return f'<@&{converted_setting_value}>'
-        elif setting_name in CHANNEL_ID_SETTINGS:
+        elif setting_name in CHANNEL_ID_SETTINGS and (isinstance(converted_setting_value, int) or isinstance(converted_setting_value, str)):
             return f'<#{converted_setting_value}>'
-        elif SETTINGS_TYPES[setting_name] == str or SETTINGS_TYPES[setting_name] == int or SETTINGS_TYPES[setting_name] == float:
+        elif isinstance(converted_setting_value, int) or isinstance(converted_setting_value, str) or isinstance(converted_setting_value, float):
             return str(converted_setting_value)
-        elif SETTINGS_TYPES[setting_name] == bool:
+        elif isinstance(converted_setting_value, bool):
             if converted_setting_value: return 'On'
             else: return 'Off'
         else:
@@ -197,8 +195,8 @@ class Settings(commands.Cog):
         if setting_type == str:
             return str(value)
         elif setting_type == bool:
-            if value.lower == 'on': return True
-            if value.lower == 'off': return False
+            if value.lower in TRUE_ALIASES: return True
+            if value.lower in FALSE_ALIASES: return False
             return bool(value)
         elif setting_type == int:
             return int(value)
@@ -219,7 +217,7 @@ class Settings(commands.Cog):
             elif raw_input in REMOVE_ALIASES:
                 is_add = False
             else:
-                return discord.Embed(description=f'Specify add or remove, not `{input_value}`!')
+                return discord.Embed(description=f'Specify add or remove, not `{input_value}`!', color=16741747)
             setting_type = LIST_TYPES[setting_name] if setting_name in LIST_TYPES else int  #Default to int if no type is provided
             input_value = raw_input_two
 
@@ -229,23 +227,15 @@ class Settings(commands.Cog):
         
         #Converter section
 
-        if setting_name in ROLE_ID_SETTINGS:
-            try:
+        try:
+            if setting_name in ROLE_ID_SETTINGS:
                 converted_value = self.get_role_id_for_input(ctx.guild, input_value)
-            except ValueError:
-                return discord.Embed(description=f'Invalid input value `{input_value}`!')
-
-        elif setting_name in CHANNEL_ID_SETTINGS:
-            try:
+            elif setting_name in CHANNEL_ID_SETTINGS:
                 converted_value = self.get_channel_id_for_input(ctx.guild, input_value)
-            except ValueError:
-                return discord.Embed(description=f'Invalid input value `{input_value}`!')
-
-        else:
-            try:
+            else:
                 converted_value = self.convert_input_to_type(input_value, setting_type)
-            except ValueError:
-                return discord.Embed(description=f'Invalid input value `{input_value}`!')
+        except ValueError:
+            return discord.Embed(description=f'Invalid input value `{input_value}`!', color=16741747)
 
         #Actually do the thing
 
@@ -257,23 +247,23 @@ class Settings(commands.Cog):
 
     def run_simple_config_change_command(self, ctx, setting_name, converted_value):
         set_setting(ctx.guild.id, setting_name, converted_value)
-        return discord.Embed(description=f'Changed {SETTINGS_NAMES[setting_name]} to {self.get_formatted_value(setting_name, converted_value)}!')
+        return discord.Embed(description=f'Changed {SETTINGS_NAMES[setting_name]} to {self.get_formatted_value(converted_value, setting_name)}!', color=7528669)
 
     def run_list_config_change_command(self, ctx, setting_name, converted_value, is_add: True):
         current_list: list = fetch_setting(ctx.guild.id, setting_name)
         if is_add:
             if converted_value in current_list:
-                return discord.Embed(description=f'{self.get_formatted_value(setting_name, converted_value)} is already in {SETTINGS_NAMES[setting_name]}!')
+                return discord.Embed(description=f'{self.get_formatted_value(converted_value, setting_name)} is already in {SETTINGS_NAMES[setting_name]}!', color=16741747)
             current_list.append(converted_value)
             set_setting(ctx.guild.id, setting_name, current_list)
-            return discord.Embed(description=f'Added {self.get_formatted_value(setting_name, converted_value)} to {SETTINGS_NAMES[setting_name]}!')
+            return discord.Embed(description=f'Added {self.get_formatted_value(converted_value, setting_name)} to {SETTINGS_NAMES[setting_name]}!', color=7528669)
         else:
             if converted_value not in current_list:
-                return discord.Embed(description=f'{self.get_formatted_value(setting_name, converted_value)} is not in the list!')
+                return discord.Embed(description=f'{self.get_formatted_value(converted_value, setting_name)} is not in the list!', color=16741747)
             current_list: list = fetch_setting(ctx.guild.id, setting_name)
             current_list.remove(converted_value)
             set_setting(ctx.guild.id, setting_name, current_list)
-            return discord.Embed(description=f'Removed {self.get_formatted_value(setting_name, converted_value)} from {SETTINGS_NAMES[setting_name]}!')
+            return discord.Embed(description=f'Removed {self.get_formatted_value(converted_value, setting_name)} from {SETTINGS_NAMES[setting_name]}!', color=7528669)
     #endregion
         
     def get_internal_setting_name(self, input_name: str):
@@ -317,6 +307,13 @@ class Settings(commands.Cog):
         else:
             return value
 
+
+
+def validate_settings_dicts():
+    for name in list(DEFAULT_SETTINGS.keys()):
+        if name not in SETTINGS_NAMES or name not in SETTINGS_TYPES or name not in SETTINGS_DESCRIPTIONS:
+            del(DEFAULT_SETTINGS[name])
+            logger.warn(f'Setting {name=} not in all required dicts')
 
 
 #region Database handling

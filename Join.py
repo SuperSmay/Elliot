@@ -1,14 +1,34 @@
 import datetime
 import logging
 import random
-
+from Settings import fetch_setting
 import discord
-from globalVariables import welcomeChannel, botRole, logChannel
+from discord.ext import commands
+from globalVariables import botRole, logChannel
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-class Join:
+class Join(commands.Cog, name='Join'):
+    def __init__(self, member):
+        self.member: discord.Member = member
+        self.guild = member.guild
+
+    
+    @commands.Cog.listener()
+    async def on_member_remove(user):
+        leave = Leave(user)
+        await leave.send()
+            
+
+    @commands.Cog.listener()
+    async def on_member_join(user):
+        join = Join(user)
+        await join.send()
+
+
+
+class JoinMessager(commands.Cog, name='Join'):
     def __init__(self, member):
         self.member: discord.Member = member
         self.guild = member.guild
@@ -40,7 +60,9 @@ class Join:
 
     async def send(self):
         #if self.member.id == 812156805244911647: return  #Ignore alt
-        try: channel = self.guild.get_channel(welcomeChannel[self.guild.id])
+        channel_id = fetch_channel(self.guild.id, 'welcome_channel')
+        if channel_id is None: return
+        try: channel = self.guild.get_channel(channel_id)
         except Exception as e: 
             logger.warn('Failed to get channel for join message', exc_info=e)
             return
@@ -50,13 +72,15 @@ class Join:
         logger.info('Join/Leave message sent')
 
     async def log(self):
-        channel = self.guild.get_channel(logChannel[self.guild.id])
+        channel_id = fetch_channel(self.guild.id, 'log_channel')
+        if channel_id is None: return
+        channel = self.guild.get_channel(channel_id)
         embed = discord.Embed(title= "Member joined", description= f"User is {self.member.mention}", color= 15672122)
         embed.set_author(name= self.member.display_name, url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         embed.set_footer(text= f"ID: {self.member.id}")
         embed.set_thumbnail(url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         await channel.send(embed= embed)
-class Leave(Join):
+class LeaveMessager(JoinMessager):
 
     async def getMessage(self):
         joinMessageList = [
@@ -85,7 +109,9 @@ class Leave(Join):
         return False
 
     async def log(self):
-        channel = self.guild.get_channel(logChannel[self.guild.id])
+        channel_id = fetch_channel(self.guild.id, 'log_channel')
+        if channel_id is None: return
+        channel = self.guild.get_channel(channel_id)
         embed = discord.Embed(title= "Member leave", description= f"User is {self.member.mention}", color= 15672122)
         embed.set_author(name= self.member.display_name, url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         embed.set_footer(text= f"ID: {self.member.id}")

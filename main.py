@@ -94,8 +94,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 
 @bot.event
 async def on_member_remove(user):
-  leave = Join.Leave(user)
-  await leave.send()
   timeSinceJoin = datetime.datetime.now(datetime.timezone.utc) - user.joined_at
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(user)
@@ -117,8 +115,6 @@ async def on_member_remove(user):
 
 @bot.event
 async def on_member_join(user):
-  join = Join.Join(user)
-  await join.send()
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
 
@@ -128,6 +124,7 @@ bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
 bot.add_cog(Settings.Settings())
 bot.add_cog(Help.Help())
+bot.add_cog(Join.Join())
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
