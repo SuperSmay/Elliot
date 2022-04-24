@@ -4,9 +4,9 @@ import math
 import discord
 from discord.ext import commands
 
-import Settings
+from Settings import fetch_setting
 
-from globalVariables import bot, prefix
+from globalVariables import bot
 from discord import Option, SlashCommand, SlashCommandGroup
 
 class Help(commands.Cog, name='Help'):
@@ -50,7 +50,7 @@ class Help(commands.Cog, name='Help'):
                 self.num_cogs += 1
         self.max_pages = math.floor(self.num_cogs / self.ITEMS_PER_PAGE)
 
-    def full_help(self, page: int = 0):
+    def full_help(self, ctx, page: int = 0):
         '''
         Displays a full help page about a every command the bot has
 
@@ -62,7 +62,7 @@ class Help(commands.Cog, name='Help'):
         self.calculate_pages()
         self.page = page
 
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{Settings.fetch_setting(ctx.guild.id, "prefix")}help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{fetch_setting(ctx.guild.id, "prefix")}help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
         cog_items = set() #Contains each command within a cog, so that non-cog commands may be gathered later

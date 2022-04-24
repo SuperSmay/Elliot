@@ -3,6 +3,8 @@ import discord
 from discord.ext import commands, tasks
 from discord.commands import Option, OptionChoice, SlashCommandGroup
 
+import DBManager
+
 import sqlite3
 import pathlib
 import logging
@@ -14,13 +16,15 @@ ADD_ALIASES = ['add', 'a', 'append']
 REMOVE_ALIASES = ['remove', 'r', 'rm', 'delete', 'yeet']
 TRUE_ALIASES = ['on', 'enable', 'true']
 FALSE_ALIASES = ['off', 'disable', 'false']
+RESET_ALIASES = ['reset', 'none', 'default']
 
 DEFAULT_SETTINGS = {  #Required settings dict, provides a default value and serves as the master list of settings
     'cafe_mode': 0,
     'prefix': 'eli',
     'welcome_channel' : None,
     'age_role_list' : [],
-    'settings_roles' : []
+    'settings_roles' : [],
+    'log_channel' : None,
 }
 
 SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
@@ -28,14 +32,16 @@ SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
     'prefix': 'Prefix',
     'welcome_channel' : 'Welcome Channel',
     'age_role_list' : 'Age Roles',
-    'settings_roles' : 'Settings Roles'
+    'settings_roles' : 'Settings Roles',
+    'log_channel' : 'Log Channel',
 }
 
 SETTINGS_ALIASES = {  #Optional settings dict for other usable names
     'cafe_mode' : ['cafe mode', 'cafemode', 'cafe', 'cafémode', 'café', 'café_mode'],
     'welcome_channel' : ['welcome channel', 'welcomechannel', 'welcome'],
     'age_role_list' : ['age roles', 'age list', 'valid age roles', 'ageroles', 'agelist', 'validageroles', 'age_roles', 'age_list', 'valid_age_roles'],
-    'settings_roles' : ['settings roles', 'settingsroles']
+    'settings_roles' : ['settings roles', 'settingsroles'],
+    'log_channel' : ['log channel', 'logchannel', 'log'],
 }
 
 SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of the setting
@@ -43,7 +49,8 @@ SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of th
     'prefix': 'The prefix for prefix commands',
     'welcome_channel' : 'The channel to send welcome/goodbye messages in',
     'age_role_list' : 'List of valid age roles for verification',
-    'settings_roles' : 'Roles that are allowed to change settings'
+    'settings_roles' : 'Roles that are allowed to change settings',
+    'log_channel' : 'Channel to send log messages to',
 }
 
 SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the setting value
@@ -51,7 +58,8 @@ SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the s
     'prefix': str,
     'welcome_channel' : int,
     'age_role_list' : list,
-    'settings_roles' : list
+    'settings_roles' : list,
+    'log_channel' : int,
 }
 
 LIST_TYPES = {
@@ -61,11 +69,12 @@ LIST_TYPES = {
 
 ROLE_ID_SETTINGS = [
     'age_role_list', 
-    'settings_roles'
+    'settings_roles',
 ]
 
 CHANNEL_ID_SETTINGS = [
-    'welcome_channel'
+    'welcome_channel',
+    'log_channel',
 ]
 
 logger = logging.getLogger(__name__)
@@ -73,9 +82,13 @@ logger.setLevel(logging.DEBUG)
 
 class Settings(commands.Cog):
     def __init__(self):
+        
         validate_settings_dicts()
-        ensure_table_exists()
-        update_columns()
+
+        name_type_dict = {name: SETTINGS_TYPES[name] for name in DEFAULT_SETTINGS}  # This is because the default settings dict is the master list and should be the only reference for which settings currently exist
+        
+        DBManager.ensure_table_exists('settings')
+        DBManager.update_columns('settings', name_type_dict)
 
     config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])
 
@@ -104,8 +117,6 @@ class Settings(commands.Cog):
     # async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='')):
     #     await ctx.respond(embed=self.run_simple_config_change_command(ctx, 'prefix', prefix))
 
-    #TODO settings dict verification check
-
     def has_settings_permission(self, guild, member: discord.Member):
         if member.guild_permissions.administrator or member.guild_permissions.manage_guild:
             return True
@@ -133,21 +144,21 @@ class Settings(commands.Cog):
     def get_simple_config_info_embed(self, guild_id, setting_name):
         setting_value = fetch_setting(guild_id, setting_name)
         embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ {SETTINGS_NAMES[setting_name]} ☾∘∙⊱⋅•⋅', description=f'{SETTINGS_DESCRIPTIONS[setting_name]}', color=7528669)
-        embed.add_field(name=f'Currently set to:', value=self.get_formatted_value(setting_name, setting_value))
+        embed.add_field(name=f'Currently set to:', value=self.get_formatted_value(setting_value, setting_name))
         embed.set_footer(text=f'Change this with /config <{setting_name}> <value>')
         return embed
 
     def get_list_config_info_embed(self, guild_id, setting_name):
         setting_value = fetch_setting(guild_id, setting_name)
         embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ {SETTINGS_NAMES[setting_name]} ☾∘∙⊱⋅•⋅', description=f'{SETTINGS_DESCRIPTIONS[setting_name]}', color=7528669)
-        embed.add_field(name=f'Current list:', value=self.get_formatted_value(setting_name, setting_value))
+        embed.add_field(name=f'Current list:', value=self.get_formatted_value(setting_value, setting_name))
         embed.set_footer(text=f'Change this with /config <{setting_name}> add/remove <value>')
         return embed
 
     #region AAAAAAAA
 
     def get_formatted_value(self, converted_setting_value, setting_name=None) -> str:  #Returns nicely formatted string
-        #TSetting name is used for determining if the value should be formatted as a channel/role mention
+        #Setting name is used for determining if the value should be formatted as a channel/role mention
         if converted_setting_value is None:
             return 'None'
         if isinstance(converted_setting_value, list):
@@ -190,13 +201,12 @@ class Settings(commands.Cog):
         except ValueError as e:
             raise e
 
-
     def convert_input_to_type(self, value, setting_type):
         if setting_type == str:
             return str(value)
         elif setting_type == bool:
-            if value.lower in TRUE_ALIASES: return True
-            if value.lower in FALSE_ALIASES: return False
+            if value.lower() in TRUE_ALIASES: return True
+            if value.lower() in FALSE_ALIASES: return False
             return bool(value)
         elif setting_type == int:
             return int(value)
@@ -207,28 +217,30 @@ class Settings(commands.Cog):
         else:
             return value
 
-    def run_config_change_command(self, ctx, setting_name, raw_input, raw_input_two):  #Assumes valid setting name
+    def run_config_change_command(self, ctx, setting_name: str, raw_input: str, raw_input_two: str):  #Assumes valid setting name
 
         if setting_name not in DEFAULT_SETTINGS: raise ValueError(setting_name)  #Dunno why this would happen but eh
         
         if SETTINGS_TYPES[setting_name] == list:
-            if raw_input in ADD_ALIASES:
+            if raw_input.lower() in ADD_ALIASES:
                 is_add = True
-            elif raw_input in REMOVE_ALIASES:
+            elif raw_input.lower() in REMOVE_ALIASES:
                 is_add = False
             else:
                 return discord.Embed(description=f'Specify add or remove, not `{input_value}`!', color=16741747)
             setting_type = LIST_TYPES[setting_name] if setting_name in LIST_TYPES else int  #Default to int if no type is provided
-            input_value = raw_input_two
+            input_value: str = raw_input_two
 
         else:
             setting_type = SETTINGS_TYPES[setting_name]
-            input_value = raw_input
+            input_value: str = raw_input
         
         #Converter section
 
         try:
-            if setting_name in ROLE_ID_SETTINGS:
+            if input_value.lower() in RESET_ALIASES and not SETTINGS_TYPES[setting_name] == list:
+                converted_value = None
+            elif setting_name in ROLE_ID_SETTINGS:
                 converted_value = self.get_role_id_for_input(ctx.guild, input_value)
             elif setting_name in CHANNEL_ID_SETTINGS:
                 converted_value = self.get_channel_id_for_input(ctx.guild, input_value)
@@ -313,89 +325,10 @@ def validate_settings_dicts():
     for name in list(DEFAULT_SETTINGS.keys()):
         if name not in SETTINGS_NAMES or name not in SETTINGS_TYPES or name not in SETTINGS_DESCRIPTIONS:
             del(DEFAULT_SETTINGS[name])
-            logger.warn(f'Setting {name=} not in all required dicts')
+            logger.warn(f'Setting {name=} not in all required dicts, removing...')
 
 
 #region Database handling
-def ensure_table_exists():
-    '''
-        Checks that the settings table exists in the database, and creates it if it doesn't
-    '''
-    try:
-        if not does_table_exist():
-            with sqlite3.connect(database_path) as con:
-                cur = con.cursor()
-                cur.execute(f"CREATE TABLE settings {get_columns_string()}")
-                logger.info('Created new settings table')
-    except Exception as e:
-        logger.error('Failed to ensure settings table exists', exc_info=e)
-        raise e
-
-def get_columns_string():
-    '''
-        Creates and returns the string used to create the columns for a new table based on the DEFAULT_SETTINGS dict
-    '''
-    complete_string = ''
-    for setting in DEFAULT_SETTINGS.keys():
-        complete_string += f'{setting} {type_to_typename(SETTINGS_TYPES[setting])},'
-    return f'(guild_id INTEGER, {complete_string} PRIMARY KEY("guild_id"))'
-    
-def type_to_typename(type):
-    '''
-        Returns the proper SQLite type name to use for the given type. If type is unknown then BLOB is returned
-
-        Parameters:
-            - `type`: type; The type to convert
-
-        Returns:
-            `str`; The formatted type name
-    '''
-    if type == str:
-        return 'TEXT'
-    elif type == int:
-        return 'INTEGER'
-    elif type == float:
-        return 'REAL'
-    elif type == list:
-        return 'TEXT'
-    elif type == bool:
-        return 'INTEGER'
-    else:
-        return 'BLOB'
-
-def update_columns():
-    '''
-        Adds any missing columns to the settings table
-    '''
-    try:
-        with sqlite3.connect(database_path) as con:
-            cur = con.cursor()
-            columns = cur.execute('PRAGMA table_info(settings)').fetchall()
-            for setting in DEFAULT_SETTINGS.keys():
-                if setting in [column[1] for column in columns]:
-                    continue
-                cur.execute(f"ALTER TABLE settings ADD {setting} {type_to_typename(SETTINGS_TYPES[setting])}")
-                logger.info(f'Created new table column {setting} of type {type_to_typename(SETTINGS_TYPES[setting])}')
-    except Exception as e:
-        logger.error('Failed to update settings database columns', exc_info=e)
-        raise e
-
-def does_table_exist():
-    '''
-        Checks if the settings table exists
-    '''
-    try:
-        with sqlite3.connect(database_path) as con:
-            cur = con.cursor()
-            table = cur.execute(f"SELECT * FROM sqlite_master WHERE type='table' AND name='settings'").fetchone()
-            if table == None:
-                return False
-            else:
-                return True
-    except Exception as e:
-        logger.error('Failed to check that settings table exists', exc_info=e)
-        raise e
-
 def process_setting_value(raw_setting, setting_type, list_type=None):
     '''
         Returns the raw setting value formatted correctly using SETTINGS_TYPES. Unknown types are returned as the raw value.
@@ -476,12 +409,12 @@ def fetch_all_settings(guild_id):
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
                 row = cur.execute(f"SELECT * FROM settings WHERE guild_id = {guild_id}").fetchone()
-                logger.info(f'Fetched all settings for guild_id={guild_id}')
+                logger.info(f'Fetched all settings for {guild_id=}')
                 return row
         else:
             return DEFAULT_SETTINGS.copy()
     except Exception as e:
-        logger.error(f'Failed to fetch all settings from database row guild_id={guild_id}', exc_info=e)
+        logger.error(f'Failed to fetch all settings from database row {guild_id=}', exc_info=e)
         raise e
 
 def set_setting(guild_id, setting, value):
@@ -493,7 +426,9 @@ def set_setting(guild_id, setting, value):
             - `setting`: str; The setting name
             - `value`: Any; The setting value
     '''
-    if type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)  #FIXME well fuck that doesn't work on lists anymore
+    if value is None: value = 'NULL'
+    elif type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
+
     if not is_guild_known(guild_id):
         initialize_guild(guild_id)
     try:
@@ -506,7 +441,7 @@ def set_setting(guild_id, setting, value):
         with sqlite3.connect(database_path) as con:
             cur = con.cursor()
             cur.execute(f"UPDATE settings SET {setting} = (?) WHERE guild_id = {guild_id}", [value])
-            logger.info(f'Changed setting {setting} to {value} for guild_id={guild_id}')
+            logger.info(f'Changed setting {setting} to {value} for {guild_id=}')
     except Exception as e:
         logger.error(f'Changing setting {setting} to {value} failed', exc_info=e)
         raise e
@@ -525,7 +460,7 @@ def set_default_settings(guild_id):
                 cur.execute(f"DELETE FROM settings WHERE guild_id = {guild_id}")
                 logger.info(f'Deleting server row {guild_id} to reset to default')
     except Exception as e:
-        logger.error('Failed to delete settings database row guild_id={guild_id}', exc_info=e)
+        logger.error(f'Failed to delete settings database row {guild_id=}', exc_info=e)
         raise e
 
 def initialize_guild(guild_id):
@@ -545,7 +480,7 @@ def initialize_guild(guild_id):
                 cur.execute(f"INSERT INTO settings VALUES ({'?,'*(len(DEFAULT_SETTINGS))}?)", values)
                 logger.info(f'Guild row {guild_id} initialized')
     except Exception as e:
-        logger.error('Failed to initalize settings database row guild_id={guild_id}', exc_info=e)
+        logger.error(f'Failed to initalize settings database row {guild_id=}', exc_info=e)
         raise e
 
 def is_guild_known(guild_id):
@@ -568,7 +503,7 @@ def is_guild_known(guild_id):
             else:
                 return False
     except Exception as e:
-        logger.error(f'Failed to check if guild_id={guild_id} is known', exc_info=e)
+        logger.error(f'Failed to check if {guild_id=} is known', exc_info=e)
         raise e
 #endregion
 
@@ -591,8 +526,8 @@ if __name__ == '__main__':
             columns = cur.execute(f'PRAGMA table_info({table_name})').fetchall()
             return columns
 
-    ensure_table_exists()
-    update_columns()
+    DBManager.ensure_table_exists('settings')
+    DBManager.update_columns('settings')
     #set_setting(866160840037236736, 'cafe_mode', False)
     print(fetch_table('settings'))
     print(fetch_setting(866160840037236736, 'prefix'))
