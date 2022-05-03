@@ -1,16 +1,13 @@
 from fnmatch import fnmatch
+from sys import prefix
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.commands import Option, OptionChoice, SlashCommandGroup
 
 import DBManager
 
 import sqlite3
-import pathlib
 import logging
-
-database_name = 'Elliot.sqlite'
-database_path = pathlib.Path(database_name)
 
 ADD_ALIASES = ['add', 'a', 'append']
 REMOVE_ALIASES = ['remove', 'r', 'rm', 'delete', 'yeet']
@@ -19,66 +16,112 @@ FALSE_ALIASES = ['off', 'disable', 'false']
 RESET_ALIASES = ['reset', 'none', 'default']
 
 DEFAULT_SETTINGS = {  #Required settings dict, provides a default value and serves as the master list of settings
-    'cafe_mode': 0,
+    'cafe_mode': False,
+    'verification_system': False,
     'prefix': 'eli',
     'welcome_channel' : None,
+    'role_channel' : None,
     'age_role_list' : [],
+    'pronoun_role_list': [],
     'settings_roles' : [],
+    'unverified_role' : None,
+    'verified_role' : None,
+    'too_old_role' : None,
+    'too_young_role' : None,
     'log_channel' : None,
 }
 
 SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
     'cafe_mode': 'Café Mode',
+    'verification_system': 'Verification',
     'prefix': 'Prefix',
     'welcome_channel' : 'Welcome Channel',
+    'role_channel' : 'Role Channel',
     'age_role_list' : 'Age Roles',
+    'pronoun_role_list': 'Pronoun Roles',
     'settings_roles' : 'Settings Roles',
+    'unverified_role' : 'Unverified Role',
+    'verified_role' : 'Verified Role',
+    'too_young_role' : 'Too Young Role',
+    'too_old_role' : 'Too Old Role',
     'log_channel' : 'Log Channel',
 }
 
 SETTINGS_ALIASES = {  #Optional settings dict for other usable names
-    'cafe_mode' : ['cafe mode', 'cafemode', 'cafe', 'cafémode', 'café', 'café_mode'],
-    'welcome_channel' : ['welcome channel', 'welcomechannel', 'welcome'],
-    'age_role_list' : ['age roles', 'age list', 'valid age roles', 'ageroles', 'agelist', 'validageroles', 'age_roles', 'age_list', 'valid_age_roles'],
-    'settings_roles' : ['settings roles', 'settingsroles'],
-    'log_channel' : ['log channel', 'logchannel', 'log'],
+    'cafe_mode' : ['cafemode', 'cafe', 'cafémode', 'café', 'café_mode'],
+    'verification_system': ['verificationsystem', 'verification', 'verify'],
+    'welcome_channel' : ['welcomechannel', 'welcome'],
+    'role_channel' : ['rolechannel'],
+    'age_role_list' : ['ageroles', 'agerole', 'agelist', 'validageroles', 'age_roles', 'age_list', 'valid_age_roles'],
+    'pronoun_role_list': ['pronounrolelist', 'pronounroles', 'pronounrole', 'pronoun_roles', 'pronoun_role', 'validpronounroles', 'valid_pronoun_roles',],
+    'settings_roles' : ['settingsroles'],
+    'unverified_role' : ['unverifiedrole', 'unverified'],
+    'verified_role' : ['verifiedrole', 'verified'],
+    'too_young_role' : ['tooyoungrole', 'tooyoung', 'youngrole', 'too_young', 'young_role'],
+    'too_old_role' : ['toooldrole', 'tooold', 'oldrole', 'too_old', 'old_role'],
+    'log_channel' : ['logchannel', 'log'],
 }
 
 SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of the setting
     'cafe_mode': 'Changes some wordings to be café themed',
+    'verification_system': 'Enable/disable the verification system based on pronoun roles and age roles. Requires age roles, pronoun rolesm, verified and unverified roles to be filled out',
     'prefix': 'The prefix for prefix commands',
     'welcome_channel' : 'The channel to send welcome/goodbye messages in',
+    'role_channel' : 'The channel that users can be reffered to to get roles',
     'age_role_list' : 'List of valid age roles for verification',
+    'pronoun_role_list': 'List of valid pronoun roles for verification',
     'settings_roles' : 'Roles that are allowed to change settings',
+    'unverified_role' : 'Role that new users get when joining the server',
+    'verified_role' : 'Role for verified used to get',
+    'too_young_role' : 'Role that will auto kick people for being too young',
+    'too_old_role' : 'Role that will auto kick people for being too old',
     'log_channel' : 'Channel to send log messages to',
 }
 
 SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the setting value
     'cafe_mode': bool,
+    'verification_system': bool,
     'prefix': str,
     'welcome_channel' : int,
+    'role_channel' : int,
     'age_role_list' : list,
+    'pronoun_role_list': list,
     'settings_roles' : list,
+    'unverified_role' : int,
+    'verified_role' : int,
+    'too_young_role' : int,
+    'too_old_role' : int,
     'log_channel' : int,
 }
 
-LIST_TYPES = {
+LIST_TYPES = {  #Required if SETTINGS_TYPE is list
     'age_role_list' : int,
+    'pronoun_role_list': int,
     'settings_roles' : int
 }
 
 ROLE_ID_SETTINGS = [
     'age_role_list', 
+    'pronoun_role_list',
     'settings_roles',
+    'unverified_role',
+    'verified_role',
+    'too_young_role',
+    'too_old_role',
 ]
 
 CHANNEL_ID_SETTINGS = [
     'welcome_channel',
+    'role_channel',
     'log_channel',
 ]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+global_prefix_dict = {}
+global_verification_system_dict = {}
+global_unverified_role_dict = {}
 
 class Settings(commands.Cog):
     def __init__(self):
@@ -95,18 +138,18 @@ class Settings(commands.Cog):
     @commands.command(name='config', description='Shows the current config')  #FIXME Parse value with quotes and stuff
     async def config_prefix_command(self, ctx, input_name='list', value='', value_two=''):
         if input_name == 'list':
-            await ctx.reply(embed=self.get_config_list_embed(ctx.guild.id, 0), mention_author=False)
+            await ctx.reply(embed=self.get_config_list_embed(0), mention_author=False)
         else:
             try:
                 setting_name = self.get_internal_setting_name(input_name)  #raises ValueError if input is invalid, so we can assume that setting_name is valid
                 if value == '':
                     await ctx.reply(embed=self.get_config_info_embed(ctx.guild.id, setting_name), mention_author=False)
-                elif not self.has_settings_permission(ctx.guild, ctx.author):
-                    return discord.Embed(description=f'You don\'t have permission for that!', color=16741747)
+                elif not self.has_settings_permission(ctx.author):
+                    await ctx.reply(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
                 else:
                     await ctx.reply(embed=self.run_config_change_command(ctx, setting_name, value, value_two), mention_author=False)
             except ValueError:
-                return discord.Embed(description=f'Setting name `{input_name}` not found!', color=16741747)
+                await ctx.reply(embed=discord.Embed(description=f'Setting name `{input_name}` not found!', color=16741747))
                 
 
     # @config.command(name='list', description='Shows the current config')
@@ -117,7 +160,7 @@ class Settings(commands.Cog):
     # async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='')):
     #     await ctx.respond(embed=self.run_simple_config_change_command(ctx, 'prefix', prefix))
 
-    def has_settings_permission(self, guild, member: discord.Member):
+    def has_settings_permission(self, member: discord.Member):
         if member.guild_permissions.administrator or member.guild_permissions.manage_guild:
             return True
         member_role_ids = [role.id for role in member.roles]
@@ -126,12 +169,11 @@ class Settings(commands.Cog):
                 return True
         return False
     
-    def get_config_list_embed(self, guild_id, page:int):
+    def get_config_list_embed(self, page:int):
         max_page = max((len(DEFAULT_SETTINGS) - 1)//10, 0)
-        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Current Settings ☾∘∙⊱⋅•⋅', description='Shows current bot configuration', color=7528669)
+        embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Settings ☾∘∙⊱⋅•⋅', description='Bot configuration options', color=7528669)
         for setting_name in list(DEFAULT_SETTINGS.keys())[10*page: 10*(page + 1)]:
-            setting_value = fetch_setting(guild_id, setting_name)
-            embed.add_field(name=f'{SETTINGS_NAMES[setting_name]} - {self.get_formatted_value(setting_value, setting_name)}', value=SETTINGS_DESCRIPTIONS[setting_name])
+            embed.add_field(name=f'{SETTINGS_NAMES[setting_name]}', value=SETTINGS_DESCRIPTIONS[setting_name])
         embed.set_footer(text=f'Page {min(page+1, max_page + 1)} of {max_page + 1}')
         return embed
 
@@ -167,11 +209,11 @@ class Settings(commands.Cog):
             return f'<@&{converted_setting_value}>'
         elif setting_name in CHANNEL_ID_SETTINGS and (isinstance(converted_setting_value, int) or isinstance(converted_setting_value, str)):
             return f'<#{converted_setting_value}>'
-        elif isinstance(converted_setting_value, int) or isinstance(converted_setting_value, str) or isinstance(converted_setting_value, float):
-            return str(converted_setting_value)
         elif isinstance(converted_setting_value, bool):
             if converted_setting_value: return 'On'
             else: return 'Off'
+        elif isinstance(converted_setting_value, int) or isinstance(converted_setting_value, str) or isinstance(converted_setting_value, float):
+            return str(converted_setting_value)
         else:
             return str(converted_setting_value)
         
@@ -323,6 +365,7 @@ class Settings(commands.Cog):
 
 def validate_settings_dicts():
     for name in list(DEFAULT_SETTINGS.keys()):
+        #TODO Check for things like role/channel id settings being of type int
         if name not in SETTINGS_NAMES or name not in SETTINGS_TYPES or name not in SETTINGS_DESCRIPTIONS:
             del(DEFAULT_SETTINGS[name])
             logger.warn(f'Setting {name=} not in all required dicts, removing...')
@@ -357,17 +400,15 @@ def process_setting_value(raw_setting, setting_type, list_type=None):
         base_list = []
         for setting in str(raw_setting).split('%list_separator;%'):
             if list_type == bool:
-                try:
-                    if setting == 'True':  #Assumes that original list was serialized using set_setting, thus the format for bools will match this pattern
-                        base_list.append(True)
-                    elif setting == 'False':
-                        base_list.append(False)
-                except:
-                    continue
+                if setting == 'True':  #Assumes that original list was serialized using set_setting, thus the format for bools will match this pattern
+                    base_list.append(True)
+                elif setting == 'False':
+                    base_list.append(False)
             else:
                 try:
-                    base_list.append(list_type(setting))
-                except:
+                    base_list.append(process_setting_value(setting, list_type))
+                except ValueError as e:
+                    logger.warn(f'Processing setting list value {setting=} with type {list_type=} failed')
                     continue
         return base_list
     else:
@@ -384,13 +425,43 @@ def fetch_setting(guild_id, setting):
         Returns:
             `Any`; The setting value
     '''
+    #Special case to avoid spamming the database
+    if setting == 'prefix':
+        if guild_id in global_prefix_dict:
+            return global_prefix_dict[guild_id]  #Should only ever be set to a string so it should be fine
+    if setting == 'verification_system':
+        if guild_id in global_verification_system_dict:
+            return global_verification_system_dict[guild_id]  #Should only ever be set to an int so it should be fine
+    if setting == 'unverified_role':
+        if guild_id in global_unverified_role_dict:
+            return global_unverified_role_dict[guild_id]  #Should only ever be set to an int so it should be fine
+    #If not cached then continue on as normal
+
     if setting not in DEFAULT_SETTINGS: raise ValueError(setting)
     raw_setting = fetch_all_settings(guild_id)[setting]
     if raw_setting == 'NULL' or raw_setting is None:
+        if setting == 'prefix':  #If this is true then the prefix is not cached as that would be caught earlier
+            global_prefix_dict[guild_id] = DEFAULT_SETTINGS[setting]
+        if setting == 'verification_system':  #If this is true then the prefix is not cached as that would be caught earlier
+            global_verification_system_dict[guild_id] = DEFAULT_SETTINGS[setting]
+        if setting == 'unverified_role':  #If this is true then the prefix is not cached as that would be caught earlier
+            global_unverified_role_dict[guild_id] = DEFAULT_SETTINGS[setting]
         return DEFAULT_SETTINGS[setting]
     else:
         setting_type = SETTINGS_TYPES[setting] if setting in SETTINGS_TYPES else int
         list_type = LIST_TYPES[setting] if setting in LIST_TYPES else None
+        if setting == 'prefix':  #If this is true then the prefix is not cached as that would be caught earlier
+            value = process_setting_value(raw_setting, setting_type, list_type)
+            global_prefix_dict[guild_id] = value
+            logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
+        if setting == 'verification_system':  #If this is true then the prefix is not cached as that would be caught earlier
+            value = process_setting_value(raw_setting, setting_type, list_type)
+            global_verification_system_dict[guild_id] = value
+            logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
+        if setting == 'unverified_role':  #If this is true then the prefix is not cached as that would be caught earlier
+            value = process_setting_value(raw_setting, setting_type, list_type)
+            global_unverified_role_dict[guild_id] = value
+            logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
         return process_setting_value(raw_setting, setting_type, list_type)
 
 def fetch_all_settings(guild_id):
@@ -405,7 +476,7 @@ def fetch_all_settings(guild_id):
     '''
     try:
         if is_guild_known(guild_id):
-            with sqlite3.connect(database_path) as con:
+            with sqlite3.connect(DBManager.database_path) as con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
                 row = cur.execute(f"SELECT * FROM settings WHERE guild_id = {guild_id}").fetchone()
@@ -438,13 +509,35 @@ def set_setting(guild_id, setting, value):
                 base_str += str(item)
                 base_str += '%list_separator;%'
             value = base_str
-        with sqlite3.connect(database_path) as con:
+        with sqlite3.connect(DBManager.database_path) as con:
             cur = con.cursor()
             cur.execute(f"UPDATE settings SET {setting} = (?) WHERE guild_id = {guild_id}", [value])
             logger.info(f'Changed setting {setting} to {value} for {guild_id=}')
     except Exception as e:
         logger.error(f'Changing setting {setting} to {value} failed', exc_info=e)
         raise e
+
+    if setting == 'prefix':  #If this is true then update the cache
+        if value == 'NULL' and guild_id in global_prefix_dict:
+            del(global_prefix_dict[guild_id])
+            logger.info(f'Removed cached setting {setting} for {guild_id=}')
+        else:
+            global_prefix_dict[guild_id] = value
+            logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
+    if setting == 'verification_system':  #If this is true then update the cache
+        if value == 'NULL' and guild_id in global_verification_system_dict:
+            del(global_verification_system_dict[guild_id])
+            logger.info(f'Removed cached setting {setting} for {guild_id=}')
+        else:
+            global_verification_system_dict[guild_id] = value
+            logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
+    if setting == 'unverified_role':  #If this is true then update the cache
+        if value == 'NULL' and guild_id in global_unverified_role_dict:
+            del(global_unverified_role_dict[guild_id])
+            logger.info(f'Removed cached setting {setting} for {guild_id=}')
+        else:
+            global_unverified_role_dict[guild_id] = value
+            logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
 
 def set_default_settings(guild_id):
     '''
@@ -455,13 +548,23 @@ def set_default_settings(guild_id):
     '''
     try:
         if is_guild_known(guild_id):
-            with sqlite3.connect(database_path) as con:
+            with sqlite3.connect(DBManager.database_path) as con:
                 cur = con.cursor()
                 cur.execute(f"DELETE FROM settings WHERE guild_id = {guild_id}")
                 logger.info(f'Deleting server row {guild_id} to reset to default')
     except Exception as e:
         logger.error(f'Failed to delete settings database row {guild_id=}', exc_info=e)
         raise e
+
+    if guild_id in global_prefix_dict:  #If this is true then remove that cached value
+        del(global_prefix_dict[guild_id])
+        logger.info(f'Removed cached setting prefix for {guild_id=}')
+    if guild_id in global_verification_system_dict:  #If this is true then remove that cached value
+        del(global_verification_system_dict[guild_id])
+        logger.info(f'Removed cached setting verifcation_system for {guild_id=}')
+    if guild_id in global_unverified_role_dict:  #If this is true then remove that cached value
+        del(global_unverified_role_dict[guild_id])
+        logger.info(f'Removed cached setting unverified_role for {guild_id=}')
 
 def initialize_guild(guild_id):
     '''
@@ -475,7 +578,7 @@ def initialize_guild(guild_id):
             values = [guild_id]
             values.extend(['NULL' for i in DEFAULT_SETTINGS])
             #values.extend(DEFAULT_SETTINGS.values())
-            with sqlite3.connect(database_path) as con:
+            with sqlite3.connect(DBManager.database_path) as con:
                 cur = con.cursor()
                 cur.execute(f"INSERT INTO settings VALUES ({'?,'*(len(DEFAULT_SETTINGS))}?)", values)
                 logger.info(f'Guild row {guild_id} initialized')
@@ -494,7 +597,7 @@ def is_guild_known(guild_id):
             `bool`; Whether the guild is in the database or not
     '''
     try:
-        with sqlite3.connect(database_path) as con:
+        with sqlite3.connect(DBManager.database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
             row = cur.execute(f"SELECT * FROM settings WHERE guild_id = {guild_id}").fetchone()
@@ -510,18 +613,18 @@ def is_guild_known(guild_id):
 if __name__ == '__main__':
 
     def fetch_table(table_name):
-        with sqlite3.connect(database_path) as con:
+        with sqlite3.connect(DBManager.database_path) as con:
             cur = con.cursor()
             table = cur.execute(f"SELECT * from {table_name}").fetchall()
             return table
 
     def delete_table(table_name):
-        with sqlite3.connect(database_path) as con:
+        with sqlite3.connect(DBManager.database_path) as con:
             cur = con.cursor()
             cur.execute(f"DROP TABLE {table_name}")
 
     def list_columns(table_name):
-        with sqlite3.connect(database_path) as con:
+        with sqlite3.connect(DBManager.database_path) as con:
             cur = con.cursor()
             columns = cur.execute(f'PRAGMA table_info({table_name})').fetchall()
             return columns
