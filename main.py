@@ -16,8 +16,10 @@ import ImageScan
 import Interaction
 import Join
 import Leaderboard
+import Settings
 import Verify
-from globalVariables import bot, joinChannel, last_start_time, unverifiedRole
+from Settings import fetch_setting
+from globalVariables import bot, last_start_time
 
 logging.basicConfig()
 
@@ -37,7 +39,7 @@ async def on_ready():
 @bot.event
 async def on_message(message: discord.Message):
   if message.author.bot: return
-  if message.guild.id in unverifiedRole.keys() and unverifiedRole[message.guild.id] in [role.id for role in message.author.roles]:
+  if fetch_setting(message.guild.id, 'verification_system') and fetch_setting(message.guild.id, 'unverified_role') in [role.id for role in message.author.roles]:
     verify = Verify.Verify(member= message.author, message= message)
     await verify.checkVerifyStatus()
 
@@ -85,16 +87,14 @@ async def leaderboard(ctx, leaderboard='leaver'):
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-  if payload.guild_id in unverifiedRole.keys() and unverifiedRole[payload.guild_id] in [role.id for role in payload.member.roles]:
-    await asyncio.sleep(1)
+  if fetch_setting(payload.guild_id, 'verification_system') and fetch_setting(payload.guild_id, 'unverified_role') in [role.id for role in payload.member.roles]:
+    await asyncio.sleep(1)  #Chill to let reaction role bots do their thing
     verify = Verify.Verify(member= await payload.member.guild.fetch_member(payload.member.id))
     await verify.checkVerifyStatus()
 
 
 @bot.event
 async def on_member_remove(user):
-  leave = Join.Leave(user)
-  await leave.send()
   timeSinceJoin = datetime.datetime.now(datetime.timezone.utc) - user.joined_at
   if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
     leaderboard = Leaderboard.timeLeaderboard(user)
@@ -102,7 +102,9 @@ async def on_member_remove(user):
     leaderboard.setScoreOnLeaderboard()
     leaderboard.saveLeaderboard()
     if leaderboard.indexToAnnounce < 10 and leaderboard.annouce:
-      channel = await bot.fetch_channel(joinChannel[user.guild.id])
+      channel_id = fetch_setting(user.guild.id, 'welcome_channel')
+      if channel_id is None: return
+      channel = await bot.fetch_channel(channel_id)
       await channel.send(leaderboard.positionAnnoucenment())
     
     weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(user)
@@ -110,14 +112,14 @@ async def on_member_remove(user):
     weeklyLeaderboard.setScoreOnLeaderboard()
     weeklyLeaderboard.saveLeaderboard()
     if weeklyLeaderboard.indexToAnnounce < 1 and weeklyLeaderboard.annouce:
-      channel = await bot.fetch_channel(joinChannel[user.guild.id])
+      channel_id = fetch_setting(user.guild.id, 'welcome_channel')
+      if channel_id is None: return
+      channel = await bot.fetch_channel(channel_id)
       await channel.send(weeklyLeaderboard.positionAnnoucenment())
     
 
 @bot.event
 async def on_member_join(user):
-  join = Join.Join(user)
-  await join.send()
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
 
@@ -125,7 +127,9 @@ bot.add_cog(Interaction.Interaction())
 bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
+bot.add_cog(Settings.Settings())
 bot.add_cog(Help.Help())
+bot.add_cog(Join.Join())
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))

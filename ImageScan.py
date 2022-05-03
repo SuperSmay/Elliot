@@ -1,6 +1,6 @@
 import json
 import requests
-from globalVariables import logChannel
+from Settings import fetch_setting
 
 # params = {
 #     'url': '',
@@ -45,6 +45,8 @@ class MemberScanner:
             await self.takeAction()
 
     async def takeAction(self):
-        channel = self.guild.get_channel(logChannel[self.guild.id])
+        channel_id = fetch_setting(self.guild.id, 'log_channel')
+        if channel_id is None: return
+        channel = self.guild.get_channel(channel_id)
         await channel.send(f"<@811369189658591233>, <@811376322584641606>, <@811441753194233856>: New user {self.member.mention} has a profile picture containing `{self.getReasons()}`")
         # <@811369189658591233>, <@811376322584641606>, <@811441753194233856> Mod role pings

@@ -3,10 +3,8 @@ import pathlib
 from typing import List
 import discord
 import math
-from globalVariables import bot, numberEmoteList, joinChannel
+from globalVariables import bot, numberEmoteList
 import time
-
-
 
 
 class Leaderboard:
