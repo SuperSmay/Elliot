@@ -155,8 +155,17 @@ class Settings(commands.Cog):
 
     @commands.command(name='config', description='Shows the current config')  #FIXME Parse value with quotes and stuff
     async def config_prefix_command(self, ctx, input_name='list', value='', value_two=''):
+        
+        try: 
+            int(input_name)
+            value = input_name
+            input_name = 'list'
+        except ValueError: page = 0  #If the input cannot be converted to an int, then its not a number and the page should be default (duh)
+
         if input_name == 'list':
-            await ctx.reply(embed=self.get_config_list_embed(0), mention_author=False)
+            try: page = int(value) - 1
+            except ValueError: page = 0
+            await ctx.reply(embed=self.get_config_list_embed(page), mention_author=False)
         else:
             try:
                 setting_name = self.get_internal_setting_name(input_name)  #raises ValueError if input is invalid, so we can assume that setting_name is valid
@@ -187,8 +196,9 @@ class Settings(commands.Cog):
                 return True
         return False
     
-    def get_config_list_embed(self, page:int):
+    def get_config_list_embed(self, page: int):
         max_page = max((len(DEFAULT_SETTINGS) - 1)//10, 0)
+        page = min(max_page, max(page, 0))
         embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Settings ☾∘∙⊱⋅•⋅', description='Bot configuration options', color=7528669)
         for setting_name in list(DEFAULT_SETTINGS.keys())[10*page: 10*(page + 1)]:
             embed.add_field(name=f'{SETTINGS_NAMES[setting_name]}', value=SETTINGS_DESCRIPTIONS[setting_name])
