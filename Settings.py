@@ -73,7 +73,7 @@ SETTINGS_ALIASES = {  #Optional settings dict for other usable names
 
 SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of the setting
     'cafe_mode': 'Changes some wordings to be café themed',
-    'verification_system': 'Enable/disable the verification system based on pronoun roles and age roles. Requires age roles, pronoun rolesm, verified and unverified roles to be filled out',
+    'verification_system': 'Enable/disable the verification system based on pronoun roles and age roles. Requires age roles, pronoun roles, verified and unverified roles to be filled out',
     'prefix': 'The prefix for prefix commands',
     'welcome_channel' : 'The channel to send welcome/goodbye messages in',
     'role_channel' : 'The channel that users can be reffered to to get roles',
@@ -81,7 +81,7 @@ SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of th
     'pronoun_role_list': 'List of valid pronoun roles for verification',
     'settings_roles' : 'Roles that are allowed to change settings',
     'unverified_role' : 'Role that new users get when joining the server',
-    'verified_role' : 'Role for verified used to get',
+    'verified_role' : 'Role for verified users to get',
     'too_young_role' : 'Role that will auto kick people for being too young',
     'too_old_role' : 'Role that will auto kick people for being too old',
     'log_channel' : 'Channel to send log messages to',
@@ -256,8 +256,9 @@ class Settings(commands.Cog):
                     break
         try:
             int_value = int(value)
-            if int_value in [channel.id for channel in guild.channels]:
-                return int_value
+            if int_value not in [channel.id for channel in guild.channels]:
+                raise ValueError(int_value)
+            return int_value
         except ValueError as e:
             raise e
 
@@ -266,8 +267,9 @@ class Settings(commands.Cog):
             value = value.replace('<@&', '').replace('>','')
         try:
             int_value = int(value)
-            if int_value in [role.id for role in guild.roles]:
-                return int_value
+            if int_value not in [role.id for role in guild.roles]:
+                raise ValueError(int_value)
+            return int_value
         except ValueError as e:
             raise e
 
@@ -426,7 +428,7 @@ def process_setting_value(raw_setting, setting_type, list_type=None):
     elif setting_type == list:
         if list_type == None: raise TypeError(list_type)
         base_list = []
-        for setting in str(raw_setting).split('%list_separator;%'):
+        for setting in str(raw_setting).split('%list_separator;%')[:-1]:  #Ignore last item, it should be blank because the string will end with the separator
             if list_type == bool:
                 if setting == 'True':  #Assumes that original list was serialized using set_setting, thus the format for bools will match this pattern
                     base_list.append(True)
