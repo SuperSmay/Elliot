@@ -39,7 +39,10 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
 
         bump_remind_message = await self.get_message(guild, bump_remind_check)
 
-        time_since_bump_remind = datetime.datetime.now(datetime.timezone.utc) - bump_remind_message.created_at
+        if bump_remind_message is None:
+            time_since_bump_remind = -1
+        else:
+            time_since_bump_remind = datetime.datetime.now(datetime.timezone.utc) - bump_remind_message.created_at
 
         if bump_remind_message != None and (bump_remind_message.created_at - bump_message.created_at).total_seconds() > 0 and not time_since_bump_remind.total_seconds() > 7200: 
             print(f"Cancelling remind task and waiting because reminder was sent after last bump success and within two hours")
