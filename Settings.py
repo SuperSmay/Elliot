@@ -148,7 +148,7 @@ class Settings(commands.Cog):
 
         name_type_dict = {name: SETTINGS_TYPES[name] for name in DEFAULT_SETTINGS}  # This is because the default settings dict is the master list and should be the only reference for which settings currently exist
         
-        DBManager.ensure_table_exists('settings')
+        DBManager.ensure_table_exists('settings', name_type_dict)
         DBManager.update_columns('settings', name_type_dict)
 
     config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])

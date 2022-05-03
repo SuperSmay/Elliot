@@ -8,7 +8,7 @@ database_path = pathlib.Path(database_name)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def ensure_table_exists(name: str):
+def ensure_table_exists(name: str, name_type_dict: dict[str, type]):
     '''
         Checks that the input table exists in the database, and creates it if it doesn't
 
@@ -19,7 +19,7 @@ def ensure_table_exists(name: str):
         if not does_table_exist(name):
             with sqlite3.connect(database_path) as con:
                 cur = con.cursor()
-                cur.execute(f"CREATE TABLE {name} {get_columns_string()}")
+                cur.execute(f"CREATE TABLE {name} {get_columns_string(name_type_dict)}")
                 logger.info(f'Created new {name=} table')
     except Exception as e:
         logger.error(f'Failed to ensure {name=} table exists', exc_info=e)
