@@ -4,7 +4,6 @@ import random
 from Settings import fetch_setting
 import discord
 from discord.ext import commands
-from globalVariables import botRole, logChannel
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -49,7 +48,7 @@ class JoinMessager(commands.Cog, name='Join'):
     def get_member_count(self):
         memberCount = 0
         for member in self.guild.members:
-            if not botRole[self.guild.id] in [role.id for role in member.roles]:
+            if not fetch_setting(self.guild.id, 'bot_role') in [role.id for role in member.roles]:
                 memberCount += 1
         return memberCount
 

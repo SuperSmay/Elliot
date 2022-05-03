@@ -29,6 +29,9 @@ DEFAULT_SETTINGS = {  #Required settings dict, provides a default value and serv
     'too_old_role' : None,
     'too_young_role' : None,
     'log_channel' : None,
+    'bump_channel' : None,
+    'bump_role' : None,
+    'bot_role' : None,
 }
 
 SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
@@ -45,6 +48,9 @@ SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
     'too_young_role' : 'Too Young Role',
     'too_old_role' : 'Too Old Role',
     'log_channel' : 'Log Channel',
+    'bump_channel' : 'Bump Reminder Channel',
+    'bump_role' : 'Bump Reminder Role',
+    'bot_role' : 'Server Bot Role',
 }
 
 SETTINGS_ALIASES = {  #Optional settings dict for other usable names
@@ -60,6 +66,9 @@ SETTINGS_ALIASES = {  #Optional settings dict for other usable names
     'too_young_role' : ['tooyoungrole', 'tooyoung', 'youngrole', 'too_young', 'young_role'],
     'too_old_role' : ['toooldrole', 'tooold', 'oldrole', 'too_old', 'old_role'],
     'log_channel' : ['logchannel', 'log'],
+    'bump_channel' : ['bumpchannel'],
+    'bump_role' : ['bumprole'],
+    'bot_role' : ['botrole'],
 }
 
 SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of the setting
@@ -76,6 +85,9 @@ SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of th
     'too_young_role' : 'Role that will auto kick people for being too young',
     'too_old_role' : 'Role that will auto kick people for being too old',
     'log_channel' : 'Channel to send log messages to',
+    'bump_channel' : 'Channel to send bump reminders in',
+    'bump_role' : 'Role to ping for bump reminders',
+    'bot_role' : 'Role that you give bot users to excluse them from the member count',
 }
 
 SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the setting value
@@ -92,6 +104,9 @@ SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the s
     'too_young_role' : int,
     'too_old_role' : int,
     'log_channel' : int,
+    'bump_channel' : int,
+    'bump_role' : int,
+    'bot_role' : int,
 }
 
 LIST_TYPES = {  #Required if SETTINGS_TYPE is list
@@ -108,12 +123,15 @@ ROLE_ID_SETTINGS = [
     'verified_role',
     'too_young_role',
     'too_old_role',
+    'bump_role',
+    'bot_role',
 ]
 
 CHANNEL_ID_SETTINGS = [
     'welcome_channel',
     'role_channel',
     'log_channel',
+    'bump_channel',
 ]
 
 logger = logging.getLogger(__name__)
