@@ -467,6 +467,8 @@ def fetch_setting(guild_id, setting):
             return global_unverified_role_dict[guild_id]  #Should only ever be set to an int so it should be fine
     #If not cached then continue on as normal
 
+    logger.info(f'Fetching {setting=} for {guild_id=}')
+
     if setting not in DEFAULT_SETTINGS: raise ValueError(setting)
     raw_setting = fetch_all_settings(guild_id)[setting]
     if raw_setting == 'NULL' or raw_setting is None:
@@ -510,7 +512,7 @@ def fetch_all_settings(guild_id):
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
                 row = cur.execute(f"SELECT * FROM settings WHERE guild_id = {guild_id}").fetchone()
-                logger.info(f'Fetched all settings for {guild_id=}')
+                #logger.info(f'Fetched all settings for {guild_id=}')
                 return row
         else:
             return DEFAULT_SETTINGS.copy()
