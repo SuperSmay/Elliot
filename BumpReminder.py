@@ -87,7 +87,7 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
         bump_role_id = fetch_setting(guild_id, 'bump_role')
         channel = await bot.fetch_channel(bump_channel_id)  #Get channel
         await channel.send(embed= self.get_reminder_embed(), content= f"<@&{bump_role_id}>" if bump_role_id is not None else '')  #Send reminder
-        self.bump_reminder_tasks[id] = False  #Set task running to False
+        self.bump_reminder_tasks[guild_id] = False  #Set task running to False
 
     @tasks.loop(minutes=15)
     async def bump_reminder_starter(self):
