@@ -47,8 +47,9 @@ class JoinMessager(commands.Cog, name='Join'):
 
     def get_member_count(self):
         memberCount = 0
+        bot_role_id = fetch_setting(self.guild.id, 'bot_role')
         for member in self.guild.members:
-            if not fetch_setting(self.guild.id, 'bot_role') in [role.id for role in member.roles]:
+            if not bot_role_id in [role.id for role in member.roles]:
                 memberCount += 1
         return memberCount
 
