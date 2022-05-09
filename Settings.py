@@ -1,8 +1,9 @@
 from fnmatch import fnmatch
+from random import choices
 from sys import prefix
 import discord
 from discord.ext import commands
-from discord.commands import Option, OptionChoice, SlashCommandGroup
+from discord.commands import Option, OptionChoice, SlashCommandGroup, SlashCommand
 
 import DBManager
 
@@ -151,15 +152,148 @@ class Settings(commands.Cog):
         DBManager.ensure_table_exists('settings', name_type_dict)
         DBManager.update_columns('settings', name_type_dict)
 
-        config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])
+        
 
-        config_list = []
 
-        for setting in DEFAULT_SETTINGS:
+    async def simple_config_command(self, ctx, raw_input):
+        setting_name = ctx.command.qualified_name.split(' ')[1]
+        if raw_input == '':
+            await ctx.respond(embed=self.get_config_info_embed(ctx.guild.id, setting_name))
+        elif not self.has_settings_permission(ctx.author):
+            await ctx.respond(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+        else:
+            await ctx.respond(embed=self.run_config_change_command(ctx, setting_name, raw_input, ''))
 
-            config_list.append(discord.SlashCommand(name=SETTINGS_NAMES[setting], description=SETTINGS_DESCRIPTIONS[setting], options=[Option(str, 'test'), Option(str, 'test2')], callback=self.config_command, parent=config))
+    async def list_config_command(self, ctx, raw_input, raw_input_two):
+        setting_name = ctx.command.qualified_name.split(' ')[1]
+        if raw_input == '':
+            await ctx.respond(embed=self.get_config_info_embed(ctx.guild.id, setting_name))
+        elif not self.has_settings_permission(ctx.author):
+            await ctx.respond(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+        else:
+            await ctx.respond(embed=self.run_config_change_command(ctx, setting_name, raw_input, raw_input_two))
 
-        # @config.command(name=setting, description=SETTINGS_DESCRIPTIONS[setting])
+    config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])
+
+    # @config.command(name='cafe_mode', description=SETTINGS_DESCRIPTIONS['cafe_mode'])
+    # async def config_cafe_mode(self, ctx, value: Option(str, required=False, default='', options=[OptionChoice(name='On', value='on'), OptionChoice(name='Off', value='off')])):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='list', description='Shows the current config')
+    # async def config_list(self, ctx, page: Option(int, required=False, default=1)):
+    #     await ctx.respond(embed=self.get_config_list_embed(page-1))
+
+    # @config.command(name='verif', description='e')
+    # async def config_verification_system(self, ctx, value: Option(str, required=False, default='', options=[OptionChoice(name='On', value='on'), OptionChoice(name='Off', value='off')])):
+    #     await self.simple_config_command(ctx, value)
+        
+    # @config.command(name='prefix', description=SETTINGS_DESCRIPTIONS['prefix'])
+    # async def config_prefix(self, ctx, value: Option(str, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='welcome_channel', description=SETTINGS_DESCRIPTIONS['welcome_channel'])
+    # async def config_welcome_channel(self, ctx, value: Option(discord.TextChannel, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='role_channel', description=SETTINGS_DESCRIPTIONS['role_channel'])
+    # async def config_role_channel(self, ctx, value: Option(discord.TextChannel, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='unverified_role', description=SETTINGS_DESCRIPTIONS['unverified_role'])
+    # async def config_unverified_role(self, ctx, value: Option(discord.Role, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='verified_role', description=SETTINGS_DESCRIPTIONS['verified_role'])
+    # async def config_verified_role(self, ctx, value: Option(discord.Role, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='too_young_role', description=SETTINGS_DESCRIPTIONS['too_young_role'])
+    # async def config_too_young_role(self, ctx, value: Option(discord.Role, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='too_old_role', description=SETTINGS_DESCRIPTIONS['too_old_role'])
+    # async def config_too_old_role(self, ctx, value: Option(discord.Role, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='log_channel', description=SETTINGS_DESCRIPTIONS['log_channel'])
+    # async def config_log_channel(self, ctx, value: Option(discord.TextChannel, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='bump_channel', description=SETTINGS_DESCRIPTIONS['bump_channel'])
+    # async def config_bump_channel(self, ctx, value: Option(discord.TextChannel, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='bump_role', description=SETTINGS_DESCRIPTIONS['bump_role'])
+    # async def config_bump_role(self, ctx, value: Option(discord.Role, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='bot_role', description=SETTINGS_DESCRIPTIONS['bot_role'])
+    # async def config_bot_role(self, ctx, value: Option(discord.Role, required=False, default='')):
+    #     await self.simple_config_command(ctx, value)
+
+    # @config.command(name='age_role_list', description=SETTINGS_DESCRIPTIONS['age_role_list'])
+    # async def config_age_role_list(self, ctx, mode: Option(bool, required=True, options=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')]), value: Option(discord.Role, required=False, default='')):
+    #     await self.list_config_command(ctx, mode, value)
+
+    # @config.command(name='pronoun_role_list', description=SETTINGS_DESCRIPTIONS['pronoun_role_list'])
+    # async def config_pronoun_role_list(self, ctx, mode: Option(bool, required=True, options=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')]), value: Option(discord.Role, required=False, default='')):
+    #     await self.list_config_command(ctx, mode, value)
+
+    # @config.command(name='settings_roles', description=SETTINGS_DESCRIPTIONS['settings_roles'])
+    # async def config_settings_roles(self, ctx, mode: Option(bool, required=True, options=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')]), value: Option(discord.Role, required=False, default='')):
+    #     await self.list_config_command(ctx, mode, value)
+
+    
+
+
+    
+    
+
+    # for setting in DEFAULT_SETTINGS:
+
+    #     if SETTINGS_TYPES[setting] == list:
+    #         @config.command(name=setting, description=SETTINGS_DESCRIPTIONS[setting][:50])
+    #         async def config_command(self, ctx, mode: Option(str, required=False, default='', choices=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')]), value: Option(str, required=False, description=SETTINGS_DESCRIPTIONS[setting][:50])):
+    #             setting_name = ctx.command.qualified_name.split(' ')[1]
+    #             if mode == '':
+    #                 await ctx.respond(embed=self.get_config_info_embed(ctx.guild.id, setting_name))
+    #             elif not self.has_settings_permission(ctx.author):
+    #                 await ctx.respond(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+    #             else:
+    #                 await ctx.respond(embed=self.run_config_change_command(ctx, setting_name, mode, value))
+        
+    #     else:
+    #         @config.command(name=setting, description=SETTINGS_DESCRIPTIONS[setting][:50])
+    #         async def config_command(self, ctx, value: Option(str, required=False), description=SETTINGS_DESCRIPTIONS[setting][:50]):
+    #             setting_name = ctx.command.qualified_name.split(' ')[1]
+    #             if value == '':
+    #                 await ctx.respond(embed=self.get_config_info_embed(ctx.guild.id, setting_name))
+    #             elif not self.has_settings_permission(ctx.author):
+    #                 await ctx.respond(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+    #             else:
+    #                 await ctx.respond(embed=self.run_config_change_command(ctx, setting_name, value))
+
+    config_list_simple = [OptionChoice(name=SETTINGS_NAMES[setting], value=setting) for setting in DEFAULT_SETTINGS if SETTINGS_TYPES[setting] != list]
+
+    config_list_list = [OptionChoice(name=SETTINGS_NAMES[setting], value=setting) for setting in DEFAULT_SETTINGS if SETTINGS_TYPES[setting] == list]
+
+    @config.command(name='lists', description='Change list settings')
+    async def config_command(self, ctx, setting_name:Option(str, required=True, choices=config_list_list, description='The option to change'), mode: Option(str, required=False, default='', choices=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')], description='Add or remove items'), value: Option(str, required=False, description='Item to add/remove for the list')):
+        if mode == '':
+            await ctx.respond(embed=self.get_config_info_embed(ctx.guild.id, setting_name))
+        elif not self.has_settings_permission(ctx.author):
+            await ctx.respond(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+        else:
+            await ctx.respond(embed=self.run_config_change_command(ctx, setting_name, mode, value))
+
+    @config.command(name='values', description='Change settings')
+    async def config_command(self, ctx, setting_name:Option(str, required=True, choices=config_list_simple, description='The option to change'), value: Option(str, required=False, description='New setting value')):
+        if value == '':
+            await ctx.respond(embed=self.get_config_info_embed(ctx.guild.id, setting_name))
+        elif not self.has_settings_permission(ctx.author):
+            await ctx.respond(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+        else:
+            await ctx.respond(embed=self.run_config_change_command(ctx, setting_name, value, ''))
 
 
     @commands.command(name='config', description='Shows the current config')  #FIXME Parse value with quotes and stuff
@@ -186,27 +320,7 @@ class Settings(commands.Cog):
                     await ctx.reply(embed=self.run_config_change_command(ctx, setting_name, value, value_two), mention_author=False)
             except ValueError:
                 await ctx.reply(embed=discord.Embed(description=f'Setting name `{input_name}` not found!', color=16741747))
-                
-
-    # @config.command(name='list', description='Shows the current config')
-    # async def config_list(self, ctx):
-    #     await ctx.respond(embed=self.get_config_list_embed(0))
-
-    
-
-    async def config_command(self, ctx, param1, param2):
-        setting_name = ctx.command.qualified_name()
-        if param1 == '':
-            await ctx.reply(embed=self.get_config_info_embed(ctx.guild.id, setting_name), mention_author=False)
-        elif not self.has_settings_permission(ctx.author):
-            await ctx.reply(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
-        else:
-            await ctx.reply(embed=self.run_config_change_command(ctx, setting_name, param1, param2), mention_author=False)
-
-
-    # @config.command(name='prefix', description='Change the current prefix')
-    # async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='')):
-    #     await ctx.respond(embed=self.run_simple_config_change_command(ctx, 'prefix', prefix))
+            
 
     def has_settings_permission(self, member: discord.Member):
         if member.guild_permissions.administrator or member.guild_permissions.manage_guild:
@@ -320,7 +434,7 @@ class Settings(commands.Cog):
             elif raw_input.lower() in REMOVE_ALIASES:
                 is_add = False
             else:
-                return discord.Embed(description=f'Specify add or remove, not `{input_value}`!', color=16741747)
+                return discord.Embed(description=f'Specify add or remove, not `{raw_input}`!', color=16741747)
             setting_type = LIST_TYPES[setting_name] if setting_name in LIST_TYPES else int  #Default to int if no type is provided
             input_value: str = raw_input_two
 
