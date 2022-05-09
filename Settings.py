@@ -151,7 +151,16 @@ class Settings(commands.Cog):
         DBManager.ensure_table_exists('settings', name_type_dict)
         DBManager.update_columns('settings', name_type_dict)
 
-    config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])
+        config = SlashCommandGroup(name='config', description='Configuration commands', guild_ids=[866160840037236736])
+
+        config_list = []
+
+        for setting in DEFAULT_SETTINGS:
+
+            config_list.append(discord.SlashCommand(name=SETTINGS_NAMES[setting], description=SETTINGS_DESCRIPTIONS[setting], options=[Option(str, 'test'), Option(str, 'test2')], callback=self.config_command, parent=config))
+
+        # @config.command(name=setting, description=SETTINGS_DESCRIPTIONS[setting])
+
 
     @commands.command(name='config', description='Shows the current config')  #FIXME Parse value with quotes and stuff
     async def config_prefix_command(self, ctx, input_name='list', value='', value_two=''):
@@ -181,7 +190,19 @@ class Settings(commands.Cog):
 
     # @config.command(name='list', description='Shows the current config')
     # async def config_list(self, ctx):
-    #     await ctx.respond(embed=self.get_config_list_embed(ctx.guild.id, 0))
+    #     await ctx.respond(embed=self.get_config_list_embed(0))
+
+    
+
+    async def config_command(self, ctx, param1, param2):
+        setting_name = ctx.command.qualified_name()
+        if param1 == '':
+            await ctx.reply(embed=self.get_config_info_embed(ctx.guild.id, setting_name), mention_author=False)
+        elif not self.has_settings_permission(ctx.author):
+            await ctx.reply(embed=discord.Embed(description=f'You don\'t have permission for that!', color=16741747))
+        else:
+            await ctx.reply(embed=self.run_config_change_command(ctx, setting_name, param1, param2), mention_author=False)
+
 
     # @config.command(name='prefix', description='Change the current prefix')
     # async def config_prefix(self, ctx, prefix: Option(discord.enums.SlashCommandOptionType.string, description='The new prefix', required=False, default='')):
