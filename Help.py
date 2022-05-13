@@ -46,7 +46,8 @@ class Help(commands.Cog, name='Help'):
         self.ITEMS_PER_PAGE = 4
         self.num_cogs = 0
         for i in bot.cogs:
-            if len(bot.cogs.get(i).get_commands()) / 2 >= 4:
+            commands = [command for command in bot.cogs.get(i).get_commands() if isinstance(command, discord.ApplicationCommand)]
+            if len(commands) >= 4:
                 self.num_cogs += 1
         self.max_pages = math.floor(self.num_cogs / self.ITEMS_PER_PAGE)
 
@@ -62,7 +63,7 @@ class Help(commands.Cog, name='Help'):
         self.calculate_pages()
         self.page = page
 
-        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{fetch_setting(ctx.guild.id, "prefix")}help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
+        embed = discord.Embed(title=f'⋅•⋅⊰∙∘☽ {bot.user.name} Commands ☾∘∙⊱⋅•⋅', description=f'An exhaustive list of {bot.user.name}\'s commands.\ntype `{fetch_setting(ctx.guild.id, "prefix")} help <command>` or `/help <command>` for more information on a specific command.', color= 7528669)
         embed.set_thumbnail(url=bot.user.avatar.url)
 
         cog_items = set() #Contains each command within a cog, so that non-cog commands may be gathered later
@@ -70,11 +71,12 @@ class Help(commands.Cog, name='Help'):
         #For each grouping of commands
         index = 0
         for i in bot.cogs:
-            commands = bot.cogs.get(i).get_commands() #Gets the commands for that group
-            if (len(commands) / 2 >= 4): #Some groups have no commands (namely, the BumpReminder cog); therefore, no group should be displayed
+            commands = [command for command in bot.cogs.get(i).get_commands() if isinstance(command, discord.ApplicationCommand)] # Gets the slash commands for that group
+            if (len(commands) >= 4): #Some groups have no commands (namely, the BumpReminder cog); therefore, no group should be displayed
                 if math.floor(index / self.ITEMS_PER_PAGE) == self.page: #If current cog should be displayed on this page
-                    items = set() #A set of the command names, so that duplicates are removed (each name is added twice because both the normal commands and slash commands are accounted for)
+                    items = set() #A set of the command names
                     for j in commands:
+                        if not isinstance(j, discord.ApplicationCommand): continue  # Ignore the prefix commands
                         items.add(j.qualified_name)
                         cog_items.add(j.qualified_name)
                     display = ', '.join(sorted(items)) #Takes the set and puts them into a string that can be displayed

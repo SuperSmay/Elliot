@@ -33,6 +33,11 @@ DEFAULT_SETTINGS = {  #Required settings dict, provides a default value and serv
     'bump_channel' : None,
     'bump_role' : None,
     'bot_role' : None,
+    'announce_songs': False,
+    'shuffle': False,
+    'game_mode': False,
+    'auto_skip': False,
+
 }
 
 SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
@@ -52,6 +57,10 @@ SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
     'bump_channel' : 'Bump Reminder Channel',
     'bump_role' : 'Bump Reminder Role',
     'bot_role' : 'Server Bot Role',
+    'announce_songs': 'Announce Now Playing Song',
+    'shuffle': 'Shuffle',
+    'game_mode': 'Music Player Game Mode',
+    'auto_skip': 'Music Player Autoskip',
 }
 
 SETTINGS_ALIASES = {  #Optional settings dict for other usable names
@@ -70,6 +79,9 @@ SETTINGS_ALIASES = {  #Optional settings dict for other usable names
     'bump_channel' : ['bumpchannel'],
     'bump_role' : ['bumprole'],
     'bot_role' : ['botrole'],
+    'announce_songs': ['announcesongs'],
+    'game_mode': ['gamemode'],
+    'auto_skip': ['autoskip'],
 }
 
 SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of the setting
@@ -89,6 +101,10 @@ SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of th
     'bump_channel' : 'Channel to send bump reminders in',
     'bump_role' : 'Role to ping for bump reminders',
     'bot_role' : 'Role that you give bot users to excluse them from the member count',
+    'announce_songs': 'Announce what song is playing when a new song starts',
+    'shuffle': 'Shuffle the upcoming playlist (Queue is unaffected!)',
+    'game_mode': 'Turns on the guessing game for the music player',
+    'auto_skip': 'Skip songs after they have been guessed in game mode',
 }
 
 SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the setting value
@@ -108,6 +124,10 @@ SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the s
     'bump_channel' : int,
     'bump_role' : int,
     'bot_role' : int,
+    'announce_songs': bool,
+    'shuffle': bool,
+    'game_mode': bool,
+    'auto_skip': bool,
 }
 
 LIST_TYPES = {  #Required if SETTINGS_TYPE is list

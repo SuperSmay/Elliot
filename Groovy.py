@@ -6,8 +6,6 @@ import logging
 import pathlib
 import random
 import re
-import time
-from tokenize import maybe
 from typing import Literal
 import requests
 import threading
@@ -22,6 +20,7 @@ from discord.commands import Option, OptionChoice, SlashCommandGroup
 from youtubesearchpython import VideosSearch
 
 from globalVariables import bot
+from Settings import fetch_setting, set_setting
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
@@ -275,13 +274,9 @@ class iPod:
 
         self.game_scoreboard = {}
 
-        self.shuffle = False
         self.loading_running = False
         self.preloading_running = False
 
-        self.announce_songs = False
-        self.game_mode = False
-        self.auto_skip_game_mode = False
         self.can_guess = True
         self.give_up_pending = False
         self.seconds_until_give_up = 0
@@ -463,7 +458,8 @@ class iPod:
         Raises:
             `TriedPlayingWhenOutOfVC`
         '''
-        if self.shuffle: partially_loaded_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
+        shuffle = fetch_setting(ctx.guild.id, 'shuffle')
+        if shuffle: partially_loaded_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
         else: partially_loaded_playlist = self.partially_loaded_playlist
 
 
@@ -474,7 +470,7 @@ class iPod:
             self.play(ctx, new_song, False)
             return True
         elif len(self.partially_loaded_playlist) > 0 and self.is_valid_to_play(partially_loaded_playlist[0]):
-            if self.shuffle:
+            if shuffle:
                 shuffled_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
                 new_song = shuffled_playlist[0]
             else:
@@ -579,11 +575,11 @@ class iPod:
         Parameters:
             - `ctx`: discord.commands.Context; The context for the change    
         '''
-        if self.shuffle:
-            self.shuffle = False
+        if fetch_setting(ctx.guild.id, 'shuffle'):
+            set_setting(ctx.guild.id, 'shuffle', False)
             self.on_shuffle_disable(ctx)
         else:
-            self.shuffle = True
+            set_setting(ctx.guild.id, 'shuffle', True)
             self.reshuffle_list(self.partially_loaded_playlist)
             self.on_shuffle_enable(ctx)
         self.ensure_preload(ctx)
@@ -595,11 +591,11 @@ class iPod:
         Parameters:
             - `ctx`: discord.commands.Context; The context for the change    
         '''
-        if self.announce_songs:
-            self.announce_songs = False
+        if fetch_setting(self.last_context.guild.id, 'announce_songs'):
+            set_setting(ctx.guild.id, 'announce_songs', False)
             self.on_announce_disable(ctx)
         else:
-            self.announce_songs = True
+            set_setting(ctx.guild.id, 'announce_songs', True)
             self.on_announce_enable(ctx)
 
     def toggle_pause(self, ctx: commands.Context) -> None:
@@ -624,10 +620,10 @@ class iPod:
         Parameters:
             - `ctx`: discord.commands.Context; The context for the change    
         '''
-        if self.game_mode:  #Do button shenanigans when game mode is on
+        if fetch_setting(ctx.guild.id, 'game_mode'):  #Do button shenanigans when game mode is on
             bot.loop.create_task(self.respond_to_game_mode_disable(ctx))
         else:
-            self.game_mode = True
+            set_setting(ctx.guild.id, 'game_mode', True)
             self.on_game_mode_enable(ctx)
 
     def toggle_autoskip(self, ctx: commands.Context) -> None:
@@ -637,11 +633,11 @@ class iPod:
         Parameters:
             - `ctx`: discord.commands.Context; The context for the change    
         '''
-        if self.auto_skip_game_mode:  #Do button shenanigans when game mode is on
-            self.auto_skip_game_mode = False
+        if fetch_setting(self.last_context.guild.id, 'auto_skip'):  #Do button shenanigans when game mode is on
+            set_setting(ctx.guild.id, 'auto_skip', False)
             self.on_autoskip_disable(ctx)
         else:
-            self.auto_skip_game_mode = True
+            set_setting(ctx.guild.id, 'auto_skip', True)
             self.on_autoskip_enable(ctx)
 
     def submit_song_guess(self, ctx, input, loaded_song: LoadedYoutubeSong, member) -> None:
@@ -1278,7 +1274,7 @@ class iPod:
         new_list.sort(key=self.get_shuffle_number)
         return new_list
 
-    def get_formatted_playlist(self, list: list[LoadedYoutubeSong], page: int) -> list[str]:
+    def get_formatted_playlist(self, song_list: list[LoadedYoutubeSong], page: int) -> list[str]:
         '''
         Returns the list formatted for use in the playlist command, with an index and duration attached
 
@@ -1290,10 +1286,22 @@ class iPod:
             `list[str]`; The formatted list
         '''
         index_length = 0
-        for song in list[10*page: 10*(page + 1)]:
-            if len(str(list.index(song) + 1)) > index_length: index_length = len(str(list.index(song) + 1))
-        return [f'{self.get_consistent_length_index(list.index(song) + 1, index_length)} {f"{self.get_consistent_length_title(song.title)}  {self.parse_duration(song.duration)}" if not self.game_mode else "Song titles are hidden in game mode"}' for song in list[0 + (10*page): 10 + (10*page)]]
-            
+        for song in song_list[10*page: 10*(page + 1)]:
+            if len(str(song_list.index(song) + 1)) > index_length: index_length = len(str(song_list.index(song) + 1))
+        game_mode = fetch_setting(self.last_context.guild.id, 'game_mode')
+        complete_list = []
+        for song in song_list[0 + (10*page): 10 + (10*page)]:
+            song_line = ''
+            song_line += self.get_consistent_length_index(song_list.index(song) + 1, index_length)  # Do index part
+            song_line += ' '
+            if not game_mode: song_line += self.get_consistent_length_title(song.title)  # Title part
+            else: song_line += "Song titles are hidden in game mode"
+            song_line += '  '
+            song_line += self.parse_duration(song.duration)  # Length part
+            complete_list.append(song_line)
+        
+        return complete_list
+          
     def get_consistent_length_title(self, song_title: str):
         '''
         Returns the song title truncated to a defined length or extended with '----' to meet that same length
@@ -1404,7 +1412,7 @@ class iPod:
         '''
         items_to_preload = []
         items_to_preload.extend(self.partially_loaded_queue[0:3])
-        if self.shuffle: items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])
+        if fetch_setting(self.last_context.guild.id, 'shuffle'): items_to_preload.extend(self.sort_for_shuffle(self.partially_loaded_playlist)[0:3])
         else: items_to_preload.extend(self.partially_loaded_playlist[0:3])
         return items_to_preload
 
@@ -1498,7 +1506,7 @@ class iPod:
             self.receive_loaded_spotify_playlist(ctx, loaded_item, add_to_queue)
         self.ensure_preload(ctx)
 
-    def reshuffle_list(self, playlist:list[PartiallyLoadedSong]):
+    def reshuffle_list(self, playlist: list[PartiallyLoadedSong]):
         for song in playlist:
             song.random_value = random.randint(0, 10000)
     
@@ -1689,7 +1697,7 @@ class iPod:
         self.last_context = ctx
         try:
             await self.setup_vc(ctx)
-            if not self.game_mode:
+            if not fetch_setting(self.last_context.guild.id, 'game_mode'):
                 self.skip_backwards(ctx)
             else:
                 embed = discord.Embed(description='You cannot skip backwards in game mode!')
@@ -1853,7 +1861,7 @@ class iPod:
                 embed = discord.Embed(description=f'Play something first!')
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
-            elif self.game_mode:
+            elif fetch_setting(self.last_context.guild.id, 'game_mode'):
                 loaded_song = ctx.guild.voice_client.source.loaded_song
                 self.submit_song_guess(ctx, input, loaded_song, ctx.author)
             else:
@@ -1880,7 +1888,7 @@ class iPod:
                 embed = discord.Embed(description=f'Play something first!')
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
-            elif self.game_mode:
+            elif fetch_setting(self.last_context.guild.id, 'game_mode'):
                 loaded_song = ctx.guild.voice_client.source.loaded_song
                 self.start_giveup(ctx, loaded_song, ctx.author)
             else:
@@ -1914,7 +1922,7 @@ class iPod:
         logger.info('Scoreboard command receive')
         self.last_context = ctx
         try:
-            if self.game_mode:
+            if fetch_setting(self.last_context.guild.id, 'game_mode'):
                 embed = self.get_game_score_embed(self.game_scoreboard)
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
@@ -2067,8 +2075,8 @@ class iPod:
             embed = discord.Embed(description=f'The {song_list_name} is empty!')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
-        if self.shuffle and song_list_name == 'playlist':
-            embed = discord.Embed(description=f'Sorry, moving songs from the playlist does not work while shuffle is on.')
+        if fetch_setting(ctx.guild.id, 'shuffle') and song_list_name == 'playlist':
+            embed = discord.Embed(description=f'Sorry, moving songs from the playlist is disabled while shuffle is on.')  #FIXME
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
         else:
@@ -2149,7 +2157,7 @@ class iPod:
         '''
         try:
             ctx = await bot.get_context(interaction.message)
-            self.game_mode = False
+            set_setting(interaction.guild.id, 'game_mode', False)
             self.reset_scores()
             self.on_game_mode_disable(ctx)
             embed = discord.Embed(description='Game mode off!', color=3093080)
@@ -2182,7 +2190,7 @@ class iPod:
         def __init__(self, iPod, list_name, song_list, loaded_song):
             self.iPod = iPod
             self.list_name = list_name
-            self.song_list: list = song_list
+            self.song_list: song_list = song_list
             self.loaded_song = loaded_song
             super().__init__(style=discord.enums.ButtonStyle.danger, label='Remove')
 
@@ -2274,7 +2282,7 @@ class iPod:
         
     def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
         logger.info(f'Song play succeed {new_song}')
-        if self.announce_songs:
+        if fetch_setting(self.last_context.guild.id, 'announce_songs'):
             bot.loop.create_task(self.respond_to_nowplaying(ctx, True))
 
     def on_start_play_fail(self, ctx, new_song: LoadedYoutubeSong, exception):
@@ -2348,7 +2356,7 @@ class iPod:
         self.can_guess = False
         self.add_score_to_member(member)
         bot.loop.create_task(self.respond_to_correct_guess(ctx, loaded_song))
-        if self.auto_skip_game_mode:
+        if fetch_setting(self.last_context.guild.id, 'auto_skip'):
             self.skip(ctx, True)
 
     def on_incorrect_guess(self, ctx, input, loaded_song, member):
@@ -2361,7 +2369,7 @@ class iPod:
     
     def on_give_up(self, ctx):
         logger.info('Give up')
-        if self.auto_skip_game_mode:
+        if fetch_setting(self.last_context.guild.id, 'auto_skip'):
             self.skip(ctx, True)
 
     def on_disconnect(self, ctx, auto):
@@ -2438,7 +2446,8 @@ class iPod:
             embed = discord.Embed(description=f'Successfully added {item_loaded.total_count} songs to {"queue" if add_to_queue else "playlist"}')
             embed.color = 7528669
         else:
-            embed = discord.Embed(description=f'Successfully added {item_loaded if not self.game_mode else "`Song titles are hidden in game mode`"} to {"queue" if add_to_queue else "playlist"}')
+            game_mode = fetch_setting(self.last_context.guild.id, 'game_mode')
+            embed = discord.Embed(description=f'Successfully added {item_loaded if not game_mode else "`Song titles are hidden in game mode`"} to {"queue" if add_to_queue else "playlist"}')
             embed.color = 7528669
         await item_loaded.loading_context.send_message(ctx, embed)
         
@@ -2602,7 +2611,7 @@ class iPod:
     def compile_playlist(self, list: str, page=0) -> discord.Embed:
         if list != 'both' and list != 'playlist' and list != 'queue' and list != 'history': raise ValueError(list)
         #Set lists of strings
-        if self.shuffle:
+        if fetch_setting(self.last_context.guild.id, 'shuffle'):
             shuffled_playlist = self.sort_for_shuffle(self.partially_loaded_playlist)
             playlist_title_list = self.get_formatted_playlist(shuffled_playlist, page)
         else:
@@ -2655,13 +2664,13 @@ class iPod:
 
     def get_nowplaying_message_embed(self, ctx):
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
-        if not self.game_mode: embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
+        if not fetch_setting(self.last_context.guild.id, 'game_mode'): embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
         else: embed = discord.Embed(title='Now Playing ♫', description='`Song titles are hidden in game mode`', color=7528669)
         return embed
 
     def get_skip_message_embed(self, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
         if new_song != None:
-            if not self.game_mode: embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
+            if not fetch_setting(self.last_context.guild.id, 'game_mode'): embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
             else: embed = discord.Embed(title='Now Playing', description='`Song titles are hidden in game mode`', color=7528669)
             embed.set_footer(text=f'Skipped {old_song.title}')
         elif loading:
@@ -2678,7 +2687,7 @@ class iPod:
         if new_song == None: 
             embed = discord.Embed(description='Nothing in the play history', color=7528669)
         else: 
-            if not self.game_mode: embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
+            if not fetch_setting(self.last_context.guild.id, 'game_mode'): embed = discord.Embed(title='Now Playing', description=new_song.title, color=7528669)
             else: embed = discord.Embed(title='Now Playing', description='`Song titles are hidden in game mode`', color=7528669)
         return embed
 
@@ -2699,7 +2708,7 @@ class iPod:
             formatted_scoreboard = '```\n' + '\n'.join(scoreboard_list) + '\n```'
             embed = discord.Embed(title='Current Scoreboard', description=formatted_scoreboard, color=7528669)
             return embed
-        elif self.game_mode:
+        elif fetch_setting(self.last_context.guild.id, 'game_mode'):
             embed = discord.Embed(title='Current Scoreboard', description='Scoreboard is empty!', color=7528669)
             return embed
         else:
@@ -2812,13 +2821,8 @@ class Groovy(commands.Cog, name='Groovy'):
         player = self.get_player(ctx)
         await player.on_shuffle_command(ctx)
 
-    @commands.command(name='announcesongs', aliases=['an', 'as'], description='Toggle announcing when a song starts')
+    @commands.command(name='announcesongs', aliases=['an', 'as'], description='Toggle announcing when a song starts')  # Prefix only
     async def prefix_announce(self, ctx):
-        player = self.get_player(ctx)
-        await player.on_announce_command(ctx)
-
-    @commands.slash_command(name='announcesongs', description='Toggle announcing when a song starts')
-    async def slash_announce(self, ctx):
         player = self.get_player(ctx)
         await player.on_announce_command(ctx)
 
@@ -2863,13 +2867,8 @@ class Groovy(commands.Cog, name='Groovy'):
         player = self.get_player(ctx)
         await player.on_giveup_command(ctx)
 
-    @commands.command(name='autoskip', description='Toggle music player autoskip in game mode')
+    @commands.command(name='autoskip', description='Toggle music player autoskip in game mode')  # Prefix only
     async def prefix_autoskip(self, ctx):
-        player = self.get_player(ctx)
-        await player.on_autoskip_command(ctx)
-
-    @commands.slash_command(name='autoskip', description='Toggle music player autoskip in game mode')
-    async def slash_autoskip(self, ctx):
         player = self.get_player(ctx)
         await player.on_autoskip_command(ctx)
 
@@ -3001,8 +3000,3 @@ class Groovy(commands.Cog, name='Groovy'):
         await player.on_search_message_context(ctx, message)
         
     #endregion
-        
-
-
-
-
