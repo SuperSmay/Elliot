@@ -2871,7 +2871,7 @@ class Groovy(commands.Cog, name='Groovy'):
         if subcommand == 'info':
             await player.on_game_mode_info_command(ctx)
 
-    gamemode = SlashCommandGroup(name='gamemode', description='Music player game mode!', guild_ids=[866160840037236736])
+    gamemode = SlashCommandGroup(name='gamemode', description='Music player game mode!')
 
     @gamemode.command(name='info', description='Music player game mode!')
     async def slash_gamemode(self, ctx):
@@ -3018,6 +3018,7 @@ class Groovy(commands.Cog, name='Groovy'):
     index_to_end:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the last song to move', required=False, min_value=1, deafult=0),
     index_to_move_to:Option(discord.enums.SlashCommandOptionType.integer, description='Where to put the songs in the other list', required=False, default=1, min_value=1)):
         index_to_start -= 1
+        if index_to_end is None: index_to_end = 0  # Why is this needed??? I don't get it but if it works it works I guess
         index_to_end -= 1
         index_to_move_to -= 1
         player = self.get_player(ctx)
