@@ -155,7 +155,7 @@ class Settings(commands.Cog):
     config_list_complete = [OptionChoice(name=SETTINGS_NAMES[setting], value=setting) for setting in DEFAULT_SETTINGS]
     config_list_complete.append(OptionChoice(name='List All', value='list'))
 
-    @commands.slash_command(name='config', description='Show/change the current config', guild_ids=[866160840037236736])
+    @commands.slash_command(name='config', description='Show/change the current config')
     async def config_command(self, ctx, setting_name:Option(str, required=True, choices=config_list_complete, description='The option to change'), mode: Option(str, required=False, default='', choices=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')], description='Add or remove items from list settings'), value: Option(str, required=False, description='New setting value')):
         
         if setting_name == 'list':
