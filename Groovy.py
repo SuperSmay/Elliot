@@ -402,15 +402,15 @@ class iPod:
             return
         self.give_up_pending = True
         self.seconds_until_give_up = 10
-        message = await self.respond_to_give_up_attempt(ctx, member, False)
+        response = await self.respond_to_give_up_attempt(ctx, member, False)
         while self.seconds_until_give_up > 0:
             await asyncio.sleep(1)
             self.seconds_until_give_up -= 1
             if self.give_up_pending == False:
                 return
-            await self.respond_to_give_up_attempt(ctx, member, False, message)
+            await self.respond_to_give_up_attempt(ctx, member, False, response)
         self.give_up_pending = False
-        self.give_up(ctx, member, message)
+        self.give_up(ctx, member, response)
 
     #region "Buttons" - Interal Player Actions
     def play(self, ctx: commands.Context, song: LoadedYoutubeSong, return_song_to_list: bool) -> None:
@@ -1301,7 +1301,7 @@ class iPod:
             complete_list.append(song_line)
         
         return complete_list
-          
+
     def get_consistent_length_title(self, song_title: str):
         '''
         Returns the song title truncated to a defined length or extended with '----' to meet that same length
@@ -1700,9 +1700,8 @@ class iPod:
             if not fetch_setting(self.last_context.guild.id, 'game_mode'):
                 self.skip_backwards(ctx)
             else:
-                embed = discord.Embed(description='You cannot skip backwards in game mode!')
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
+                self.skip_backwards(ctx)
+                self.can_guess = False
         except UserNotInVC as e:
             embed = discord.Embed(description='You need to join a vc!')
             try: await ctx.reply(embed=embed, mention_author=False)
@@ -1807,7 +1806,7 @@ class iPod:
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
 
-    async def on_game_mode_command(self, ctx):
+    async def on_game_mode_toggle_command(self, ctx):
         '''
         Event to be called when the game mode command is ran
 
@@ -1856,7 +1855,7 @@ class iPod:
         '''
         logger.info('Guess command receive')
         self.last_context = ctx
-        try:  #FIXME When not in vc and when nothing playing
+        try:
             if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
                 embed = discord.Embed(description=f'Play something first!')
                 try: await ctx.reply(embed=embed, mention_author=False)
@@ -1865,7 +1864,7 @@ class iPod:
                 loaded_song = ctx.guild.voice_client.source.loaded_song
                 self.submit_song_guess(ctx, input, loaded_song, ctx.author)
             else:
-                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
         except Exception as e:
@@ -1892,7 +1891,7 @@ class iPod:
                 loaded_song = ctx.guild.voice_client.source.loaded_song
                 self.start_giveup(ctx, loaded_song, ctx.author)
             else:
-                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
         except Exception as e:
@@ -1927,7 +1926,7 @@ class iPod:
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
             else:
-                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
                 try: await ctx.reply(embed=embed, mention_author=False)
                 except: await ctx.respond(embed=embed)
         except Exception as e:
@@ -1935,8 +1934,20 @@ class iPod:
             embed = discord.Embed(description=f'An unknown error occured. {e}')
             try: await ctx.reply(embed=embed, mention_author=False)
             except: await ctx.respond(embed=embed)
-            
 
+    async def on_game_mode_info_command(self, ctx):
+        '''
+        Event to be called when the game mode info command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Game mode info command receive')
+        self.last_context = ctx
+        embed = discord.Embed(title='Music Player Game Mode!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point! (Works best with larger playlists in shuffle mode. Supports all kinds of song input, but **works most consistently with Spotify**)', color=7528669)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+            
     async def on_disconnect_command(self, ctx):
         '''
         Event to be called when the disconnect command is ran
@@ -2501,7 +2512,7 @@ class iPod:
         except: await ctx.respond(embed=embed)
 
     async def respond_to_game_mode_enable(self, ctx):
-        embed = discord.Embed(title='Game mode ON!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point! (Works best with larger playlists in shuffle mode. Supports all kinds of song input, but works most consistently with Spotify)', color=3137695)
+        embed = discord.Embed(title='Game mode ON!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point', color=3137695)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -2513,7 +2524,7 @@ class iPod:
         try: await ctx.reply(embed=embed, view=view, mention_author=False)
         except: await ctx.respond(embed=embed, view=view)
 
-    async def respond_to_give_up_attempt(self, ctx, member, already_pending=False, message=None):
+    async def respond_to_give_up_attempt(self, ctx, member, already_pending=False, response=None):
         if not self.can_guess:
             loaded_song = ctx.guild.voice_client.source.loaded_song
             view = discord.ui.View()
@@ -2525,16 +2536,18 @@ class iPod:
         else:
             view = discord.ui.View()
             embed = discord.Embed(description=f'Giving up in {self.seconds_until_give_up} seconds', color=16741747)
-        if message != None: 
-            await message.edit(embed=embed)
+        if response != None:
+            if isinstance(response, discord.Message): await response.edit(embed=embed)
+            elif isinstance(response, discord.Interaction): await response.edit_original_message(embed=embed)
         else:
             try: return await ctx.reply(embed=embed, view=view, mention_author=False)
             except: return await ctx.respond(embed=embed, view=view)
 
-    async def respond_to_give_up(self, ctx, member, loaded_song, message=None):
+    async def respond_to_give_up(self, ctx, member, loaded_song, response=None):
         embed = discord.Embed(title='You gave up!', description=f'No one knew the song! It was {loaded_song.title}', color=16741747)
-        if message != None: 
-            await message.edit(embed=embed, view=None)
+        if response != None: 
+            if isinstance(response, discord.Message): await response.edit(embed=embed, view=None)
+            elif isinstance(response, discord.Interaction): await response.edit_original_message(embed=embed, view=None)
         else:
             try: return await ctx.reply(embed=embed, mention_author=False)
             except: return await ctx.respond(embed=embed)
@@ -2712,7 +2725,7 @@ class iPod:
             embed = discord.Embed(title='Current Scoreboard', description='Scoreboard is empty!', color=7528669)
             return embed
         else:
-            embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode` for more info')
+            embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
             return embed
     #endregion
 
@@ -2837,14 +2850,38 @@ class Groovy(commands.Cog, name='Groovy'):
         await player.on_pause_command(ctx)
 
     @commands.command(name='gamemode', aliases=['gm'], description='Toggle music player game mode. Run for more info')
-    async def prefix_gamemode(self, ctx):
+    async def prefix_gamemode(self, ctx, subcommand: str = '', input: str = ''):
         player = self.get_player(ctx)
-        await player.on_game_mode_command(ctx)
 
-    @commands.slash_command(name='gamemode', description='Toggle music player game mode. Run for more info')
+        if subcommand == 'toggle' or subcommand == 't': subcommand = 'toggle'
+        elif subcommand == 'guess' or subcommand == 'g': subcommand = 'guess'
+        elif subcommand == 'giveup' or subcommand == 'gu': subcommand = 'give_up'
+        elif subcommand == 'scoreboard' or subcommand == 'sc': subcommand = 'scoreboard'
+        elif subcommand == 'info' or subcommand == 'i': subcommand = 'info'
+        else: subcommand = 'toggle'
+
+        if subcommand == 'toggle':
+            await player.on_game_mode_toggle_command(ctx)
+        if subcommand == 'guess':
+            await player.on_guess_command(ctx, input)
+        if subcommand == 'give_up':
+            await player.on_giveup_command(ctx)
+        if subcommand == 'scoreboard':
+            await player.on_music_scoreboard_command(ctx)
+        if subcommand == 'info':
+            await player.on_game_mode_info_command(ctx)
+
+    gamemode = SlashCommandGroup(name='gamemode', description='Music player game mode!', guild_ids=[866160840037236736])
+
+    @gamemode.command(name='info', description='Music player game mode!')
     async def slash_gamemode(self, ctx):
         player = self.get_player(ctx)
-        await player.on_game_mode_command(ctx)
+        await player.on_game_mode_info_command(ctx)
+
+    @gamemode.command(name='toggle', description='Toggle music player game mode. Run for more info')
+    async def slash_gamemode(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_game_mode_toggle_command(ctx)
 
     @commands.command(name='guess', aliases=['g', 'gu'], description='Guess the song name for music game mode!')
     async def prefix_guess(self, ctx, input: str = '', *more_words):
@@ -2852,7 +2889,7 @@ class Groovy(commands.Cog, name='Groovy'):
         player = self.get_player(ctx)
         await player.on_guess_command(ctx, input)
 
-    @commands.slash_command(name='guess', description='Guess the song name for music game mode!')
+    @gamemode.command(name='guess', description='Guess the song name for music game mode!')
     async def slash_guess(self, ctx, input: Option(discord.enums.SlashCommandOptionType.string, description='Input your guess!', required=True)):
         player = self.get_player(ctx)
         await player.on_guess_command(ctx, input)
@@ -2862,12 +2899,17 @@ class Groovy(commands.Cog, name='Groovy'):
         player = self.get_player(ctx)
         await player.on_giveup_command(ctx)
 
-    @commands.slash_command(name='giveup', description='Give up guessing the song name for music game mode!')
+    @gamemode.command(name='giveup', description='Give up guessing the song name for music game mode!')
     async def slash_giveup(self, ctx):
         player = self.get_player(ctx)
         await player.on_giveup_command(ctx)
 
-    @commands.command(name='autoskip', description='Toggle music player autoskip in game mode')  # Prefix only
+    @commands.command(name='autoskip', description='Toggle music player autoskip in game mode')
+    async def prefix_autoskip(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_autoskip_command(ctx)
+
+    @gamemode.command(name='autoskip', description='Toggle music player autoskip in game mode')
     async def prefix_autoskip(self, ctx):
         player = self.get_player(ctx)
         await player.on_autoskip_command(ctx)
@@ -2877,7 +2919,7 @@ class Groovy(commands.Cog, name='Groovy'):
         player = self.get_player(ctx)
         await player.on_music_scoreboard_command(ctx)
 
-    @commands.slash_command(name='musicscoreboard', description='Show the current scoreboard')
+    @gamemode.command(name='musicscoreboard', description='Show the current scoreboard')
     async def slash_musicscoreboard(self, ctx):
         player = self.get_player(ctx)
         await player.on_music_scoreboard_command(ctx)
