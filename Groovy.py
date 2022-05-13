@@ -725,13 +725,13 @@ class iPod:
         for youtube_url in parsed_input['youtube_links']:
             self.receive_youtube_url(ctx, youtube_url, add_to_queue)
         for youtube_playlist_url in parsed_input['youtube_playlist_links']:
-            self.receive_youtube_playlist_url(ctx, youtube_playlist_url, add_to_queue)
+            self.receive_youtube_playlist_url(ctx, youtube_playlist_url, False)
         for spotify_track_url in parsed_input['spotify_track_links']:
             self.receive_spotify_track_url(ctx, spotify_track_url, add_to_queue)
         for spotify_album_url in parsed_input['spotify_album_links']:
-            self.receive_spotify_album_url(ctx, spotify_album_url, add_to_queue)
+            self.receive_spotify_album_url(ctx, spotify_album_url, False)
         for spotify_playlist_url in parsed_input['spotify_playlist_links']:
-            self.receive_spotify_playlist_url(ctx, spotify_playlist_url, add_to_queue)
+            self.receive_spotify_playlist_url(ctx, spotify_playlist_url, False)
         for search_term in parsed_input['search_terms']:
             self.receive_search_term(ctx, search_term, add_to_queue)
 
