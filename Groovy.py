@@ -18,7 +18,7 @@ import googleapiclient.discovery
 import spotipy
 import youtube_dl
 from discord.ext import commands, tasks
-from discord.commands import Option, OptionChoice
+from discord.commands import Option, OptionChoice, SlashCommandGroup
 from youtubesearchpython import VideosSearch
 
 from globalVariables import bot
@@ -1995,17 +1995,30 @@ class iPod:
         self.last_context = ctx
         await self.respond_to_clear(ctx, list_name)
 
-    async def on_remove_command(self, ctx, list_name: Literal["playlist", "queue"], index: int):
+    async def on_remove_command(self, ctx, mode: Literal["song", "all"], list_name: Literal["playlist", "queue"], index: int):
         '''
         Event to be called when the remove command is ran
 
         Parameters:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
+            - `mode`: str; The remove mode to use
             - `list_name`: str; The list name input string
             - `index`: int; The index to remove
         '''
         logger.info('Remove command receive')
         self.last_context = ctx
+
+        if mode == 'all':
+            await self.on_clear_command(ctx, list_name)
+            return
+        elif mode == 'song':
+            pass
+        else:
+            embed = discord.Embed(description=f'Mode name must be `song` or `all`, not `{mode}`!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+            return
+
         if list_name == 'playlist': song_list = self.partially_loaded_playlist
         elif list_name == 'queue': song_list = self.partially_loaded_queue
         else: 
@@ -2910,27 +2923,43 @@ class Groovy(commands.Cog, name='Groovy'):
         if list != 'both' and list != 'playlist' and list != 'queue': list = 'both'
         await player.on_clear_command(ctx, list)
 
-    @commands.slash_command(name="clear", description="Clear the playlist/queue")
-    async def slash_clear(self, ctx, 
-    list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
-        player = self.get_player(ctx)
-        await player.on_clear_command(ctx, list)
+    # @commands.slash_command(name="clear", description="Clear the playlist/queue")
+    # async def slash_clear(self, ctx, 
+    # list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
+    #     player = self.get_player(ctx)
+    #     await player.on_clear_command(ctx, list)
 
-    @commands.command(name="remove", aliases=['r', 'rm'], description="Clear the playlist/queue")
-    async def prefix_remove(self, ctx, list='', index='1'):
+    @commands.command(name="remove", aliases=['r', 'rm'], description="Remove item from playlist/queue")
+    async def prefix_remove(self, ctx, mode='', list='', index='1'):
         player = self.get_player(ctx)
+
+        if mode.lower().startswith('s'): mode = 'song'
+        elif mode.lower().startswith('c'): mode = 'all'
+        elif mode.lower().startswith('a'): mode = 'all'
+
         if list.lower().startswith('p'): list = 'playlist'
-        if list.lower().startswith('q'): list = 'queue'
+        elif list.lower().startswith('q'): list = 'queue'
+        elif mode == 'all': list = 'both'  # If mode is clear then 'both' is an acceptable list
+
         try: index = max(0, int(index)-1)
         except ValueError: index = 0
-        await player.on_remove_command(ctx, list, index)
 
-    @commands.slash_command(name="remove", description="Clear the playlist/queue")
+        await player.on_remove_command(ctx, mode, list, index)
+
+    remove = SlashCommandGroup(name='remove', description="Remove items from playlist/queue", guild_ids=[866160840037236736])
+
+    @remove.command(name="song", description="Remove a single song from playlist/queue")
     async def slash_remove(self, ctx, 
     list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Remove song from playlist', 'playlist'), OptionChoice('Remove song from queue', 'queue')], required=True), 
     index:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the song to remove', required=True, min_value=1)):
         player = self.get_player(ctx)
-        await player.on_remove_command(ctx, list, index)
+        await player.on_remove_command(ctx, 'song', list, index)
+
+    @remove.command(name="all", description="Clear the playlist/queue")
+    async def slash_clear(self, ctx, 
+    list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
+        player = self.get_player(ctx)
+        await player.on_clear_command(ctx, list)
 
     @commands.command(name="move", aliases=['m', 'mv'], description="Move a song between playlist and queue")
     async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song='0', index_to_move_to='1'):
