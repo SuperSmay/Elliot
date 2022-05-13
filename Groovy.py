@@ -3,6 +3,7 @@ import concurrent.futures
 import datetime
 from difflib import SequenceMatcher
 import logging
+import math
 import pathlib
 import random
 import re
@@ -21,6 +22,7 @@ from youtubesearchpython import VideosSearch
 
 from globalVariables import bot
 from Settings import fetch_setting, set_setting
+import String_Progress_Bar
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
@@ -281,6 +283,7 @@ class iPod:
         self.give_up_pending = False
         self.seconds_until_give_up = 0
 
+        self.time_of_last_song_start = datetime.datetime.now(datetime.timezone.utc)
         self.last_search = None
         self.last_context = None
         self.time_of_last_member = datetime.datetime.now(datetime.timezone.utc)
@@ -1375,6 +1378,16 @@ class iPod:
 
         return new_time
 
+    def get_progress_bar(self, progress_seconds, total_seconds):
+        bar = String_Progress_Bar.StringBar(length=30, percent=min(100*progress_seconds/total_seconds, 100))
+        bar.edge_back = '▻'
+        bar.edge_front = '◅'
+        bar.symbol = '●'
+        bar.empty_symbol = '○'
+        return f'{self.parse_duration(progress_seconds)} {bar.bar} {self.parse_duration(total_seconds)}'
+
+        #return f'{self.parse_duration(progress_seconds)}/{self.parse_duration(total_seconds)}'
+
     def is_valid_to_play(self, partially_loaded_song: PartiallyLoadedSong) -> bool:
         '''
         Checks if the given `partially_loaded_item` is playable
@@ -2293,6 +2306,7 @@ class iPod:
         
     def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
         logger.info(f'Song play succeed {new_song}')
+        self.time_of_last_song_start = datetime.datetime.now(datetime.timezone.utc)
         if fetch_setting(self.last_context.guild.id, 'announce_songs'):
             bot.loop.create_task(self.respond_to_nowplaying(ctx, True))
 
@@ -2554,6 +2568,7 @@ class iPod:
 
     async def respond_to_correct_guess(self, ctx, loaded_song: LoadedYoutubeSong):
         embed = discord.Embed(title='Correct!', description=f'You guessed {loaded_song.title} correctly! Good job!', color=3137695)
+        embed.set_footer(text=f'You guessed the song in {round((datetime.datetime.now(datetime.timezone.utc) - self.time_of_last_song_start).total_seconds(), 2)} seconds!')
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
@@ -2677,8 +2692,13 @@ class iPod:
 
     def get_nowplaying_message_embed(self, ctx):
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
-        if not fetch_setting(self.last_context.guild.id, 'game_mode'): embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
-        else: embed = discord.Embed(title='Now Playing ♫', description='`Song titles are hidden in game mode`', color=7528669)
+        if not fetch_setting(self.last_context.guild.id, 'game_mode'): 
+            embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
+            progress_time = round((datetime.datetime.now(datetime.timezone.utc) - self.time_of_last_song_start).total_seconds())
+            total_time = ctx.guild.voice_client.source.loaded_song.duration
+            embed.add_field(name='Song Progress', value=self.get_progress_bar(progress_time, total_time))
+        else: 
+            embed = discord.Embed(title='Now Playing ♫', description='`Song titles are hidden in game mode`\nNice try!!', color=7528669)
         return embed
 
     def get_skip_message_embed(self, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
