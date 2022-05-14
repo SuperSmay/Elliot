@@ -3,7 +3,7 @@ import concurrent.futures
 import datetime
 from difflib import SequenceMatcher
 import logging
-import math
+import lyricsgenius
 import pathlib
 import random
 import re
@@ -75,6 +75,9 @@ client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=c
 sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
 
 yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
+
+genius_token = (open(pathlib.Path('genius-token'), 'r')).read()
+genius = lyricsgenius.Genius(genius_token, verbose=False, remove_section_headers=True)
 
 music_players = {}
 #endregion
@@ -388,6 +391,17 @@ class iPod:
         items = self.search_youtube(search_term, 10)
         self.last_search = items
         self.on_search_complete(ctx, items)
+
+    def run_lyric_search_in_thread(self, ctx, song_title, song_artist):
+        '''
+        Calls functions to properly handle a lyric search command
+
+        Parameters:
+            - `ctx`: discord.commands.Context; The context of the command
+            - `search_term`: str; The input
+        '''
+        title, lyrics, url = self.fetch_lyrics(song_title, song_artist)
+        self.on_lyric_search_complete(ctx, title, lyrics, url)
 
     async def respond_to_give_up_loop(self, ctx, member):
         '''
@@ -1503,6 +1517,35 @@ class iPod:
     
     def get_score_for_member(self, game_member: GameMember):
         return game_member.score
+
+    def fetch_lyrics(self, song_title, song_artist):
+        song = genius.search_song(title=song_title, artist=song_artist)
+        if song is not None:
+            url = song.url
+            song_lyrics = genius.lyrics(song_url=url)
+
+            song_lyrics_list = song_lyrics.split('\n')  # Remove song title thing from the beginning
+            song_lyrics = '\n'.join(song_lyrics_list[1:])
+
+            if len(song_lyrics) > 4000:  # Cut off lyrics that are too long
+                song_lyrics = song_lyrics[:4000]
+                song_lyrics += "\n..."
+            else:
+                song_lyrics_list = song_lyrics.split('\n')
+                last_line = ''
+                for letter in song_lyrics_list[-1]:  # Cut off (numbers)Embed garbage
+                    try: 
+                        int(letter)  # If a number is hit then stop adding letters
+                        break
+                    except ValueError: 
+                        last_line += letter
+
+                song_lyrics_list[-1] = last_line.removesuffix('Embed')  # Just in case there are no numbers, remove this anyway
+                song_lyrics = '\n'.join(song_lyrics_list)
+
+            return song.title, song_lyrics, url
+        else:
+            return None, 'No lyrics found!', None
     #endregion
 
     #region Data Management
@@ -2108,6 +2151,30 @@ class iPod:
             self.ensure_preload(ctx)
             await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, moved_songs)
 
+    async def on_lyrics_command(self, ctx):
+        '''
+        Event to be called when the lyrics command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Lyrics command receive')
+        self.last_context = ctx
+        if ctx.guild.voice_client is None or ctx.guild.voice_client.source is None: 
+            embed = discord.Embed(description=f'Play something first!')
+            try: await ctx.reply(embed=embed, mention_author=False)
+            except: await ctx.respond(embed=embed)
+            return
+
+        loaded_song = ctx.guild.voice_client.source.loaded_song
+        if loaded_song.title_from_spotify != None: title = self.get_clean_title_spotify(loaded_song.title_from_spotify)
+        else: title = self.get_clean_title_youtube(loaded_song.title)
+        if loaded_song.artist_from_spotify != None: artist = loaded_song.artist_from_spotify
+        else: artist = ''
+
+        thread = threading.Thread(target=self.run_lyric_search_in_thread, args=(ctx, title, artist))
+        thread.start()
+
     async def on_play_message_context(self, ctx, message, add_to_queue: bool):
         '''
         Event to be called when the play context command is ran
@@ -2405,6 +2472,10 @@ class iPod:
         logger.info('Search complete')
         bot.loop.create_task(self.respond_to_search(ctx, items))
 
+    def on_lyric_search_complete(self, ctx, title, lyrics, url):
+        logger.info('Lyric search complete')
+        bot.loop.create_task(self.respond_to_lyric_search(ctx, title, lyrics, url))
+
     def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool, silent = False):
         logger.info('Song skipped')
         if not silent:
@@ -2595,6 +2666,12 @@ class iPod:
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
 
+    async def respond_to_lyric_search(self, ctx, title, lyrics, url):
+        source_text = f'Lyrics from [Genuis]({url})' if url is not None else ''
+        embed = discord.Embed(title=f'Lyrics for {title}', description=f'{lyrics}\n\n{source_text}', color=7528669)
+        try: await ctx.reply(embed=embed, mention_author=False)
+        except: await ctx.respond(embed=embed)
+
     async def respond_to_nowplaying(self, ctx, announce = False):
         embed = self.get_nowplaying_message_embed(ctx)
         if announce:
@@ -2633,6 +2710,8 @@ class iPod:
         embed = self.get_move_embed(song_list_name, song_list, other_list_name, other_list, moved_songs)
         try: await ctx.reply(embed=embed, mention_author=False)
         except: await ctx.respond(embed=embed)
+
+    
     #endregion
 
     #region Message contructors
@@ -3043,6 +3122,17 @@ class Groovy(commands.Cog, name='Groovy'):
         index_to_move_to -= 1
         player = self.get_player(ctx)
         await player.on_move_command(ctx, list, index_to_start, index_to_end, index_to_move_to)
+
+    @commands.command(name='lyrics', aliases=['ly', 'lyr'], description='Get lyrics on the current song')
+    async def prefix_lyrics(self, ctx):
+        player = self.get_player(ctx)
+        await player.on_lyrics_command(ctx)
+
+    @commands.slash_command(name='lyrics', description='Get lyrics on the current song')
+    async def slash_lyrics(self, ctx):
+        await ctx.defer()
+        player = self.get_player(ctx)
+        await player.on_lyrics_command(ctx)
 
     @commands.message_command(name='play')
     async def context_play(self, ctx, message: discord.Message):

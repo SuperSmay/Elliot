@@ -21,7 +21,7 @@ class Help(commands.Cog, name='Help'):
     async def help_slash(self, ctx, command:Option(str, description='Which command to provide details for or the page number to display', required=False)):
         args = []
         if command != None: args += command.split(' ')
-        await ctx.respond(embed=self.run_and_get_response(args))
+        await ctx.respond(embed=self.run_and_get_response(args, ctx))
 
     def run_and_get_response(self, args, ctx):  #Replys with the embed or an error
         try:

@@ -19,5 +19,6 @@ InteractionCountDict
 youtube-api-key
 spotify-secret
 spotify-id
+genius-token
 output*
 Elliot.sqlite

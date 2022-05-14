@@ -14,7 +14,7 @@ def prefix(bot, message):
 
 bot = commands.Bot(command_prefix=prefix, description="Robo Barista for The Gayming Café!", intents=intents, help_command=None, case_insensitive=True, strip_after_prefix=True)
 
-bot_version = '0.5.3'
+bot_version = '0.5.4'
 
 last_start_time = datetime.datetime.utcnow()
 
