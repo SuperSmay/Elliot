@@ -400,8 +400,13 @@ class iPod:
             - `ctx`: discord.commands.Context; The context of the command
             - `search_term`: str; The input
         '''
-        title, lyrics, url = self.fetch_lyrics(song_title, song_artist)
+        if not fetch_setting(ctx.guild.id, 'game_mode'):
+            title, lyrics, url = self.fetch_lyrics(song_title, song_artist)
+        else:
+            
+            title, lyrics, url = 'Hidden', '`Lyrics are hidden in game mode`', 'https://genius.com'
         self.on_lyric_search_complete(ctx, title, lyrics, url)
+        
 
     async def respond_to_give_up_loop(self, ctx, member):
         '''
@@ -1637,7 +1642,62 @@ class iPod:
 
     #region Command Events
 
+    def groovy_decorator(func, *args, **kwargs):
+        '''
+        Decorator to be used on every command function to ensure consistent error catching and general functionality
 
+        Parameters:
+            - `*args`: Any;
+            - `**kwargs`: Any;
+        
+        Returns:
+            Wrapped function
+        '''
+
+        async def inner(self, input_ctx, *args, **kwargs):
+
+            try:
+                if isinstance(input_ctx, commands.Context) or isinstance(input_ctx, discord.commands.ApplicationContext):  # Don't save interactions
+                    self.last_context = input_ctx
+                ctx = self.last_context  # Use last valid context for vc setup
+
+                try:
+                    await self.setup_vc(ctx)
+                except UserNotInVC as e:
+                    embed = discord.Embed(description='You need to join a vc!')
+                    await self.send_response(ctx, embed)
+                    return
+                except MusicAlreadyPlayingInGuild as e:
+                    embed = discord.Embed(description='Music is already playing somewhere else in this server!')
+                    await self.send_response(ctx, embed)
+                    return
+                except CannotConnectToVC as e:
+                    embed = discord.Embed(description='I don\'t have access to that voice channel!')
+                    await self.send_response(ctx, embed)
+                    return
+                except CannotSpeakInVC as e:
+                    embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
+                    await self.send_response(ctx, embed)
+                    return
+                except asyncio.TimeoutError as e:
+                    embed = discord.Embed(description='Connection timed out.')
+                    embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
+                    await self.send_response(ctx, embed)
+                    return
+
+                result = await func(self, input_ctx, *args, **kwargs)  # Make sure to pass input context through no matter what
+                return result
+
+            except Exception as e:
+                logger.error(f'{func.__name__} failed', exc_info=e)
+                embed = discord.Embed(description=f'An unknown error occured.\n```{e}```')
+                await self.send_response(input_ctx, embed)
+            
+            
+
+        return inner
+
+    @groovy_decorator
     async def on_play_command(self, ctx, input: str, add_to_queue: bool):
         '''
         Event to be called when the play command is ran
@@ -1648,42 +1708,14 @@ class iPod:
             - `add_to_queue`: bool; Whether to add the input to the queue or not
         '''
         logger.info(f'Play command received')
-        self.last_context = ctx
-        try:
-            await self.setup_vc(ctx)
-            if len(input ) > 0: self.process_input(ctx, input, add_to_queue)
-            else: 
-                try: self.toggle_pause(ctx)
-                except NotPlaying: 
-                    self.play_next_item(ctx)
-                    await self.on_nowplaying_command(ctx)
-        except UserNotInVC as e:
-            embed = discord.Embed(description='You need to join a vc!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except MusicAlreadyPlayingInGuild as e:
-            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotConnectToVC as e:
-            embed = discord.Embed(description='I don\'t have access to that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotSpeakInVC as e:
-            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except asyncio.TimeoutError as e:
-            embed = discord.Embed(description='Connection timed out.')
-            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Play command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        if len(input ) > 0: self.process_input(ctx, input, add_to_queue)
+        else: 
+            try: self.toggle_pause(ctx)
+            except NotPlaying: 
+                self.play_next_item(ctx)
+                await self.on_nowplaying_command(ctx)
 
+    @groovy_decorator
     async def on_playlist_command(self, ctx, list: Literal["playlist", "queue", "both", "history"], page: int):
         '''
         Event to be called when the playlist command is ran
@@ -1694,15 +1726,9 @@ class iPod:
             - `page`: int; Page input
         '''
         logger.info('Playlist command receive')
-        self.last_context = ctx
-        try:
-            await self.respond_to_playlist_command(ctx, list, page)
-        except Exception as e:
-            logger.error(f'Playlist command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        await self.respond_to_playlist_command(ctx, list, page)
 
+    @groovy_decorator
     async def on_skip_command(self, ctx):
         '''
         Event to be called when the skip command is ran
@@ -1711,37 +1737,9 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Skip command receive')
-        self.last_context = ctx
-        try:
-            await self.setup_vc(ctx)
-            self.skip(ctx)
-        except UserNotInVC as e:
-            embed = discord.Embed(description='You need to join a vc!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except MusicAlreadyPlayingInGuild as e:
-            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotConnectToVC as e:
-            embed = discord.Embed(description='I don\'t have access to that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotSpeakInVC as e:
-            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except asyncio.TimeoutError as e:
-            embed = discord.Embed(description='Connection timed out.')
-            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Skip command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        self.skip(ctx)
 
+    @groovy_decorator
     async def on_skip_backwards_command(self, ctx):
         '''
         Event to be called when the skip backwards command is ran
@@ -1750,41 +1748,13 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Skip back command receive')
-        self.last_context = ctx
-        try:
-            await self.setup_vc(ctx)
-            if not fetch_setting(self.last_context.guild.id, 'game_mode'):
-                self.skip_backwards(ctx)
-            else:
-                self.skip_backwards(ctx)
-                self.can_guess = False
-        except UserNotInVC as e:
-            embed = discord.Embed(description='You need to join a vc!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except MusicAlreadyPlayingInGuild as e:
-            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotConnectToVC as e:
-            embed = discord.Embed(description='I don\'t have access to that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotSpeakInVC as e:
-            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except asyncio.TimeoutError as e:
-            embed = discord.Embed(description='Connection timed out.')
-            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Skip back command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-
+        if not fetch_setting(self.last_context.guild.id, 'game_mode'):
+            self.skip_backwards(ctx)
+        else:
+            self.skip_backwards(ctx)
+            self.can_guess = False
+        
+    @groovy_decorator
     async def on_shuffle_command(self, ctx):
         '''
         Event to be called when the shuffle command is ran
@@ -1793,15 +1763,9 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Shuffle command receive')
-        self.last_context = ctx
-        try:
-            self.toggle_shuffle(ctx)
-        except Exception as e:
-            logger.error(f'Shuffle command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        self.toggle_shuffle(ctx)
 
+    @groovy_decorator
     async def on_pause_command(self, ctx):
         '''
         Event to be called when the pause command is ran
@@ -1811,40 +1775,9 @@ class iPod:
         '''
         logger.info('Pause command receive')
         self.last_context = ctx
-        try:
-            await self.setup_vc(ctx)
-            self.toggle_pause(ctx)
-        except NotPlaying as e:
-            embed = discord.Embed(description='Play something first!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except UserNotInVC as e:
-            embed = discord.Embed(description='You need to join a vc!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except MusicAlreadyPlayingInGuild as e:
-            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotConnectToVC as e:
-            embed = discord.Embed(description='I don\'t have access to that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotSpeakInVC as e:
-            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except asyncio.TimeoutError as e:
-            embed = discord.Embed(description='Connection timed out.')
-            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Pause command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        self.toggle_pause(ctx)
 
+    @groovy_decorator
     async def on_announce_command(self, ctx):
         '''
         Event to be called when the toggle annoucement command is ran
@@ -1853,15 +1786,9 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Shuffle command receive')
-        self.last_context = ctx
-        try:
-            self.toggle_announce(ctx)
-        except Exception as e:
-            logger.error(f'Annouce command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        self.toggle_announce(ctx)
 
+    @groovy_decorator
     async def on_game_mode_toggle_command(self, ctx):
         '''
         Event to be called when the game mode command is ran
@@ -1870,37 +1797,9 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Game mode command receive')
-        self.last_context = ctx
-        try:
-            await self.setup_vc(ctx)
-            self.toggle_game_mode(ctx)
-        except UserNotInVC as e:
-            embed = discord.Embed(description='You need to join a vc!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except MusicAlreadyPlayingInGuild as e:
-            embed = discord.Embed(description='Music is already playing somewhere else in this server!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotConnectToVC as e:
-            embed = discord.Embed(description='I don\'t have access to that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except CannotSpeakInVC as e:
-            embed = discord.Embed(description='I don\'t have speak permissions in that voice channel!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except asyncio.TimeoutError as e:
-            embed = discord.Embed(description='Connection timed out.')
-            embed.set_footer(text='Either the bot is running very slow, or Discord is having trouble.')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Game mode command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-
+        self.toggle_game_mode(ctx)
+        
+    @groovy_decorator
     async def on_guess_command(self, ctx, input: str):
         '''
         Event to be called when the guess command is ran
@@ -1910,25 +1809,17 @@ class iPod:
             - `input`: str; The input string
         '''
         logger.info('Guess command receive')
-        self.last_context = ctx
-        try:
-            if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
-                embed = discord.Embed(description=f'Play something first!')
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
-            elif fetch_setting(self.last_context.guild.id, 'game_mode'):
-                loaded_song = ctx.guild.voice_client.source.loaded_song
-                self.submit_song_guess(ctx, input, loaded_song, ctx.author)
-            else:
-                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Guess command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
+            embed = discord.Embed(description=f'Play something first!')
+            await self.send_response(ctx, embed)
+        elif fetch_setting(self.last_context.guild.id, 'game_mode'):
+            loaded_song = ctx.guild.voice_client.source.loaded_song
+            self.submit_song_guess(ctx, input, loaded_song, ctx.author)
+        else:
+            embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
+            await self.send_response(ctx, embed)
 
+    @groovy_decorator
     async def on_giveup_command(self, ctx):
         '''
         Event to be called when the give up command is ran
@@ -1937,25 +1828,17 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Give up command receive')
-        self.last_context = ctx
-        try:
-            if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
-                embed = discord.Embed(description=f'Play something first!')
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
-            elif fetch_setting(self.last_context.guild.id, 'game_mode'):
-                loaded_song = ctx.guild.voice_client.source.loaded_song
-                self.start_giveup(ctx, loaded_song, ctx.author)
-            else:
-                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Give up command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        if ctx.guild.voice_client == None or ctx.guild.voice_client.source == None:
+            embed = discord.Embed(description=f'Play something first!')
+            await self.send_response(ctx, embed)
+        elif fetch_setting(self.last_context.guild.id, 'game_mode'):
+            loaded_song = ctx.guild.voice_client.source.loaded_song
+            self.start_giveup(ctx, loaded_song, ctx.author)
+        else:
+            embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
+            await self.send_response(ctx, embed)
 
+    @groovy_decorator
     async def on_autoskip_command(self, ctx):
         '''
         Event to be called when the game mode command is ran
@@ -1963,10 +1846,10 @@ class iPod:
         Parameters:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
-        logger.info('Game mode command receive')
-        self.last_context = ctx
+        logger.info('Autoskip command receive')
         self.toggle_autoskip(ctx)
 
+    @groovy_decorator
     async def on_music_scoreboard_command(self, ctx):
         '''
         Event to be called when the scoreboard command is ran
@@ -1975,22 +1858,14 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Scoreboard command receive')
-        self.last_context = ctx
-        try:
-            if fetch_setting(self.last_context.guild.id, 'game_mode'):
-                embed = self.get_game_score_embed(self.game_scoreboard)
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
-            else:
-                embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
-                try: await ctx.reply(embed=embed, mention_author=False)
-                except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Game mode command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        if fetch_setting(self.last_context.guild.id, 'game_mode'):
+            embed = self.get_game_score_embed(self.game_scoreboard)
+            await self.send_response(ctx, embed)
+        else:
+            embed = discord.Embed(description=f'You need to be in game mode for this. Type `/gamemode info` for more info')
+            await self.send_response(ctx, embed)
 
+    @groovy_decorator
     async def on_game_mode_info_command(self, ctx):
         '''
         Event to be called when the game mode info command is ran
@@ -1999,11 +1874,10 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Game mode info command receive')
-        self.last_context = ctx
         embed = discord.Embed(title='Music Player Game Mode!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point! (Works best with larger playlists in shuffle mode. Supports all kinds of song input, but **works most consistently with Spotify**)', color=7528669)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
-            
+        await self.send_response(ctx, embed)
+
+    @groovy_decorator        
     async def on_disconnect_command(self, ctx):
         '''
         Event to be called when the disconnect command is ran
@@ -2012,15 +1886,9 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Disconnect command receive')
-        self.last_context = ctx
-        try:
-            self.disconnect(ctx)
-        except Exception as e:
-            logger.error(f'Disconnect command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+        self.disconnect(ctx)
 
+    @groovy_decorator
     async def on_search_command(self, ctx, search_term):
         '''
         Event to be called when the search command is ran
@@ -2030,10 +1898,10 @@ class iPod:
             - `search_term`: str; The search input string
         '''
         logger.info('Search command receive')
-        self.last_context = ctx
         thread = threading.Thread(target=self.run_youtube_multi_search_in_thread, args=(ctx, search_term))
         thread.start()
 
+    @groovy_decorator
     async def on_nowplaying_command(self, ctx):
         '''
         Event to be called when the now playing command is ran
@@ -2042,22 +1910,15 @@ class iPod:
             - `ctx`: discord.commands.ApplicationContext; The context of the command
         '''
         logger.info('Now playing command receive')
-        self.last_context = ctx
         try:
             embed = self.get_nowplaying_message_embed(ctx)
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
         except NotPlaying as e:
             logger.info(f'Nothing playing for now playing command')
             embed = discord.Embed(description='Play something first!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
-        except Exception as e:
-            logger.error(f'Now playing command failed', exc_info=e)
-            embed = discord.Embed(description=f'An unknown error occured. {e}')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
     
+    @groovy_decorator
     async def on_clear_command(self, ctx, list_name: Literal["playlist", "queue", "both"]):
         '''
         Event to be called when the clear command is ran
@@ -2070,6 +1931,7 @@ class iPod:
         self.last_context = ctx
         await self.respond_to_clear(ctx, list_name)
 
+    @groovy_decorator
     async def on_remove_command(self, ctx, mode: Literal["song", "all"], list_name: Literal["playlist", "queue"], index: int):
         '''
         Event to be called when the remove command is ran
@@ -2111,6 +1973,7 @@ class iPod:
             loaded_song = song_list[index]
             await self.respond_to_remove_command(ctx, list_name, song_list, loaded_song)
 
+    @groovy_decorator
     async def on_move_command(self, ctx, song_list_name: Literal["playlist", "queue"], index_of_first_song: int, index_of_last_song: int, index_to_move_to: int):
         '''
         Event to be called when the move command is ran
@@ -2134,23 +1997,21 @@ class iPod:
             other_list_name = 'playlist'
         else: 
             embed = discord.Embed(description=f'List name must be `playlist` or `queue`, not `{song_list_name}`!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
             return
             
         if len(song_list) == 0:
             embed = discord.Embed(description=f'The {song_list_name} is empty!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
         if fetch_setting(ctx.guild.id, 'shuffle') and song_list_name == 'playlist':
             embed = discord.Embed(description=f'Sorry, moving songs from the playlist is disabled while shuffle is on.')  #FIXME
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
         else:
             moved_songs = self.move_items_between_lists(song_list, other_list, index_of_first_song, index_of_last_song, index_to_move_to)
             self.ensure_preload(ctx)
             await self.respond_to_move(ctx, song_list_name, song_list, other_list_name, other_list, moved_songs)
 
+    @groovy_decorator
     async def on_lyrics_command(self, ctx):
         '''
         Event to be called when the lyrics command is ran
@@ -2162,8 +2023,7 @@ class iPod:
         self.last_context = ctx
         if ctx.guild.voice_client is None or ctx.guild.voice_client.source is None: 
             embed = discord.Embed(description=f'Play something first!')
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
             return
 
         loaded_song = ctx.guild.voice_client.source.loaded_song
@@ -2175,6 +2035,7 @@ class iPod:
         thread = threading.Thread(target=self.run_lyric_search_in_thread, args=(ctx, title, artist))
         thread.start()
 
+    @groovy_decorator
     async def on_play_message_context(self, ctx, message, add_to_queue: bool):
         '''
         Event to be called when the play context command is ran
@@ -2192,6 +2053,7 @@ class iPod:
             input = message.content
             await self.on_play_command(ctx, input, add_to_queue)
 
+    @groovy_decorator
     async def on_search_message_context(self, ctx, message):
         '''
         Event to be called when the search context command is ran
@@ -2208,6 +2070,7 @@ class iPod:
             search_term = message.content
             await self.on_search_command(ctx, search_term)
 
+    @groovy_decorator
     async def on_clear_button(self, interaction, list_name: Literal["playlist", "queue", "both"]):
         '''
         Event to be called when the confirm clear button is clicked
@@ -2221,6 +2084,7 @@ class iPod:
         embed = discord.Embed(description=f'Cleared all songs from {"playlist and queue" if list_name == "both" else list_name}', color=8180120)
         await interaction.message.edit(embed=embed, view=None)
 
+    @groovy_decorator
     async def on_remove_button(self, interaction, list_name: str, song_list: list, loaded_song: LoadedYoutubeSong):
         '''
         Event to be called when the confirm remove button is clicked
@@ -2238,7 +2102,8 @@ class iPod:
         except ValueError: 
             embed = discord.Embed(description=f'{loaded_song} is not in {list_name}', color=16741747)
         await interaction.message.edit(embed=embed, view=None)
-    
+
+    @groovy_decorator
     async def on_game_mode_off_button(self, interaction):
         '''
         Event to be called when the confirm game mode off button is clicked
@@ -2521,6 +2386,45 @@ class iPod:
     #endregion
 
     #region Discord interactions
+    async def send_response(self, ctx, response, view=None, depth=0):
+        try:
+            if hasattr(ctx, 'reply'):
+                try:
+                    if isinstance(response, discord.Embed):
+                        return await ctx.reply(embed=response, view=view, mention_author=False)
+                    else:
+                        return await ctx.reply(content=response, view=view, mention_author=False)
+                except Exception as e:
+                    logger.exception('Error sending message', e)
+                    return await ctx.reply(content=f'Error sending message\n```{e}```', view=view, mention_author=False)
+            elif hasattr(ctx, 'respond'):
+                try:
+                    if isinstance(response, discord.Embed):
+                        return await ctx.respond(embed=response, view=view)
+                    else:
+                        return await ctx.respond(content=response, view=view)
+                except Exception as e:
+                    logger.exception('Error sending message', e)
+                    return await ctx.respond(content=f'Error sending message\n```{e}```')
+            elif hasattr(ctx, 'channel') and hasattr(ctx.channel, 'send'):
+                try:
+                    if isinstance(response, discord.Embed):
+                        return await ctx.channel.send(embed=response, view=view)
+                    else:
+                        return await ctx.channel.send(content=response, view=view)
+                except Exception as e:
+                    logger.exception('Error sending message', e)
+                    return await ctx.channel.send(content=f'Error sending message\n```{e}```', view=view)
+
+            logger.error('Error sending message. No valid response path found.')
+        except Exception as e:
+            if depth < 1:
+                logger.exception('Error sending message. Retrying...', {e})
+                self.send_response(ctx, response, view, depth=1)
+            else:
+                logger.exception('Error sending message. Retry failed', {e})
+
+
     async def respond_to_add_unloaded_item(self, ctx, item_added):
         embed = discord.Embed(description=f'Loading {item_added}...')
         await item_added.loading_context.send_message(ctx, embed)
@@ -2549,65 +2453,53 @@ class iPod:
         
     async def respond_to_playlist_command(self, ctx, list, page):
         embed_to_send = self.compile_playlist(list, page)
-        try: await ctx.reply(embed=embed_to_send, mention_author=False)
-        except: await ctx.respond(embed=embed_to_send)
+        await self.send_response(ctx, embed_to_send)
 
     async def respond_to_shuffle_enable(self, ctx):
         embed = discord.Embed(description='Shuffle enabled', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
         if len(self.partially_loaded_queue) > len(self.partially_loaded_playlist):
             embed = discord.Embed(description='You seem to have most of your songs in the queue. Songs in the queue are not effected by shuffle. To add songs to the playlist, use `/add {song}` If you want to move existing songs to the playlist and use shuffle, use `/move queue` (Leave out the indexes to move all)', color=3093080)
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
 
     async def respond_to_shuffle_disable(self, ctx):
         embed = discord.Embed(description='Shuffle disabled', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_announce_enable(self, ctx):
         embed = discord.Embed(description='Announce songs enabled', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_announce_disable(self, ctx):
         embed = discord.Embed(description='Announce songs disabled', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_pause_enable(self, ctx):
         embed = discord.Embed(description='Paused music', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_pause_disable(self, ctx):
         embed = discord.Embed(description='Unpaused msuic', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_autoskip_enable(self, ctx):
         embed = discord.Embed(description='Autoskip on', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_autoskip_disable(self, ctx):
         embed = discord.Embed(description='Autoskip off', color=3093080)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_game_mode_enable(self, ctx):
         embed = discord.Embed(title='Game mode ON!', description='Type `/guess` to guess the name of the current song! First person to guess correctly gets a point', color=3137695)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_game_mode_disable(self, ctx):
         view = discord.ui.View()
         view.add_item(self.GameModeOffCommandYesButton(self))
         view.add_item(self.GameModeOffCommandNoButton(self))
         embed = discord.Embed(description=f'Are you sure you want to turn game mode off and clear all scores?', color=16741747)
-        try: await ctx.reply(embed=embed, view=view, mention_author=False)
-        except: await ctx.respond(embed=embed, view=view)
+        await self.send_response(ctx, embed, view)
 
     async def respond_to_give_up_attempt(self, ctx, member, already_pending=False, response=None):
         if not self.can_guess:
@@ -2625,8 +2517,7 @@ class iPod:
             if isinstance(response, discord.Message): await response.edit(embed=embed)
             elif isinstance(response, discord.Interaction): await response.edit_original_message(embed=embed)
         else:
-            try: return await ctx.reply(embed=embed, view=view, mention_author=False)
-            except: return await ctx.respond(embed=embed, view=view)
+            await self.send_response(ctx, embed, view)
 
     async def respond_to_give_up(self, ctx, member, loaded_song, response=None):
         embed = discord.Embed(title='You gave up!', description=f'No one knew the song! It was {loaded_song.title}', color=16741747)
@@ -2634,82 +2525,69 @@ class iPod:
             if isinstance(response, discord.Message): await response.edit(embed=embed, view=None)
             elif isinstance(response, discord.Interaction): await response.edit_original_message(embed=embed, view=None)
         else:
-            try: return await ctx.reply(embed=embed, mention_author=False)
-            except: return await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
 
     async def respond_to_correct_guess(self, ctx, loaded_song: LoadedYoutubeSong):
         embed = discord.Embed(title='Correct!', description=f'You guessed {loaded_song.title} correctly! Good job!', color=3137695)
         embed.set_footer(text=f'You guessed the song in {round((datetime.datetime.now(datetime.timezone.utc) - self.time_of_last_song_start).total_seconds(), 2)} seconds!')
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_incorrect_guess(self, ctx):
         embed = discord.Embed(description='Incorrect! Try again', color=16741747)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_invalid_guess(self, ctx):
         embed = discord.Embed(description='You can\'t guess right now', color=16741747)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_disconnect(self, ctx, auto):
         embed = discord.Embed(description='Leaving voice chat', color=3093080)
         if not auto:
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
         else:
-            await ctx.send(embed=embed)
+            await ctx.send(embed=embed)  # FIXME
 
     async def respond_to_search(self, ctx, items):
         embed = self.get_search_message_embed(items)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_lyric_search(self, ctx, title, lyrics, url):
         source_text = f'Lyrics from [Genuis]({url})' if url is not None else ''
         embed = discord.Embed(title=f'Lyrics for {title}', description=f'{lyrics}\n\n{source_text}', color=7528669)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_nowplaying(self, ctx, announce = False):
         embed = self.get_nowplaying_message_embed(ctx)
         if announce:
-            await ctx.send(embed=embed)
+            await ctx.send(embed=embed)  # FIXME
         else:
-            try: await ctx.reply(embed=embed, mention_author=False)
-            except: await ctx.respond(embed=embed)
+            await self.send_response(ctx, embed)
 
     async def respond_to_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool):
         embed = self.get_skip_message_embed(old_song, new_song, loading)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     async def respond_to_skip_backwards(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         embed = self.get_skip_backward_message_embed(old_song, new_song)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
     
     async def respond_to_clear(self, ctx, list):
         view = discord.ui.View()
         view.add_item(self.ClearCommandNoButton(self, list))
         view.add_item(self.ClearCommandYesButton(self, list))
         embed = discord.Embed(description=f'Are you sure you want to clear the {"playlist and queue" if list == "both" else list}?', color=16741747)
-        try: await ctx.reply(embed=embed, view=view, mention_author=False)
-        except: await ctx.respond(embed=embed, view=view)
+        await self.send_response(ctx, embed, view)
 
     async def respond_to_remove_command(self, ctx, list_name, song_list, loaded_song):
         view = discord.ui.View()
         view.add_item(self.RemoveCommandNoButton(self, list_name, song_list, loaded_song))
         view.add_item(self.RemoveCommandYesButton(self, list_name, song_list, loaded_song))
         embed = discord.Embed(description=f'Are you sure you want to remove `{loaded_song}` from the {list_name}?', color=16741747)
-        try: await ctx.reply(embed=embed, view=view, mention_author=False)
-        except: await ctx.respond(embed=embed, view=view)
+        await self.send_response(ctx, embed, view)
 
     async def respond_to_move(self, ctx, song_list_name, song_list, other_list_name, other_list, moved_songs):
         embed = self.get_move_embed(song_list_name, song_list, other_list_name, other_list, moved_songs)
-        try: await ctx.reply(embed=embed, mention_author=False)
-        except: await ctx.respond(embed=embed)
+        await self.send_response(ctx, embed)
 
     
     #endregion
@@ -2773,6 +2651,7 @@ class iPod:
         if ctx.guild.voice_client == None or (not ctx.guild.voice_client.is_paused() and not ctx.guild.voice_client.is_playing()): raise NotPlaying
         if not fetch_setting(self.last_context.guild.id, 'game_mode'): 
             embed = discord.Embed(title='Now Playing ♫', description=ctx.guild.voice_client.source.title, color=7528669)
+            embed.set_thumbnail(url=ctx.guild.voice_client.source.data['thumbnail'])
             progress_time = round((datetime.datetime.now(datetime.timezone.utc) - self.time_of_last_song_start).total_seconds())
             total_time = ctx.guild.voice_client.source.loaded_song.duration
             embed.add_field(name='Song Progress', value=self.get_progress_bar(progress_time, total_time))
@@ -2831,6 +2710,7 @@ class iPod:
 class Groovy(commands.Cog, name='Groovy'):
     def __init__(self):
         self.voice_channel_leave.start()
+        self.empty_task.start()  # Why? I dunno. But it makes the create_task() responses go fast /shrug
 
     @tasks.loop(minutes=1)
     async def voice_channel_leave(self):
@@ -2852,6 +2732,10 @@ class Groovy(commands.Cog, name='Groovy'):
     async def before_vc(self):
         logger.info("Starting voice channel loop...")
         await bot.wait_until_ready()
+
+    @tasks.loop(seconds=0.01)
+    async def empty_task(self):
+        ...
 
     def get_player(self, ctx) -> iPod:
         if ctx.guild.id in music_players.keys():
