@@ -5,6 +5,8 @@ from fnmatch import fnmatch
 import traceback
 import pathlib
 import json
+import logging
+import sqlite3
 
 import discord
 from discord.ext import commands, tasks
@@ -12,33 +14,16 @@ from discord import Option
 
 from globalVariables import bot
 
+database_name = 'Elliot.sqlite'
+database_path = pathlib.Path(database_name)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class Interaction(commands.Cog, name='Interactions'):
 
     def __init__(self):
-        self.interactionFile = pathlib.Path('interactionCountDict')
-        self.interactionDict = json.load(open(self.interactionFile, 'r'))
-
-        print("Starting File Save Loop...")
-        self.save_interaction_file.start()
-
-    def cog_unload(self):
-        self.save_interaction_file.cancel()
-
-    def saveFile(self, file):
-        open_file = open(file, 'w')
-        json.dump(self.interactionDict, open_file)
-        open_file.close()
-
-    @tasks.loop(minutes=30)
-    async def save_interaction_file(self):
-        self.saveFile(self.interactionFile)
-        print("Interaction file saved.")
-
-    @save_interaction_file.after_loop
-    async def interaction_loop_cancelled(self):
-        if self.save_interaction_file.is_being_cancelled():
-            self.saveFile(self.interactionFile)
+        ensure_table_exists()
 
     #region Commands
 
@@ -274,159 +259,269 @@ class Interaction(commands.Cog, name='Interactions'):
         await ctx.respond(embed=HideInteraction(ctx, args).run_and_get_response())
 
     #endregion
+
+
+
+def ensure_table_exists():
+    '''
+        Checks that the input table exists in the database, and creates it if it doesn't
+
+        Parameters:
+            - `name`: str; The name of the table to check
+    '''
+    try:
+        if not does_table_exist():
+            with sqlite3.connect(database_path) as con:
+                cur = con.cursor()
+                cur.execute(f'CREATE TABLE interactions (user_id INTEGER PRIMARY KEY)')
+                logger.info(f'Created new interactions table')
+    except Exception as e:
+        logger.error(f'Failed to ensure interactions table exists', exc_info=e)
+        raise e
+
+def update_columns(name_list: list[str]):
+    '''
+        Adds any missing columns to the interactoins table based on the input list
+
+        Parameters:
+            - `name_list`: list[str]; A list of column names
+    '''
+    try:
+        with sqlite3.connect(database_path) as con:
+            cur = con.cursor()
+            columns = cur.execute(f'PRAGMA table_info(interactions)').fetchall()
+            columns_list = [column[1] for column in columns]
+            for col_name in name_list:
+                if f'{col_name}_give' in columns_list:
+                    pass
+                else:
+                    execution_string_give = f"ALTER TABLE interactions ADD {col_name}_give INTEGER DEFAULT 0"
+                    cur.execute(execution_string_give)
+                    logger.info(f'Created new table column {col_name=} of type=int')
+                
+                if f'{col_name}_receive' in columns_list:
+                    pass
+                else:
+                    execution_string_receive = f"ALTER TABLE interactions ADD {col_name}_receive INTEGER DEFAULT 0"
+                    cur.execute(execution_string_receive)
+                    logger.info(f'Created new table column {col_name=} of type=int')
+
+    except Exception as e:
+        logger.error(f'Failed to update interactions database columns', exc_info=e)
+        raise e
+
+def does_table_exist():
+    '''
+        Checks if the input table exists
+
+        Parameters:
+            - `name`: str; The name of the table to check
+    '''
+    try:
+        with sqlite3.connect(database_path) as con:
+            cur = con.cursor()
+            table = cur.execute(f"SELECT * FROM sqlite_master WHERE type='table' AND name='interactions'").fetchone()
+            if table == None:
+                return False
+            else:
+                return True
+    except Exception as e:
+        logger.error(f'Failed to check that interactions table exists', exc_info=e)
+        raise e
+
+def initialize_user(user_id):
+    '''
+        Adds the given user id to the database with empty interactions
+
+        Parameters:
+            - `user_id`: int; The user id to add
+    '''
+    try:
+        if not is_user_known(user_id):
+            with sqlite3.connect(database_path) as con:
+                cur = con.cursor()
+                cur.execute(f"INSERT INTO interactions (user_id) VALUES (?)", [user_id])
+                logger.info(f'User row {user_id} initialized')
+    except Exception as e:
+        logger.error(f'Failed to initalize interactions database row {user_id=}', exc_info=e)
+        raise e
+
+def is_user_known(user_id):
+    '''
+        Returns whether the guild is in the database or not
+
+        Parameters:
+            - `user_id`: int; The guild id to search for
+
+        Returns:
+            `bool`; Whether the guild is in the database or not
+    '''
+    try:
+        with sqlite3.connect(database_path) as con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            row = cur.execute(f"SELECT * FROM interactions WHERE user_id = {user_id}").fetchone()
+            if row != None:
+                return True
+            else:
+                return False
+    except Exception as e:
+        logger.error(f'Failed to check if {user_id=} is known', exc_info=e)
+        raise e
     
 class BaseInteraction():
 
-    def __init__(self, ctx:commands.Context, args, interactionName):
+    def __init__(self, ctx:commands.Context, args, interaction_name):
         self.ctx = ctx
-        self.interactionName = interactionName
+        self.interaction_name = interaction_name
         self.arguments = list(args)
-        self.nameList = []
-        self.includedMessage = ""
+        self.name_list = []
+        self.included_message = ""
         self.footer = ""
-
-        self.interactionDict = (bot.get_cog('Interactions')).interactionDict
 
     def run_and_get_response(self):  #Runs command and returns the embed or an error
         try:
-            userIDList, includedMessage = self.splitIntoIDsAndMessage()
-            self.updateCounts(userIDList)
-            return self.embed(userIDList, includedMessage)
-        except:
-            error = traceback.format_exc()
-            error = error.replace("c:\\Users\\Smay\\Dropbox\\AmesBot", "bot")
-            error += f"\nVars:\nInteraction: {self.interactionName}\nArguments: {self.arguments}\nnameList: {self.nameList}\nincludedMessage: {self.includedMessage}"
-            embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
-            traceback.print_exc()
+            user_id_list, included_message = self.split_into_ids_and_message()
+            self.update_counts(user_id_list)
+            return self.embed(user_id_list, included_message)
+        except Exception as e:
+            embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328>") 
+            logger.exception('Interaction failed', e)
             return embed
    
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-            self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+            self.add_give_count(self.ctx.author.id)
     
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got tested {self.getReceiveCount(self.ctx.author.id)} times, and tested others {self.getGiveCount()} times." 
-        countMessage = countMessage.replace(" 1 times", " once").replace("69", "69 hehe") if random.randint(0, 20) != 0 else countMessage.replace("1 times", "**o**__n__c*é*")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got tested {self.get_receive_count(self.ctx.author.id)} times, and tested others {self.get_give_count()} times." 
+        count_message = count_message.replace(" 1 times", " once").replace("69", "69 hehe") if random.randint(0, 20) != 0 else count_message.replace("1 times", "**o**__n__c*é*")
+        return count_message
 
-    def embed(self, userIDList, includedMessage):  #Creates the embed to be sent
-        nameList = [(self.ctx.guild.get_member(id)).display_name for id in userIDList]
-        embedToReturn = discord.Embed(title= self.getEmbedTitle(nameList), description= includedMessage, color= self.getColor())
-        embedToReturn.set_image(url= self.getImageURL(nameList))
-        embedToReturn.set_footer(text= f"{self.getCountMessage()} {self.footer}" )
+    def embed(self, user_id_list, included_message):  #Creates the embed to be sent
+        name_list = [(self.ctx.guild.get_member(id)).display_name for id in user_id_list]
+        embedToReturn = discord.Embed(title= self.get_embed_title(name_list), description= included_message, color= self.get_color())
+        embedToReturn.set_image(url= self.get_image_url(name_list))
+        embedToReturn.set_footer(text= f"{self.get_count_message()} {self.footer}" )
         return embedToReturn
 
-    def getEmbedTitle(self, nameList):  #Gets the title of the embed from noPingTitle and pingTitle
-        if len(nameList) == 0:
-            return self.noPingTitle()
-        return self.pingTitle(nameList)
+    def get_embed_title(self, name_list):  #Gets the title of the embed from no_ping_title and ping_title
+        if len(name_list) == 0:
+            return self.no_ping_title()
+        return self.ping_title(name_list)
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name}"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} --> {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} --> {self.get_joined_names(name_list)}"
 
-    def getJoinedNames(self, nameList):  #Joins all the names used into a nice string
-        if len(nameList) == 1:
-            return nameList[0]
-        elif len(nameList) == 2:
-            return f"{nameList[0]} and {nameList[1]}"
-        elif len(nameList) > 2: 
-            return ", ".join(nameList[:-1]) + ", and " + nameList[-1]
+    def get_joined_names(self, name_list):  #Joins all the names used into a nice string
+        if len(name_list) == 1:
+            return name_list[0]
+        elif len(name_list) == 2:
+            return f"{name_list[0]} and {name_list[1]}"
+        elif len(name_list) > 2: 
+            return ", ".join(name_list[:-1]) + ", and " + name_list[-1]
 
-    def checkIfPingOrID(self, ping):  #Check if the first ping is valid for the guild
-        if fnmatch(ping, "<@*>") and self.getIDFromPing(ping) in [user.id for user in self.ctx.channel.members]: return True
+    def check_if_ping(self, ping):  #Check if the first ping is valid for the guild
+        if fnmatch(ping, "<@*>") and self.get_id_from_ping(ping) in [user.id for user in self.ctx.channel.members]: return True
         elif ping in [str(user.id) for user in self.ctx.channel.members]: return True
         elif len([user.id for user in self.ctx.channel.members]) == 1:  #If Intents.members is off for some reason or something else denies access to the channel member list then the bot's user is the only one found
-            print(f'Could not get members for channel: {self.ctx.channel.id} in guild {self.ctx.guild.name}! Assuming user is valid and continuing')
+            logger.warn(f'Could not get members for channel: {self.ctx.channel.id} in guild {self.ctx.guild.name}! Assuming user is valid and continuing')
             return True
         return False
 
-    def splitIntoIDsAndMessage(self):  #Splits the arugments into the nameList and included message and return them
+    def split_into_ids_and_message(self):  #Splits the arugments into the name_list and included message and return them
 
-        userIDList = []
-        messageList = []
-        tempArgs = self.arguments.copy()
-        while 0 < len(tempArgs):
-            if fnmatch(tempArgs[0], f"<@*{self.ctx.author.id}>") or tempArgs[0] == str(self.ctx.author.id):  #If the user that sent the message pinged themselves, skip adding it to the ping list
-                del tempArgs[0]
-            elif self.checkIfPingOrID(tempArgs[0]) and not self.getIDFromPing(tempArgs[0]) in userIDList:  #If the argument is a ping or valid id of a user in the channel, and isn't already in the ID list, add it to the ID list
-                userIDList.append(self.getIDFromPing(tempArgs[0]))
-                del tempArgs[0]
+        user_id_list = []
+        message_list = []
+        temp_args = self.arguments.copy()
+        while 0 < len(temp_args):
+            if fnmatch(temp_args[0], f"<@*{self.ctx.author.id}>") or temp_args[0] == str(self.ctx.author.id):  #If the user that sent the message pinged themselves, skip adding it to the ping list
+                del temp_args[0]
+            elif self.check_if_ping(temp_args[0]) and not self.get_id_from_ping(temp_args[0]) in user_id_list:  #If the argument is a ping or valid id of a user in the channel, and isn't already in the ID list, add it to the ID list
+                user_id_list.append(self.get_id_from_ping(temp_args[0]))
+                del temp_args[0]
             else:
-                messageList.append(tempArgs[0])
-                del tempArgs[0]
+                message_list.append(temp_args[0])
+                del temp_args[0]
 
-        includedMessage = " ".join(messageList)  #Message is everything left over joined back into a single string
+        included_message = " ".join(message_list)  #Message is everything left over joined back into a single string
 
-        return userIDList, includedMessage
+        return user_id_list, included_message
     
-    def getColor(self):
+    def get_color(self):
         return random.choice(botGifs.colors)
 
-    def getIDFromPing(self, ping):
+    def get_id_from_ping(self, ping):
         id = ping.replace("<", "").replace(">", "").replace("@", "").replace("!", "").replace("&", "")
         return int(id)
 
-    def getImageURL(self, nameList):  #Gets the image for the embed from noPingImage and pingImage
-        if len(nameList) == 0:
-            return self.noPingImage()
-        return self.pingImage()
+    def get_image_url(self, name_list):  #Gets the image for the embed from no_ping_image and ping_image
+        if len(name_list) == 0:
+            return self.no_ping_image()
+        return self.ping_image()
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return "https://images-ext-2.discordapp.net/external/T2EiRPQoyjtgufZFuk9sUh5CpvjdZHD9fMx2r2iFwv4/https/c.tenor.com/RRG7pXMcSloAAAAM/sad-anime.gif"
 
-    def pingImage(self):
+    def ping_image(self):
         return "https://images-ext-1.discordapp.net/external/jdZsQ2YnpjXowNPa42l7p52SKfc-iddn1YlpN_BXt3M/https/c.tenor.com/UhcyGsGpLNIAAAAM/hug-anime.gif"
     
-    def getGiveCount(self, userID):
-        if str(userID) in self.interactionDict.keys():
-            countDict = self.interactionDict[str(userID)]
-            if self.interactionName in countDict.keys():
-                return countDict[self.interactionName]["give"]
+    def get_give_count(self, user_id):
+        update_columns([self.interaction_name])  #FIXME kinda inefficient but oh well
+        if is_user_known(user_id):
+            with sqlite3.connect(database_path) as con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                row = cur.execute(f"SELECT * FROM interactions WHERE user_id = {user_id}").fetchone()
+                logger.info(f'Fetched give count for {self.interaction_name=} {user_id=}')
+            count = row[f'{self.interaction_name}_give']
+            return count
         return 0
     
-    def addGiveCount(self, userID):
-        if str(userID) in self.interactionDict.keys():
-            countDict = self.interactionDict[str(userID)]
-            if self.interactionName in countDict.keys():
-                countDict[self.interactionName]["give"] += 1
-            else:
-                countDict[self.interactionName] = {"give" : 0, "receive" : 0}
-                countDict[self.interactionName]["give"] += 1
-            return countDict[self.interactionName]["give"]
+    def add_give_count(self, user_id):
+        update_columns([self.interaction_name])
+        if is_user_known(user_id):
+            count = self.get_give_count(user_id)
+            count += 1
+            with sqlite3.connect(database_path) as con:
+                cur = con.cursor()
+                cur.execute(f"UPDATE interactions SET {self.interaction_name}_give = (?) WHERE user_id = {user_id}", [count])
+                logger.info(f'Changed interactions {self.interaction_name}_give to {count} for {user_id=}')
+            return count
         else:
-            countDict = {}
-            self.interactionDict[str(userID)] = countDict
-            countDict[self.interactionName] = {"give" : 0, "receive" : 0}
-            countDict[self.interactionName]["give"] += 1
-            return countDict[self.interactionName]["give"]
+            initialize_user(user_id)
+            self.add_give_count(user_id)
 
-    def getReceiveCount(self, userID):
-        if str(userID) in self.interactionDict.keys():
-            countDict = self.interactionDict[str(userID)]
-            if self.interactionName in countDict.keys():
-                return countDict[self.interactionName]["receive"]
+    def get_receive_count(self, user_id):
+        update_columns([self.interaction_name])
+        if is_user_known(user_id):
+            with sqlite3.connect(database_path) as con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                row = cur.execute(f"SELECT * FROM interactions WHERE user_id = {user_id}").fetchone()
+                logger.info(f'Fetched give count for {self.interaction_name=} {user_id=}')
+            count = row[f'{self.interaction_name}_receive']
+            return count
         return 0
     
-    def addReceiveCount(self, userID):
-        if str(userID) in self.interactionDict.keys():
-            countDict = self.interactionDict[str(userID)]
-            if self.interactionName in countDict.keys():
-                countDict[self.interactionName]["receive"] += 1
-            else:
-                countDict[self.interactionName] = {"give" : 0, "receive" : 0}
-                countDict[self.interactionName]["receive"] += 1
-            return countDict[self.interactionName]["receive"]
+    def add_receive_count(self, user_id):
+        update_columns([self.interaction_name])
+        if is_user_known(user_id):
+            count = self.get_receive_count(user_id)
+            count += 1
+            with sqlite3.connect(database_path) as con:
+                cur = con.cursor()
+                cur.execute(f"UPDATE interactions SET {self.interaction_name}_receive = (?) WHERE user_id = {user_id}", [count])
+                logger.info(f'Changed interactions {self.interaction_name}_receive to {count} for {user_id=}')
+            return count
         else:
-            countDict = {}
-            self.interactionDict[str(userID)] = countDict
-            countDict[self.interactionName] = {"give" : 0, "receive" : 0}
-            countDict[self.interactionName]["receive"] += 1
-            return countDict[self.interactionName]["receive"]
+            initialize_user(user_id)
+            self.add_give_count(user_id)
 
 #region Interaction classes
 class HugInteraction(BaseInteraction):
@@ -434,515 +529,515 @@ class HugInteraction(BaseInteraction):
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'hug')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants a hug..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is hugging {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is hugging {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.hugGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got hugged {self.getReceiveCount(self.ctx.author.id)} times, and hugged others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got hugged {self.get_receive_count(self.ctx.author.id)} times, and hugged others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class KissInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'kiss')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants a kiss..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is kissing {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is kissing {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.kissGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got kissed {self.getReceiveCount(self.ctx.author.id)} times, and kissed others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got kissed {self.get_receive_count(self.ctx.author.id)} times, and kissed others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class PunchInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'punch')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants a to punch something"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is punching {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is punching {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.punchGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.punchGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got punched {self.getReceiveCount(self.ctx.author.id)} times, and punched others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got punched {self.get_receive_count(self.ctx.author.id)} times, and punched others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class KillInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'kill')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants to kill someone"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} killed {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} killed {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.killGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.killGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got killed {self.getReceiveCount(self.ctx.author.id)} times, and killed others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got killed {self.get_receive_count(self.ctx.author.id)} times, and killed others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class HandholdInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'handhold')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants to hold someone's hand..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is holding {self.getJoinedNames(nameList)}'s hand{'' if len(nameList) < 2 else 's'}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is holding {self.get_joined_names(name_list)}'s hand{'' if len(name_list) < 2 else 's'}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.handholdGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got thier hand held {self.getReceiveCount(self.ctx.author.id)} times, and held others hands {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got thier hand held {self.get_receive_count(self.ctx.author.id)} times, and held others hands {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class LoveInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'love')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants love..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} loves {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} loves {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.loveGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got loved {self.getReceiveCount(self.ctx.author.id)} times, and loved others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got loved {self.get_receive_count(self.ctx.author.id)} times, and loved others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class CuddleInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'cuddle')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants to cuddle..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is cuddling {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is cuddling {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.cuddleGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got cuddled with {self.getReceiveCount(self.ctx.author.id)} times, and cuddled others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got cuddled with {self.get_receive_count(self.ctx.author.id)} times, and cuddled others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class PatInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'pat')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants a pat..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is patting {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is patting {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.patGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got pat {self.getReceiveCount(self.ctx.author.id)} times, and patted others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got pat {self.get_receive_count(self.ctx.author.id)} times, and patted others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class PeckInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'peck')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} wants a peck..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} pecks {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} pecks {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.selfHugGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.peckGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got pecked {self.getReceiveCount(self.ctx.author.id)} times, and pecked others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got pecked {self.get_receive_count(self.ctx.author.id)} times, and pecked others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class ChaseInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'chase')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is waiting for someone to chase..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is chasing {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is chasing {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.lurkGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.chaseGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} was chased {self.getReceiveCount(self.ctx.author.id)} times, and chased others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was chased {self.get_receive_count(self.ctx.author.id)} times, and chased others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class BoopInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'boop')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is looking for someone to boop..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} booped {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} booped {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.lurkGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.boopGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got booped {self.getReceiveCount(self.ctx.author.id)} times, and booped others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got booped {self.get_receive_count(self.ctx.author.id)} times, and booped others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class BonkInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'bonk')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is looking for someone to bonk..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} bonked {self.getJoinedNames(nameList)}!"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} bonked {self.get_joined_names(name_list)}!"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.lurkGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.bonkGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got bonked {self.getReceiveCount(self.ctx.author.id)} times, and bonked others {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got bonked {self.get_receive_count(self.ctx.author.id)} times, and bonked others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
 class RunInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'run')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is running away!"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is running at {self.getJoinedNames(nameList)}!"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is running at {self.get_joined_names(name_list)}!"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.runGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.chaseGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} got ran at {self.getReceiveCount(self.ctx.author.id)} times, and ran {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} got ran at {self.get_receive_count(self.ctx.author.id)} times, and ran {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class DieInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'die')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} died :c"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} wants {self.getJoinedNames(nameList)} to die :c"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} wants {self.get_joined_names(name_list)} to die :c"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.dieGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.dieGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} died {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} died {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class DanceInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'dance')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} danced around!"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is dancing with {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is dancing with {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.danceGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.danceGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} was danced with {self.getReceiveCount(self.ctx.author.id)} times, and danced {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was danced with {self.get_receive_count(self.ctx.author.id)} times, and danced {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class LurkInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'lurk')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is lurking..."
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is watching {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is watching {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.lurkGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.lurkGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} was watched {self.getReceiveCount(self.ctx.author.id)} times, and lurked {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was watched {self.get_receive_count(self.ctx.author.id)} times, and lurked {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class PoutInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'pout')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is pouting"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is pouting at {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is pouting at {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.poutGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.poutGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} was pouted at {self.getReceiveCount(self.ctx.author.id)} times, and pouted {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was pouted at {self.get_receive_count(self.ctx.author.id)} times, and pouted {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class EatInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'eat')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is eating"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is eating {self.getJoinedNames(nameList)}!"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is eating {self.get_joined_names(name_list)}!"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.eatGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.eatGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} was eaten {self.getReceiveCount(self.ctx.author.id)} times, and ate {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was eaten {self.get_receive_count(self.ctx.author.id)} times, and ate {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class CryInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'cry')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is crying :c"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is crying for {self.getJoinedNames(nameList)} :c"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is crying for {self.get_joined_names(name_list)} :c"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.cryGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.cryGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} cried {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} cried {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class BlushInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'blush')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is blushing"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is blushing becuase of {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is blushing becuase of {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.blushGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.blushGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} blushed {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} blushed {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 class HideInteraction(BaseInteraction):
 
     def __init__(self, ctx: commands.Context, args):
         super().__init__(ctx, args, 'hide')
 
-    def noPingTitle(self):  #The title to use if no pings are provided
+    def no_ping_title(self):  #The title to use if no pings are provided
         return f"{self.ctx.author.display_name} is hiding"
 
-    def pingTitle(self, nameList):  #The title to use if there are pings
-        return f"{self.ctx.author.display_name} is hiding from {self.getJoinedNames(nameList)}"
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is hiding from {self.get_joined_names(name_list)}"
 
-    def noPingImage(self):
+    def no_ping_image(self):
         return random.choice(botGifs.hideGif)
 
-    def pingImage(self):
+    def ping_image(self):
         return random.choice(botGifs.hideGif)
 
-    def getCountMessage(self):
-        countMessage = f"{self.ctx.author.display_name} hid {self.getGiveCount(self.ctx.author.id)} times." 
-        countMessage = countMessage.replace("1 times", "once")
-        return countMessage
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} hid {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
 
-    def updateCounts(self, userIDList):
-        if len(userIDList) > 0:
-            for id in userIDList:
-                self.addReceiveCount(id)
-        self.addGiveCount(self.ctx.author.id)
+    def update_counts(self, user_id_list):
+        if len(user_id_list) > 0:
+            for id in user_id_list:
+                self.add_receive_count(id)
+        self.add_give_count(self.ctx.author.id)
 
 #endregion
