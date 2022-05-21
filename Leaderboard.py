@@ -3,7 +3,7 @@ import pathlib
 from typing import List
 import discord
 import math
-from globalVariables import bot, numberEmoteList
+from GlobalVariables import bot, numberEmoteList
 import time
 
 

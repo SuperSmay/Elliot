@@ -1,6 +1,6 @@
 import discord
 from Settings import fetch_setting
-from globalVariables import bot
+from GlobalVariables import bot
 import traceback
 
 class Verify:

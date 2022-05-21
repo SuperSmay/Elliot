@@ -10,6 +10,8 @@ import DBManager
 import sqlite3
 import logging
 
+from Statistics import log_event
+
 ADD_ALIASES = ['add', 'a', 'append']
 REMOVE_ALIASES = ['remove', 'r', 'rm', 'delete', 'yeet']
 TRUE_ALIASES = ['on', 'enable', 'true']
@@ -177,7 +179,8 @@ class Settings(commands.Cog):
 
     @commands.slash_command(name='config', description='Show/change the current config')
     async def config_command(self, ctx, setting_name:Option(str, required=True, choices=config_list_complete, description='The option to change'), mode: Option(str, required=False, default='', choices=[OptionChoice(name='Add', value='add'), OptionChoice(name='Remove', value='remove')], description='Add or remove items from list settings'), value: Option(str, required=False, description='New setting value')):
-        
+        log_event('slash_command', ctx=ctx)
+        log_event('config_command', ctx=ctx)
         if setting_name == 'list':
             try: page = int(value) - 1
             except ValueError: page = 0
@@ -198,7 +201,8 @@ class Settings(commands.Cog):
 
     @commands.command(name='config', description='Shows the current config')  #FIXME Parse value with quotes and stuff
     async def config_prefix_command(self, ctx, input_name='list', value='', value_two=''):
-        
+        log_event('prefix_command', ctx=ctx)
+        log_event('config_command', ctx=ctx)
         try: 
             int(input_name)
             value = input_name
@@ -550,6 +554,7 @@ def fetch_all_settings(guild_id):
         Returns:
             `sqlite3.Row`; The settings row
     '''
+    log_event('config_fetch', mode='guild', id=guild_id)
     try:
         if is_guild_known(guild_id):
             with sqlite3.connect(DBManager.database_path) as con:
@@ -580,6 +585,7 @@ def set_setting(guild_id, setting, value):
             - `setting`: str; The setting name
             - `value`: Any; The setting value
     '''
+    log_event('config_chnage', mode='guild', id=guild_id)
     if value is None: value = 'NULL'
     elif type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
 

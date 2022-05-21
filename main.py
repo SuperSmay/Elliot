@@ -19,9 +19,11 @@ import Leaderboard
 import Settings
 import Verify
 from Settings import fetch_setting
-from globalVariables import bot, last_start_time
+from Statistics import log_event
+from GlobalVariables import bot, last_start_time, on_log
 
 logging.basicConfig()
+logging.root.addFilter(on_log)
 
 use_dev_mode = pathlib.Path.exists(pathlib.Path('use-dev-mode')) and open(pathlib.Path('use-dev-mode'), 'r').read().lower() == 'true'
 
@@ -32,12 +34,14 @@ TOKEN = tokenFile.read()
 async def on_ready():
   global last_start_time
   print("I love coffee")
+  log_event('startup')
   last_start_time = datetime.datetime.utcnow()
   async for guild in bot.fetch_guilds(limit=150):
     print(guild.name)
   
 @bot.event
 async def on_message(message: discord.Message):
+  if message.author.id == bot.user.id: log_event('message_send', mode='guild', id=message.guild.id)
   if message.author.bot: return
   if fetch_setting(message.guild.id, 'verification_system') and fetch_setting(message.guild.id, 'unverified_role') in [role.id for role in message.author.roles]:
     verify = Verify.Verify(member= message.author, message= message)
@@ -60,14 +64,20 @@ async def on_message_edit(oldMessage, newMessage: discord.Message):
 
 @bot.slash_command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
+  log_event('slash_command', ctx=ctx)
+  log_event('cutie_command', ctx=ctx)
   await ctx.respond(embed=discord.Embed(description="ur a cutie 2 ;3"))
 
 @bot.command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
+  log_event('prefix_command', ctx=ctx)
+  log_event('cutie_command', ctx=ctx)
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
 @bot.slash_command(name="leaderboard", description="Shows a leaderboard")
 async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver time', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
+  log_event('slash_command', ctx=ctx)
+  log_event('leaderboard_command', ctx=ctx)
   if leaderboard == 'weekly':
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
   elif leaderboard == 'leaver':
@@ -77,6 +87,8 @@ async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to s
 
 @bot.command(name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
 async def leaderboard(ctx, leaderboard='leaver'):
+  log_event('prefix_command', ctx=ctx)
+  log_event('leaderboard_command', ctx=ctx)
   if leaderboard == 'weekly':
     interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
   elif leaderboard == 'leaver':

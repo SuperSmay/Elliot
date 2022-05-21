@@ -19,8 +19,9 @@ import youtube_dl
 from discord.ext import commands, tasks
 from discord.commands import Option, OptionChoice, SlashCommandGroup
 from youtubesearchpython import VideosSearch
+from Statistics import log_event
 
-from globalVariables import bot
+from GlobalVariables import bot, on_log
 from Settings import fetch_setting, set_setting
 import String_Progress_Bar
 
@@ -45,6 +46,7 @@ import String_Progress_Bar
 #region Variables and setup
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logger.addFilter(on_log)
 
 ytdlFormatOptions = {
     'format': 'bestaudio/best',
@@ -337,7 +339,7 @@ class iPod:
             if len(self.unloaded_playlist) > 0 or len(self.unloaded_queue) > 0: self.loading_loop(ctx)
         
         except Exception as e:
-            logger.error(f'Loading loop failed', exc_info=e)
+            logger.error(f'Loading loop failed', exc_info=True)
         
         self.loading_running = False
 
@@ -376,7 +378,7 @@ class iPod:
             if do_loop: self.preloading_loop(ctx)
         
         except Exception as e:
-            logger.error(f'Preloading loop failed', exc_info=e)
+            logger.error(f'Preloading loop failed', exc_info=True)
         
         self.preloading_running = False
 
@@ -1689,7 +1691,7 @@ class iPod:
                 return result
 
             except Exception as e:
-                logger.error(f'{func.__name__} failed', exc_info=e)
+                logger.error(f'{func.__name__} failed', exc_info=True)
                 embed = discord.Embed(description=f'An unknown error occured.\n```{e}```')
                 await self.send_response(input_ctx, embed)
             
@@ -2215,7 +2217,7 @@ class iPod:
             if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
             bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, message='Video is age restricted'))
         else:
-            logger.error(f'Failed loading item {unloaded_item}', exc_info=exception)
+            logger.error(f'Failed loading item {unloaded_item}', exc_info=True)
             if unloaded_item.loading_context.parent_playlist != None: unloaded_item.loading_context.parent_playlist.error_count += 1
             bot.loop.create_task(self.respond_to_load_error(ctx, unloaded_item, exception))
 
@@ -2238,15 +2240,16 @@ class iPod:
         
     def on_song_play(self, ctx, new_song: LoadedYoutubeSong):
         logger.info(f'Song play succeed {new_song}')
+        log_event('song_played', ctx=ctx)
         self.time_of_last_song_start = datetime.datetime.now(datetime.timezone.utc)
         if fetch_setting(self.last_context.guild.id, 'announce_songs'):
             bot.loop.create_task(self.respond_to_nowplaying(ctx, True))
 
     def on_start_play_fail(self, ctx, new_song: LoadedYoutubeSong, exception):
-        logger.error(f'Song play fail {new_song}', exc_info=exception)
+        logger.error(f'Song play fail {new_song}', exc_info=True)
 
     def on_during_play_fail(self, ctx, song: LoadedYoutubeSong, exception):
-        logger.error(f'Play failed during song {song}', exc_info=exception)
+        logger.error(f'Play failed during song {song}', exc_info=True)
         self.ensure_preload(ctx)
 
     def on_song_end_unknown(self, ctx, song, skip=False, exception=None):
@@ -2286,6 +2289,7 @@ class iPod:
 
     def on_pause_enable(self, ctx):
         logger.info('Pause on')
+        log_event('music_paused', ctx=ctx)
         bot.loop.create_task(self.respond_to_pause_enable(ctx))
 
     def on_pause_disable(self, ctx):
@@ -2310,6 +2314,7 @@ class iPod:
     
     def on_correct_guess(self, ctx, input, loaded_song, member):
         logger.info('Correct guess yay!')
+        log_event('correct_guess', ctx=ctx)
         self.can_guess = False
         self.add_score_to_member(member)
         bot.loop.create_task(self.respond_to_correct_guess(ctx, loaded_song))
@@ -2318,6 +2323,7 @@ class iPod:
 
     def on_incorrect_guess(self, ctx, input, loaded_song, member):
         logger.info('Incorrect guess')
+        log_event('incorrect_guess', ctx=ctx)
         bot.loop.create_task(self.respond_to_incorrect_guess(ctx))
 
     def on_invalid_guess(self, ctx, input, loaded_song, member):
@@ -2343,11 +2349,13 @@ class iPod:
 
     def on_song_skip(self, ctx, old_song: YTDLSource, new_song: YTDLSource, loading: bool, silent = False):
         logger.info('Song skipped')
+        log_event('song_skip', ctx=ctx)
         if not silent:
             bot.loop.create_task(self.respond_to_skip(ctx, old_song, new_song, loading))
 
     def on_song_skip_backwards(self, ctx, old_song: YTDLSource, new_song: YTDLSource):
         logger.info('Song skipped back')
+        log_event('song_skip', ctx=ctx)
         bot.loop.create_task(self.respond_to_skip_backwards(ctx, old_song, new_song))
     
     def on_list_clear(self, ctx, list_name):
@@ -2395,7 +2403,7 @@ class iPod:
                     else:
                         return await ctx.reply(content=response, view=view, mention_author=False)
                 except Exception as e:
-                    logger.exception('Error sending message', e)
+                    logger.error('Error sending message', exc_info=True)
                     return await ctx.reply(content=f'Error sending message\n```{e}```', view=view, mention_author=False)
             elif hasattr(ctx, 'respond'):
                 try:
@@ -2404,7 +2412,7 @@ class iPod:
                     else:
                         return await ctx.respond(content=response, view=view)
                 except Exception as e:
-                    logger.exception('Error sending message', e)
+                    logger.error('Error sending message', exc_info=True)
                     return await ctx.respond(content=f'Error sending message\n```{e}```')
             elif hasattr(ctx, 'channel') and hasattr(ctx.channel, 'send'):
                 try:
@@ -2413,16 +2421,16 @@ class iPod:
                     else:
                         return await ctx.channel.send(content=response, view=view)
                 except Exception as e:
-                    logger.exception('Error sending message', e)
+                    logger.error('Error sending message', exc_info=True)
                     return await ctx.channel.send(content=f'Error sending message\n```{e}```', view=view)
 
             logger.error('Error sending message. No valid response path found.')
         except Exception as e:
             if depth < 1:
-                logger.exception('Error sending message. Retrying...', {e})
+                logger.error('Error sending message. Retrying...', {e})
                 self.send_response(ctx, response, view, depth=1)
             else:
-                logger.exception('Error sending message. Retry failed', {e})
+                logger.error('Error sending message. Retry failed', exc_info=True)
 
 
     async def respond_to_add_unloaded_item(self, ctx, item_added):
@@ -2746,50 +2754,68 @@ class Groovy(commands.Cog, name='Groovy'):
     #region Commands
     @commands.command(name='play', aliases=['p'], description='Add a song to the queue')
     async def prefix_play(self, ctx, input: str = '', *more_words):
+        log_event('prefix_command', ctx=ctx)
+        log_event('play_command', ctx=ctx)
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, True)
 
     @commands.slash_command(name='play', description='Add a song to the queue')
     async def slash_play(self, ctx: discord.ApplicationContext, input: Option(discord.enums.SlashCommandOptionType.string, description='A link or search term', required=False, default='')):
+        log_event('slash_command', ctx=ctx)
+        log_event('play_command', ctx=ctx)
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, True)
 
     @commands.command(name='add', aliases=['a'], description='Add a song to the playlist')
     async def prefix_add(self, ctx, input: str = '', *more_words):
+        log_event('prefix_command', ctx=ctx)
+        log_event('play_command', ctx=ctx)
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, False)
 
     @commands.slash_command(name='add', description='Add a song to the playlist')
     async def slash_add(self, ctx, input: Option(discord.enums.SlashCommandOptionType.string, description='A link or search term', required=False, default='')):
+        log_event('slash_command', ctx=ctx)
+        log_event('play_command', ctx=ctx)
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_play_command(ctx, input, False)
 
     @commands.command(name='skip', aliases=['s', 'sk'], description='Skip the current song!')
     async def prefix_skip(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('skip_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_skip_command(ctx)
 
     @commands.slash_command(name='skip', description='Skip the current song!')
     async def slash_skip(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('skip_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_skip_command(ctx)
 
     @commands.command(name='skipback', aliases=['sb', 'b'], description='Skip back to past songs!')
     async def prefix_skipback(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('skipback_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_skip_backwards_command(ctx)
 
     @commands.slash_command(name='skipback', description='Skip back to past songs!')
     async def slash_skipback(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('skipback_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_skip_backwards_command(ctx)
         
     @commands.command(name='playlist', aliases=['pl'], description='Show playlist/queue')
     async def prefix_playlist(self, ctx, list='both', page='1'):
+        log_event('prefix_command', ctx=ctx)
+        log_event('playlist_command', ctx=ctx)
         if list.lower().startswith('p'): list = 'playlist'
         if list.lower().startswith('q'): list = 'queue'
         if list.lower().startswith('h'): list = 'history'
@@ -2804,36 +2830,49 @@ class Groovy(commands.Cog, name='Groovy'):
     list: Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Show playlist', 'playlist'), OptionChoice('Show queue', 'queue')], required=False, default='both'), 
     page: Option(discord.enums.SlashCommandOptionType.integer, description='Specify page number', required=False, default=1, min_value=1)
     ):
+        log_event('slash_command', ctx=ctx)
+        log_event('playlist_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_playlist_command(ctx, list, page-1)
 
     @commands.command(name='shuffle', aliases=['sh'], description='Toggle shuffle mode')
     async def prefix_shuffle(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('shuffle_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_shuffle_command(ctx)
 
     @commands.slash_command(name='shuffle', description='Toggle shuffle mode')
     async def slash_shuffle(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('shuffle_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_shuffle_command(ctx)
 
     @commands.command(name='announcesongs', aliases=['an', 'as'], description='Toggle announcing when a song starts')  # Prefix only
     async def prefix_announce(self, ctx):
+        log_event('prefix_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_announce_command(ctx)
 
     @commands.command(name='pause', description='Toggle pause')
     async def prefix_pause(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('pause_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_pause_command(ctx)
 
     @commands.slash_command(name='pause', description='Toggle pause')
     async def slash_pause(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('pause_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_pause_command(ctx)
 
     @commands.command(name='gamemode', aliases=['gm'], description='Toggle music player game mode. Run for more info')
     async def prefix_gamemode(self, ctx, subcommand: str = '', input: str = ''):
+        log_event('prefix_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
 
         if subcommand == 'toggle' or subcommand == 't': subcommand = 'toggle'
@@ -2858,89 +2897,123 @@ class Groovy(commands.Cog, name='Groovy'):
 
     @gamemode.command(name='info', description='Music player game mode!')
     async def slash_gamemode(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_game_mode_info_command(ctx)
 
     @gamemode.command(name='toggle', description='Toggle music player game mode. Run for more info')
     async def slash_gamemode(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_game_mode_toggle_command(ctx)
 
     @commands.command(name='guess', aliases=['g', 'gu'], description='Guess the song name for music game mode!')
     async def prefix_guess(self, ctx, input: str = '', *more_words):
+        log_event('prefix_command', ctx=ctx)
+        log_event('guess_command', ctx=ctx)
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_guess_command(ctx, input)
 
     @gamemode.command(name='guess', description='Guess the song name for music game mode!')
     async def slash_guess(self, ctx, input: Option(discord.enums.SlashCommandOptionType.string, description='Input your guess!', required=True)):
+        log_event('slash_command', ctx=ctx)
+        log_event('guess_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_guess_command(ctx, input)
 
     @commands.command(name='giveup', description='Give up guessing the song name for music game mode!')
     async def prefix_giveup(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('giveup_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_giveup_command(ctx)
 
     @gamemode.command(name='giveup', description='Give up guessing the song name for music game mode!')
     async def slash_giveup(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('giveup_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_giveup_command(ctx)
 
     @commands.command(name='autoskip', description='Toggle music player autoskip in game mode')
     async def prefix_autoskip(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_autoskip_command(ctx)
 
     @gamemode.command(name='autoskip', description='Toggle music player autoskip in game mode')
     async def prefix_autoskip(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_autoskip_command(ctx)
 
     @commands.command(name='musicscoreboard', aliases=['scoreboard', 'scb'], description='Show the current scoreboard!')
     async def prefix_musicscoreboard(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_music_scoreboard_command(ctx)
 
     @gamemode.command(name='musicscoreboard', description='Show the current scoreboard')
     async def slash_musicscoreboard(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('gamemode_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_music_scoreboard_command(ctx)
 
     @commands.command(name='disconnect', aliases=['dc', 'dis'], description='Leave VC')
     async def prefix_disconnect(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('disconnect_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_disconnect_command(ctx)
 
     @commands.slash_command(name='disconnect', description='Leave VC')
     async def slash_disconnect(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('disconnect_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_disconnect_command(ctx)
 
     @commands.command(name='search', aliases=['sch'], description='Search something on YouTube and get a list of results')
     async def prefix_search(self, ctx, input: str = 'music', *more_words):
+        log_event('prefix_command', ctx=ctx)
+        log_event('search_command', ctx=ctx)
         input = (input + ' ' + ' '.join(more_words)).strip()  #So that any number of words is accepted in input   #FIXME add character limit or something
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
 
     @commands.slash_command(name='search', description='Search something on YouTube and get a list of results')
     async def slash_search(self, ctx, input: Option(str, description='A search term', required=True)):
+        log_event('slash_command', ctx=ctx)
+        log_event('search_command', ctx=ctx)
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_search_command(ctx, input)
 
     @commands.command(name="nowplaying", aliases=['np'], description="Show the now playing song")
     async def np(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('nowplaying_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_nowplaying_command(ctx)
 
     @commands.slash_command(name="nowplaying", description="Show the now playing song")
     async def slash_np(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('nowplaying_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_nowplaying_command(ctx)
     
     @commands.command(name="clear", aliases=['c'], description="Clear the playlist/queue")  # Secret lil guy
     async def prefix_clear(self, ctx, list='both'):
+        log_event('prefix_command', ctx=ctx)
+        log_event('remove_command', ctx=ctx)
         player = self.get_player(ctx)
         if list.lower().startswith('p'): list = 'playlist'
         if list.lower().startswith('q'): list = 'queue'
@@ -2949,6 +3022,8 @@ class Groovy(commands.Cog, name='Groovy'):
 
     @commands.command(name="remove", aliases=['r', 'rm'], description="Remove item from playlist/queue")
     async def prefix_remove(self, ctx, mode='', list='', index='1'):
+        log_event('prefix_command', ctx=ctx)
+        log_event('remove_command', ctx=ctx)
         player = self.get_player(ctx)
 
         if mode.lower().startswith('s'): mode = 'song'
@@ -2970,17 +3045,23 @@ class Groovy(commands.Cog, name='Groovy'):
     async def slash_remove(self, ctx, 
     list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Remove song from playlist', 'playlist'), OptionChoice('Remove song from queue', 'queue')], required=True), 
     index:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the song to remove', required=True, min_value=1)):
+        log_event('slash_command', ctx=ctx)
+        log_event('remove_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_remove_command(ctx, 'song', list, index)
 
     @remove.command(name="all", description="Clear the playlist/queue")
     async def slash_clear(self, ctx, 
     list:Option(discord.enums.SlashCommandOptionType.string, description='Specify playlist or queue', choices=[OptionChoice('Clear playlist', 'playlist'), OptionChoice('Clear queue', 'queue')], required=False, default='both')):
+        log_event('slash_command', ctx=ctx)
+        log_event('remove_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_clear_command(ctx, list)
 
     @commands.command(name="move", aliases=['m', 'mv'], description="Move a song between playlist and queue")
     async def prefix_move(self, ctx, song_list_list='', index_of_first_song='1', index_of_last_song='0', index_to_move_to='1'):
+        log_event('prefix_command', ctx=ctx)
+        log_event('move_command', ctx=ctx)
         player = self.get_player(ctx)
         if song_list_list.lower().startswith('p'): song_list_list = 'playlist'
         if song_list_list.lower().startswith('q'): song_list_list = 'queue'
@@ -3000,6 +3081,8 @@ class Groovy(commands.Cog, name='Groovy'):
     index_to_start:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the first song to move', required=False, min_value=1, default=1),
     index_to_end:Option(discord.enums.SlashCommandOptionType.integer, description='Number of the last song to move', required=False, min_value=1, deafult=0),
     index_to_move_to:Option(discord.enums.SlashCommandOptionType.integer, description='Where to put the songs in the other list', required=False, default=1, min_value=1)):
+        log_event('slash_command', ctx=ctx)
+        log_event('move_command', ctx=ctx)
         index_to_start -= 1
         if index_to_end is None: index_to_end = 0  # Why is this needed??? I don't get it but if it works it works I guess
         index_to_end -= 1
@@ -3009,11 +3092,15 @@ class Groovy(commands.Cog, name='Groovy'):
 
     @commands.command(name='lyrics', aliases=['ly', 'lyr'], description='Get lyrics on the current song')
     async def prefix_lyrics(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('lyrics_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_lyrics_command(ctx)
 
     @commands.slash_command(name='lyrics', description='Get lyrics on the current song')
     async def slash_lyrics(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('lyrics_command', ctx=ctx)
         await ctx.defer()
         player = self.get_player(ctx)
         await player.on_lyrics_command(ctx)

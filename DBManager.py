@@ -3,7 +3,7 @@ import sqlite3
 import logging
 
 database_name = 'Elliot.sqlite'
-database_path = pathlib.Path(database_name)
+database_path = pathlib.Path(f'Storage/{database_name}')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

@@ -4,8 +4,9 @@ import math
 import discord
 from discord.ext import commands, tasks
 import datetime
+from Statistics import log_event
 
-from globalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
+from GlobalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
 
 class BotInfo(commands.Cog, name='Bot Info'):
     def __init__(self):
@@ -13,18 +14,26 @@ class BotInfo(commands.Cog, name='Bot Info'):
 
     @commands.command(name='info', description='Show\'s some stats about Elliot')
     async def info_prefix(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('info_command', ctx=ctx)
         await ctx.reply(embed=self.run_and_get_response_info(), mention_author=False)
 
     @commands.slash_command(name='info', description='Show\'s some stats about Elliot')
     async def info_slash(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('info_command', ctx=ctx)
         await ctx.respond(embed=self.run_and_get_response_info())
 
     @commands.command(name='contribute', aliases=['contrib', 'cont'], description='Elliot\'s GitHub page and contributors!')
     async def contribute_prefix(self, ctx):
+        log_event('prefix_command', ctx=ctx)
+        log_event('contribute_command', ctx=ctx)
         await ctx.reply(embed=self.run_and_get_response_contribute(), mention_author=False)
 
     @commands.slash_command(name='contribute', description='Elliot\'s GitHub page and contributors!')
     async def contribute_slash(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('contribute_command', ctx=ctx)
         await ctx.respond(embed=self.run_and_get_response_contribute())
 
     def run_and_get_response_info(self):  #Replys with the embed or an error

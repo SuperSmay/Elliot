@@ -1,13 +1,18 @@
 import asyncio
 import datetime
+import logging
 import traceback
 import discord
 
 from discord.ext import commands, tasks
+from Statistics import log_event
 
-from globalVariables import bot
+from GlobalVariables import bot, on_log
 from Settings import fetch_setting
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addFilter(on_log)
 
 class BumpReminder(commands.Cog, name='Bump Reminder'):
 
@@ -28,12 +33,12 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
         bump_message = await self.get_message(guild, bump_message_check)
 
         if bump_message == None:
-            print("Bump message was empty, reminding now")
+            logger.info("Bump message was empty, reminding now")
             bot.loop.create_task(self.bump_reminder_task(0, guild.id))
             return
 
         time_since_bump = datetime.datetime.now(datetime.timezone.utc) - bump_message.created_at
-        print(f"Time since bump is {time_since_bump}")
+        logger.info(f"Time since bump is {time_since_bump}")
 
         time_until_bump = datetime.timedelta(hours= 2) - time_since_bump
 
@@ -45,7 +50,7 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
             time_since_bump_remind = datetime.datetime.now(datetime.timezone.utc) - bump_remind_message.created_at
 
         if bump_remind_message != None and (bump_remind_message.created_at - bump_message.created_at).total_seconds() > 0 and not time_since_bump_remind.total_seconds() > 7200: 
-            print(f"Cancelling remind task and waiting because reminder was sent after last bump success and within two hours")
+            logger.info(f"Cancelling remind task and waiting because reminder was sent after last bump success and within two hours")
             self.bump_reminder_tasks[guild.id] = False
             return
 
@@ -68,7 +73,7 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
             message = await channel.history(limit=1500).find(search)
 
         if message == None:
-            print(f'Could not find bump message within 1500 messages for {guild.name}/{channel.name}')
+            logger.info(f'Could not find bump message within 1500 messages for {guild.name}/{channel.name}')
 
         return message
 
@@ -87,11 +92,11 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
         bump_role_id = fetch_setting(guild_id, 'bump_role')
         channel = await bot.fetch_channel(bump_channel_id)  #Get channel
         await channel.send(embed= self.get_reminder_embed(), content= f"<@&{bump_role_id}>" if bump_role_id is not None else '')  #Send reminder
+        log_event('bump_reminded', mode='guild', id=guild_id)
         self.bump_reminder_tasks[guild_id] = False  #Set task running to False
 
     @tasks.loop(minutes=15)
     async def bump_reminder_starter(self):
-        # print("Attempting reminder task start...")
         try:
             async for guild in bot.fetch_guilds():
                 if fetch_setting(guild.id, 'bump_channel') is None: continue
@@ -99,16 +104,15 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
                 if not self.bump_reminder_tasks[guild.id]:
                     try:
                         await self.bump_task_start(guild)  #Start new task
-                        print(f"Bump reminder task started for guild {guild.name}")
+                        logger.info(f"Bump reminder task started for guild {guild.name}")
                     except discord.errors.Forbidden:
                         pass
                     except Exception as e:
-                        print(f'Reminder task failed to start for {guild.name}.\n{e}')  #If something goes wrong, just wait and try restarting again later
+                        logger.error(f'Reminder task failed to start for {guild.name}', exc_info=True)  #If something goes wrong, just wait and try restarting again later
         except Exception as e:
-            print(f'Reminder task starter has failed. Trying again in 15 minutes. {e}')  #If something goes wrong, just wait and try restarting again later
-            traceback.print_exc()
+            logger.error(f'Reminder task starter has failed. Trying again in 15 minutes', exc_info=True)  #If something goes wrong, just wait and try restarting again later
 
     @bump_reminder_starter.before_loop
     async def before_bump(self):
-        print('Starting bump loop...')
+        logger.info('Starting bump loop...')
         await bot.wait_until_ready()

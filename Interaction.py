@@ -1,4 +1,5 @@
 import random
+from Statistics import log_event
 
 import botGifs
 from fnmatch import fnmatch
@@ -12,13 +13,14 @@ import discord
 from discord.ext import commands, tasks
 from discord import Option
 
-from globalVariables import bot
+from GlobalVariables import bot, on_log
 
 database_name = 'Elliot.sqlite'
-database_path = pathlib.Path(database_name)
+database_path = pathlib.Path(f'Storage/{database_name}')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logger.addFilter(on_log)
 
 class Interaction(commands.Cog, name='Interactions'):
 
@@ -29,10 +31,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="hug", description="Hugs a user!")
     async def hug_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=HugInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="hug", description="Hugs a user!")
     async def hug_slash(self, ctx, user:Option(discord.Member, description='User to hug', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -40,10 +44,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="kiss", description="Kiss a user!")
     async def kiss_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=KissInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="kiss", description="Kiss a user!")
     async def kiss_slash(self, ctx, user:Option(discord.Member, description='User to kiss', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -51,10 +57,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="punch", description="Punch a user!")
     async def punch_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=PunchInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="punch", description="Punch a user!")
     async def punch_slash(self, ctx, user:Option(discord.Member, description='User to punch', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -62,10 +70,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="kill", description="Kills a user!")
     async def kill_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=KillInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="kill", description="Kills a user!")
     async def kill_slash(self, ctx, user:Option(discord.Member, description='User to kill', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -73,10 +83,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="handhold", description="Handholds a user!")
     async def handhold_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=HandholdInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="handhold", description="Handholds a user!")
     async def handhold_slash(self, ctx, user:Option(discord.Member, description='User to handhold', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -84,10 +96,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="love", description="Loves a user!")
     async def love_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=LoveInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="love", description="Loves a user!")
     async def love_slash(self, ctx, user:Option(discord.Member, description='User to love', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -95,10 +109,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="cuddle", description="Cuddles a user!")
     async def cuddle_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=CuddleInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="cuddle", description="Cuddles a user!")
     async def cuddle_slash(self, ctx, user:Option(discord.Member, description='User to cuddle', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -106,10 +122,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="pat", description="Pats a user!")
     async def pat_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=PatInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="pat", description="Pats a user!")
     async def pat_slash(self, ctx, user:Option(discord.Member, description='User to pat', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -117,10 +135,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="peck", description="Pecks a user!")
     async def peck_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=PeckInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="peck", description="Pecks a user!")
     async def peck_slash(self, ctx, user:Option(discord.Member, description='User to peck', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -128,10 +148,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="chase", description="Chases a user!")
     async def chase_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=ChaseInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="chase", description="Chases a user!")
     async def chase_slash(self, ctx, user:Option(discord.Member, description='User to chase', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -139,10 +161,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="boop", description="Boops a user!")
     async def boop_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=BoopInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="boop", description="Boops a user!")
     async def boop_slash(self, ctx, user:Option(discord.Member, description='User to boop', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -150,10 +174,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="bonk", description="Bonks a user!")
     async def bonk_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=BonkInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="bonk", description="Bonks a user!")
     async def bonk_slash(self, ctx, user:Option(discord.Member, description='User to bonk', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -161,10 +187,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="run", description="Run!")
     async def run_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=RunInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="run", description="Run!")
     async def run_slash(self, ctx, user:Option(discord.Member, description='User to run at', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -172,10 +200,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="die", description="*Dies*")
     async def die_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=DieInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="die", description="*Dies*")
     async def die_slash(self, ctx, user:Option(discord.Member, description='User to wish death upon', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -183,10 +213,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="dance", description="Dance!")
     async def dance_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=DanceInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="dance", description="Dance!")
     async def dance_slash(self, ctx, user:Option(discord.Member, description='User to dance with', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -194,10 +226,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="lurk", description="Lurk")
     async def lurk_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=LurkInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="lurk", description="Lurk")
     async def lurk_slash(self, ctx, user:Option(discord.Member, description='User to watch', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -205,10 +239,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="pout", description="Pout")
     async def pout_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=PoutInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="pout", description="Pout")
     async def pout_slash(self, ctx, user:Option(discord.Member, description='User to pout at', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -216,10 +252,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="eat", description="Eat some food")
     async def eat_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=EatInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="eat", description="Eat some food")
     async def eat_slash(self, ctx, user:Option(discord.Member, description='User to eat', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -227,10 +265,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="cry", description="When you want to cry :(")
     async def cry_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=CryInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="cry", description="When you want to cry :(")
     async def cry_slash(self, ctx, user:Option(discord.Member, description='User to cry for', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -238,10 +278,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="blush", description="Blush")
     async def blush_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=BlushInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="blush", description="Blush")
     async def blush_slash(self, ctx, user:Option(discord.Member, description='User that made you blush', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -249,10 +291,12 @@ class Interaction(commands.Cog, name='Interactions'):
 
     @commands.command(name="hide", description="Hide")
     async def hide_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
         await ctx.reply(embed=HideInteraction(ctx, args).run_and_get_response(), mention_author=False)
 
     @commands.slash_command(name="hide", description="Hide")
     async def hide_slash(self, ctx, user:Option(discord.Member, description='User to hide from', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
         args = []
         if user != None: args.append(user.mention)
         if message != None: args += message.split(' ')
@@ -276,7 +320,7 @@ def ensure_table_exists():
                 cur.execute(f'CREATE TABLE interactions (user_id INTEGER PRIMARY KEY)')
                 logger.info(f'Created new interactions table')
     except Exception as e:
-        logger.error(f'Failed to ensure interactions table exists', exc_info=e)
+        logger.error(f'Failed to ensure interactions table exists', exc_info=True)
         raise e
 
 def update_columns(name_list: list[str]):
@@ -307,7 +351,7 @@ def update_columns(name_list: list[str]):
                     logger.info(f'Created new table column {col_name=} of type=int')
 
     except Exception as e:
-        logger.error(f'Failed to update interactions database columns', exc_info=e)
+        logger.error(f'Failed to update interactions database columns', exc_info=True)
         raise e
 
 def does_table_exist():
@@ -326,7 +370,7 @@ def does_table_exist():
             else:
                 return True
     except Exception as e:
-        logger.error(f'Failed to check that interactions table exists', exc_info=e)
+        logger.error(f'Failed to check that interactions table exists', exc_info=True)
         raise e
 
 def initialize_user(user_id):
@@ -343,7 +387,7 @@ def initialize_user(user_id):
                 cur.execute(f"INSERT INTO interactions (user_id) VALUES (?)", [user_id])
                 logger.info(f'User row {user_id} initialized')
     except Exception as e:
-        logger.error(f'Failed to initalize interactions database row {user_id=}', exc_info=e)
+        logger.error(f'Failed to initalize interactions database row {user_id=}', exc_info=True)
         raise e
 
 def is_user_known(user_id):
@@ -366,7 +410,7 @@ def is_user_known(user_id):
             else:
                 return False
     except Exception as e:
-        logger.error(f'Failed to check if {user_id=} is known', exc_info=e)
+        logger.error(f'Failed to check if {user_id=} is known', exc_info=True)
         raise e
     
 class BaseInteraction():
@@ -383,10 +427,11 @@ class BaseInteraction():
         try:
             user_id_list, included_message = self.split_into_ids_and_message()
             self.update_counts(user_id_list)
+            log_event('user_interaction', ctx=self.ctx)
             return self.embed(user_id_list, included_message)
         except Exception as e:
             embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328>") 
-            logger.exception('Interaction failed', e)
+            logger.error('Interaction failed', exc_info=True)
             return embed
    
     def update_counts(self, user_id_list):

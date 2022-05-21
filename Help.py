@@ -5,8 +5,9 @@ import discord
 from discord.ext import commands
 
 from Settings import fetch_setting
+from Statistics import log_event
 
-from globalVariables import bot
+from GlobalVariables import bot
 from discord import Option, SlashCommand, SlashCommandGroup
 
 class Help(commands.Cog, name='Help'):
@@ -15,10 +16,14 @@ class Help(commands.Cog, name='Help'):
 
     @commands.command(name='help', description='A full list of commands for Elliot')
     async def help_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
+        log_event('help_command', ctx=ctx)
         await ctx.reply(embed=self.run_and_get_response(args, ctx), mention_author=False)
 
     @commands.slash_command(name='help', description='A full list of commands for Elliot')
     async def help_slash(self, ctx, command:Option(str, description='Which command to provide details for or the page number to display', required=False)):
+        log_event('slash_command', ctx=ctx)
+        log_event('help_command', ctx=ctx)
         args = []
         if command != None: args += command.split(' ')
         await ctx.respond(embed=self.run_and_get_response(args, ctx))
@@ -36,7 +41,6 @@ class Help(commands.Cog, name='Help'):
                 return self.command_help(args)
         except:
             error = traceback.format_exc()
-            error = error.replace("c:\\Users\\Smay\\Dropbox\\AmesBot", "bot")
             embed = discord.Embed(description= f"An error occured. If you can reproduce this message, DM a screenshot and reproduction steps to <@243759220057571328> ```{error}```") 
             traceback.print_exc()
             return embed

@@ -5,8 +5,11 @@ from Settings import fetch_setting
 import discord
 from discord.ext import commands
 
+from GlobalVariables import on_log
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logger.addFilter(on_log)
 
 class Join(commands.Cog, name='Join'):
   

@@ -22,3 +22,5 @@ spotify-id
 genius-token
 output*
 Elliot.sqlite
+ElliotGuild.sqlite
+ElliotUser.sqlite
