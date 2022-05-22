@@ -41,7 +41,7 @@ def get_database_info(name: str, mode: Literal['global', 'guild', 'user']='globa
     '''
     if mode not in ['global', 'guild', 'user']:
         raise ValueError(mode)
-        
+
     if mode == 'global':
         real_name = name
         database_path = global_database_path
@@ -62,19 +62,16 @@ def get_database_info(name: str, mode: Literal['global', 'guild', 'user']='globa
 
     
 
-def log_event(event_name, ctx=None, modes: list[Literal['global', 'guild', 'user']]=None, id: int=None):
+def log_event(event_name, ctx: discord.ApplicationContext=None, modes: list[Literal['global', 'guild', 'user']]=None, id: int=None):
     '''
         Logs an event by name. If a ctx object is provided then also logs the event for the given user and guild.
         If mode is defined, then the event will be globally logged in addition to being logged to the id provided.
 
         Parameters:
-            - `event_name`: str; The name of the table to check
-            - `ctx`: discord.ApplicationContext; The name of the table to check
-            - `modes`: list; The type of table to check
-            - `id`: int; The id of the table to check
-
-        Returns:
-            (real_name: str; The real name of the database to access, database_path: pathlib.Path; The path to the database)
+            - `event_name`: str; The name of the event to log
+            - `ctx`: discord.ApplicationContext; The context of the log. Optional
+            - `modes`: list; The modes to log in. Defaults to global only when no ctx is provided, but defaults to all when a ctx is provided
+            - `id`: int; The id of the user/guild when no ctx is provided
     '''
     if ctx is not None and not isinstance(ctx, discord.ApplicationContext):
         raise TypeError(ctx)
@@ -150,7 +147,7 @@ def change_current_event_count_to(event_name, count, mode: Literal['global', 'gu
         initialize_time(table_name, database_path, time)
         change_current_event_count_to(event_name, count, mode, id)
 
-def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user']='global', id=None):
+def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user']='global', id: int=None):
     
     if mode == 'global':
         real_name = 'statistics'
