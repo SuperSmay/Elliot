@@ -27,7 +27,7 @@ def get_time_slot():
     current_time_slot = round((time//86400))*86400  # Round down to last day (UTC)
     return current_time_slot
 
-def get_database_info(name: str, mode: Literal['global', 'guild', 'user']='global', id: int=-1):
+def get_database_info(name: str, mode: Literal['global', 'guild', 'user']='global', id: int=None):
     '''
         Gets database info from given input
 
@@ -39,41 +39,68 @@ def get_database_info(name: str, mode: Literal['global', 'guild', 'user']='globa
         Returns:
             (real_name: str; The real name of the database to access, database_path: pathlib.Path; The path to the database)
     '''
+    if mode not in ['global', 'guild', 'user']:
+        raise ValueError(mode)
+        
     if mode == 'global':
         real_name = name
         database_path = global_database_path
-    elif not isinstance(id, int):
+        return real_name, database_path
+
+    if not isinstance(id, int):  # ID is required after this point
         raise TypeError(id)
-    elif id == -1:
-        raise ValueError(id)
-    elif mode == 'guild':
+
+    if mode == 'guild':
         real_name = f'{name}_{id}'
         database_path = guild_database_path
-    elif mode == 'user':
+        return real_name, database_path
+
+    if mode == 'user':
         real_name = f'{name}_{id}'
         database_path = user_database_path
-    else:
-        raise ValueError(mode)
-    return real_name, database_path
+        return real_name, database_path
 
-def log_event(event_name, ctx=None, mode='global', id=-1): 
+    
+
+def log_event(event_name, ctx=None, modes: list[Literal['global', 'guild', 'user']]=None, id: int=None):
+    '''
+        Logs an event by name. If a ctx object is provided then also logs the event for the given user and guild.
+        If mode is defined, then the event will be globally logged in addition to being logged to the id provided.
+
+        Parameters:
+            - `event_name`: str; The name of the table to check
+            - `ctx`: discord.ApplicationContext; The name of the table to check
+            - `modes`: list; The type of table to check
+            - `id`: int; The id of the table to check
+
+        Returns:
+            (real_name: str; The real name of the database to access, database_path: pathlib.Path; The path to the database)
+    '''
+    if ctx is not None and not isinstance(ctx, discord.ApplicationContext):
+        raise TypeError(ctx)
+    if modes is not None and not isinstance(modes, list):
+        raise TypeError(modes)
+    if id is not None and not isinstance(id, int):
+        raise TypeError(id)
 
     # Global
-    ensure_table_exists('statistics')
+    if modes is None or 'global' in modes:
+        ensure_table_exists('statistics')
 
-    count = fetch_current_event_count(event_name, 'global')
-    count += 1
-    change_current_event_count_to(event_name, count, 'global')
+        count = fetch_current_event_count(event_name, 'global')
+        count += 1
+        change_current_event_count_to(event_name, count, 'global')
 
     # Guild
-    if ctx is not None:
+    if ctx is not None and (modes is None or 'guild' in modes):
         
         ensure_table_exists('statistics', 'guild', ctx.guild.id)
 
         count = fetch_current_event_count(event_name, 'guild', ctx.guild.id)
         count += 1
         change_current_event_count_to(event_name, count, 'guild', ctx.guild.id)
-    elif (ctx is None and mode == 'guild' and id != -1):
+
+    elif ctx is None and modes is not None and 'guild' in modes and id is not None:
         ensure_table_exists('statistics', 'guild', id)
 
         count = fetch_current_event_count(event_name, 'guild', id)
@@ -81,14 +108,14 @@ def log_event(event_name, ctx=None, mode='global', id=-1):
         change_current_event_count_to(event_name, count, 'guild', id)
 
     # User
-    if ctx is not None:
+    if ctx is not None and (modes is None or 'user' in modes):
         
         ensure_table_exists('statistics', 'user', ctx.author.id)
 
         count = fetch_current_event_count(event_name, 'user', ctx.author.id)
         count += 1
         change_current_event_count_to(event_name, count, 'user', ctx.author.id)
-    elif (ctx is None and mode == 'user' and id != -1):
+    elif ctx is None and modes is not None and 'user' in modes and id is not None:
         ensure_table_exists('statistics', 'user', id)
 
         count = fetch_current_event_count(event_name, 'user', id)
@@ -96,7 +123,7 @@ def log_event(event_name, ctx=None, mode='global', id=-1):
         change_current_event_count_to(event_name, count, 'user', id)
 
 
-def change_current_event_count_to(event_name, count, mode: Literal['global', 'guild', 'user']='global', id=-1):
+def change_current_event_count_to(event_name, count, mode: Literal['global', 'guild', 'user']='global', id=None):
 
     time = get_time_slot()
 
@@ -104,11 +131,11 @@ def change_current_event_count_to(event_name, count, mode: Literal['global', 'gu
         table_name = 'statistics'
         database_path = global_database_path
     elif mode == 'guild':
-        if id == -1: raise ValueError(id)
+        if id is None: raise ValueError(id)
         table_name = f'statistics_{id}'
         database_path = guild_database_path
     elif mode == 'user':
-        if id == -1: raise ValueError(id)
+        if id is None: raise ValueError(id)
         table_name = f'statistics_{id}'
         database_path = user_database_path
     else:
@@ -123,17 +150,17 @@ def change_current_event_count_to(event_name, count, mode: Literal['global', 'gu
         initialize_time(table_name, database_path, time)
         change_current_event_count_to(event_name, count, mode, id)
 
-def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user']='global', id=-1):
+def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user']='global', id=None):
     
     if mode == 'global':
         real_name = 'statistics'
         database_path = global_database_path
     elif mode == 'guild':
-        if id == -1: raise ValueError(id)
+        if id is None: raise ValueError(id)
         real_name = f'statistics_{id}'
         database_path = guild_database_path
     elif mode == 'user':
-        if id == -1: raise ValueError(id)
+        if id is None: raise ValueError(id)
         real_name = f'statistics_{id}'
         database_path = user_database_path
     else:
@@ -152,7 +179,7 @@ def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user
     else:
         return 0
 
-def ensure_table_exists(name: str, mode: Literal['global', 'guild', 'user']='global', id: int=-1):
+def ensure_table_exists(name: str, mode: Literal['global', 'guild', 'user']='global', id: int=None):
     '''
         Checks that the input table exists in the database, and creates it if it doesn't
 

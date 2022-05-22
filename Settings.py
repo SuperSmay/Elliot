@@ -554,7 +554,7 @@ def fetch_all_settings(guild_id):
         Returns:
             `sqlite3.Row`; The settings row
     '''
-    log_event('config_fetch', mode='guild', id=guild_id)
+    log_event('config_fetch', modes=['global', 'guild'], id=guild_id)
     try:
         if is_guild_known(guild_id):
             with sqlite3.connect(DBManager.database_path) as con:
@@ -585,7 +585,7 @@ def set_setting(guild_id, setting, value):
             - `setting`: str; The setting name
             - `value`: Any; The setting value
     '''
-    log_event('config_chnage', mode='guild', id=guild_id)
+    log_event('config_chnage', modes=['global', 'guild'], id=guild_id)
     if value is None: value = 'NULL'
     elif type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
 

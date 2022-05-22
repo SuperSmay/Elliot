@@ -41,7 +41,7 @@ async def on_ready():
   
 @bot.event
 async def on_message(message: discord.Message):
-  if message.author.id == bot.user.id: log_event('message_send', mode='guild', id=message.guild.id)
+  if message.author.id == bot.user.id: log_event('message_send', modes=['global', 'guild'], id=message.guild.id)
   if message.author.bot: return
   if fetch_setting(message.guild.id, 'verification_system') and fetch_setting(message.guild.id, 'unverified_role') in [role.id for role in message.author.roles]:
     verify = Verify.Verify(member= message.author, message= message)
