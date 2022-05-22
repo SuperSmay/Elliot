@@ -3,6 +3,8 @@ import json
 import Interaction
 import pathlib
 
+import DBManager
+
 database_name = 'Elliot.sqlite'
 database_path = pathlib.Path(database_name)
 
@@ -13,8 +15,8 @@ with open('interactionCountDict', 'r') as file:
     interaction_count_dict = json.load(file)
 
 for user_id, interactions in interaction_count_dict.items():
-    if not Interaction.is_user_known(user_id):
-        Interaction.initialize_user(user_id)
+    if not DBManager.is_row_known('interactions', DBManager.global_database_path, 'user_id', user_id):
+        DBManager.initialize_row('interactions', DBManager.global_database_path, 'user_id', user_id)
     for interaction, counts in interactions.items():
         Interaction.update_columns([interaction])
         with sqlite3.connect(database_path) as con:

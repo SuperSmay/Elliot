@@ -171,8 +171,8 @@ class Settings(commands.Cog):
 
         name_type_dict = {name: SETTINGS_TYPES[name] for name in DEFAULT_SETTINGS}  # This is because the default settings dict is the master list and should be the only reference for which settings currently exist
         
-        DBManager.ensure_table_exists('settings', name_type_dict)  
-        DBManager.update_columns('settings', name_type_dict)
+        DBManager.ensure_table_exists('settings')  
+        DBManager.update_columns('settings', DBManager.global_database_path, name_type_dict)
 
     config_list_complete = [OptionChoice(name=SETTINGS_NAMES[setting], value=setting) for setting in DEFAULT_SETTINGS]
     config_list_complete.append(OptionChoice(name='List All', value='list'))
@@ -356,7 +356,7 @@ class Settings(commands.Cog):
         except ValueError:
             return discord.Embed(description=f'Invalid input value `{input_value}`!', color=16741747)
 
-        if setting_name == 'prefix' and len(converted_value) > 5:
+        if setting_name == 'prefix' and converted_value is not None and len(converted_value) > 5:
             return discord.Embed(description=f'Prefix `{input_value}` is too long!', color=16741747)
 
         #Actually do the thing
@@ -439,13 +439,16 @@ def validate_settings_dicts():
         if name not in SETTINGS_NAMES or name not in SETTINGS_TYPES or name not in SETTINGS_DESCRIPTIONS:
             del(DEFAULT_SETTINGS[name])
             logger.warn(f'Setting {name=} not in all required dicts, removing...')
+            continue
         if SETTINGS_TYPES[name] == list and name not in LIST_TYPES:
             del(DEFAULT_SETTINGS[name])
             logger.warn(f'Setting {name=} is a list, but does not have a list type, removing...')
+            continue
         if (name in ROLE_ID_SETTINGS or name in CHANNEL_ID_SETTINGS):
             if SETTINGS_TYPES[name] != int and SETTINGS_TYPES[name] == list and LIST_TYPES[name] != int:
                 del(DEFAULT_SETTINGS[name])
                 logger.warn(f'Setting {name=} is role/channel id but not of type int, removing...')
+                continue
           
 
 
@@ -556,8 +559,8 @@ def fetch_all_settings(guild_id):
     '''
     log_event('config_fetch', modes=['global', 'guild'], id=guild_id)
     try:
-        if is_guild_known(guild_id):
-            with sqlite3.connect(DBManager.database_path) as con:
+        if DBManager.is_row_known('settings', DBManager.global_database_path, 'guild_id', guild_id):
+            with sqlite3.connect(DBManager.global_database_path) as con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
                 row = cur.execute(f"SELECT * FROM settings WHERE guild_id = {guild_id}").fetchone()
@@ -586,20 +589,19 @@ def set_setting(guild_id, setting, value):
             - `value`: Any; The setting value
     '''
     log_event('config_chnage', modes=['global', 'guild'], id=guild_id)
-    if value is None: value = 'NULL'
-    elif type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
+    if value is not None and type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
 
-    if setting == 'prefix':  # Special case for the prefix
+    if setting == 'prefix' and value is not None:  # Special case for the prefix
         value = value [:5]
         value.replace(' ', '')
         value = value.lower()
 
-    if not is_guild_known(guild_id):
-        initialize_guild(guild_id)
+    if not DBManager.is_row_known('settings', DBManager.global_database_path, 'guild_id', guild_id):
+        DBManager.initialize_row('settings', DBManager.global_database_path, 'guild_id', guild_id)
     try:
         if isinstance(value, list):
             value = serialize_list(value)
-        with sqlite3.connect(DBManager.database_path) as con:
+        with sqlite3.connect(DBManager.global_database_path) as con:
             cur = con.cursor()
             cur.execute(f"UPDATE settings SET {setting} = (?) WHERE guild_id = {guild_id}", [value])
             logger.info(f'Changed setting {setting} to {value} for {guild_id=}')
@@ -608,21 +610,21 @@ def set_setting(guild_id, setting, value):
         raise e
 
     if setting == 'prefix':  #If this is true then update the cache
-        if value == 'NULL' and guild_id in global_prefix_dict:
+        if value is None and guild_id in global_prefix_dict:
             del(global_prefix_dict[guild_id])
             logger.info(f'Removed cached setting {setting} for {guild_id=}')
         else:
             global_prefix_dict[guild_id] = value
             logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
     if setting == 'verification_system':  #If this is true then update the cache
-        if value == 'NULL' and guild_id in global_verification_system_dict:
+        if value is None and guild_id in global_verification_system_dict:
             del(global_verification_system_dict[guild_id])
             logger.info(f'Removed cached setting {setting} for {guild_id=}')
         else:
             global_verification_system_dict[guild_id] = value
             logger.info(f'Changed cached setting {setting} to {value} for {guild_id=}')
     if setting == 'unverified_role':  #If this is true then update the cache
-        if value == 'NULL' and guild_id in global_unverified_role_dict:
+        if value is None and guild_id in global_unverified_role_dict:
             del(global_unverified_role_dict[guild_id])
             logger.info(f'Removed cached setting {setting} for {guild_id=}')
         else:
@@ -638,8 +640,8 @@ def set_default_settings(guild_id):
             - `guild_id`: int; The guild id to remove
     '''
     try:
-        if is_guild_known(guild_id):
-            with sqlite3.connect(DBManager.database_path) as con:
+        if DBManager.is_row_known('settings', DBManager.global_database_path, 'guild_id', guild_id):
+            with sqlite3.connect(DBManager.global_database_path) as con:
                 cur = con.cursor()
                 cur.execute(f"DELETE FROM settings WHERE guild_id = {guild_id}")
                 logger.info(f'Deleting server row {guild_id} to reset to default')
@@ -656,66 +658,23 @@ def set_default_settings(guild_id):
     if guild_id in global_unverified_role_dict:  #If this is true then remove that cached value
         del(global_unverified_role_dict[guild_id])
         logger.info(f'Removed cached setting unverified_role for {guild_id=}')
-
-def initialize_guild(guild_id):
-    '''
-        Adds the given guild id to the database with empty settings
-
-        Parameters:
-            - `guild_id`: int; The guild id to add
-    '''
-    try:
-        if not is_guild_known(guild_id):
-            values = [guild_id]
-            values.extend(['NULL' for i in DEFAULT_SETTINGS])
-            #values.extend(DEFAULT_SETTINGS.values())
-            with sqlite3.connect(DBManager.database_path) as con:
-                cur = con.cursor()
-                cur.execute(f"INSERT INTO settings VALUES ({'?,'*(len(DEFAULT_SETTINGS))}?)", values)
-                logger.info(f'Guild row {guild_id} initialized')
-    except Exception as e:
-        logger.error(f'Failed to initalize settings database row {guild_id=}', exc_info=e)
-        raise e
-
-def is_guild_known(guild_id):
-    '''
-        Returns whether the guild is in the database or not
-
-        Parameters:
-            - `guild_id`: int; The guild id to search for
-
-        Returns:
-            `bool`; Whether the guild is in the database or not
-    '''
-    try:
-        with sqlite3.connect(DBManager.database_path) as con:
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
-            row = cur.execute(f"SELECT * FROM settings WHERE guild_id = {guild_id}").fetchone()
-            if row != None:
-                return True
-            else:
-                return False
-    except Exception as e:
-        logger.error(f'Failed to check if {guild_id=} is known', exc_info=e)
-        raise e
 #endregion
 
 if __name__ == '__main__':
 
     def fetch_table(table_name):
-        with sqlite3.connect(DBManager.database_path) as con:
+        with sqlite3.connect(DBManager.global_database_path) as con:
             cur = con.cursor()
             table = cur.execute(f"SELECT * from {table_name}").fetchall()
             return table
 
     def delete_table(table_name):
-        with sqlite3.connect(DBManager.database_path) as con:
+        with sqlite3.connect(DBManager.global_database_path) as con:
             cur = con.cursor()
             cur.execute(f"DROP TABLE {table_name}")
 
     def list_columns(table_name):
-        with sqlite3.connect(DBManager.database_path) as con:
+        with sqlite3.connect(DBManager.global_database_path) as con:
             cur = con.cursor()
             columns = cur.execute(f'PRAGMA table_info({table_name})').fetchall()
             return columns

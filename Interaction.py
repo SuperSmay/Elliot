@@ -14,6 +14,7 @@ from discord.ext import commands, tasks
 from discord import Option
 
 from GlobalVariables import bot, on_log
+import DBManager
 
 database_name = 'Elliot.sqlite'
 database_path = pathlib.Path(f'Storage/{database_name}')
@@ -25,7 +26,7 @@ logger.addFilter(on_log)
 class Interaction(commands.Cog, name='Interactions'):
 
     def __init__(self):
-        ensure_table_exists()
+        DBManager.ensure_table_exists('interactions')
 
     #region Commands
 
@@ -306,23 +307,6 @@ class Interaction(commands.Cog, name='Interactions'):
 
 
 
-def ensure_table_exists():
-    '''
-        Checks that the input table exists in the database, and creates it if it doesn't
-
-        Parameters:
-            - `name`: str; The name of the table to check
-    '''
-    try:
-        if not does_table_exist():
-            with sqlite3.connect(database_path) as con:
-                cur = con.cursor()
-                cur.execute(f'CREATE TABLE interactions (user_id INTEGER PRIMARY KEY)')
-                logger.info(f'Created new interactions table')
-    except Exception as e:
-        logger.error(f'Failed to ensure interactions table exists', exc_info=True)
-        raise e
-
 def update_columns(name_list: list[str]):
     '''
         Adds any missing columns to the interactoins table based on the input list
@@ -352,65 +336,6 @@ def update_columns(name_list: list[str]):
 
     except Exception as e:
         logger.error(f'Failed to update interactions database columns', exc_info=True)
-        raise e
-
-def does_table_exist():
-    '''
-        Checks if the input table exists
-
-        Parameters:
-            - `name`: str; The name of the table to check
-    '''
-    try:
-        with sqlite3.connect(database_path) as con:
-            cur = con.cursor()
-            table = cur.execute(f"SELECT * FROM sqlite_master WHERE type='table' AND name='interactions'").fetchone()
-            if table == None:
-                return False
-            else:
-                return True
-    except Exception as e:
-        logger.error(f'Failed to check that interactions table exists', exc_info=True)
-        raise e
-
-def initialize_user(user_id):
-    '''
-        Adds the given user id to the database with empty interactions
-
-        Parameters:
-            - `user_id`: int; The user id to add
-    '''
-    try:
-        if not is_user_known(user_id):
-            with sqlite3.connect(database_path) as con:
-                cur = con.cursor()
-                cur.execute(f"INSERT INTO interactions (user_id) VALUES (?)", [user_id])
-                logger.info(f'User row {user_id} initialized')
-    except Exception as e:
-        logger.error(f'Failed to initalize interactions database row {user_id=}', exc_info=True)
-        raise e
-
-def is_user_known(user_id):
-    '''
-        Returns whether the guild is in the database or not
-
-        Parameters:
-            - `user_id`: int; The guild id to search for
-
-        Returns:
-            `bool`; Whether the guild is in the database or not
-    '''
-    try:
-        with sqlite3.connect(database_path) as con:
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
-            row = cur.execute(f"SELECT * FROM interactions WHERE user_id = {user_id}").fetchone()
-            if row != None:
-                return True
-            else:
-                return False
-    except Exception as e:
-        logger.error(f'Failed to check if {user_id=} is known', exc_info=True)
         raise e
     
 class BaseInteraction():
@@ -517,8 +442,8 @@ class BaseInteraction():
         return "https://images-ext-1.discordapp.net/external/jdZsQ2YnpjXowNPa42l7p52SKfc-iddn1YlpN_BXt3M/https/c.tenor.com/UhcyGsGpLNIAAAAM/hug-anime.gif"
     
     def get_give_count(self, user_id):
-        update_columns([self.interaction_name])  #FIXME kinda inefficient but oh well
-        if is_user_known(user_id):
+        DBManager.update_columns('interactions', DBManager.global_database_path, {f'{self.interaction_name}_give': int}, defaults={f'{self.interaction_name}_give': 0})  #FIXME kinda inefficient but oh well
+        if DBManager.is_row_known('interactions', DBManager.global_database_path, 'user_id', user_id):
             with sqlite3.connect(database_path) as con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
@@ -529,8 +454,8 @@ class BaseInteraction():
         return 0
     
     def add_give_count(self, user_id):
-        update_columns([self.interaction_name])
-        if is_user_known(user_id):
+        DBManager.update_columns('interactions', DBManager.global_database_path, {f'{self.interaction_name}_give': int}, defaults={f'{self.interaction_name}_give': 0})
+        if DBManager.is_row_known('interactions', DBManager.global_database_path, 'user_id', user_id):
             count = self.get_give_count(user_id)
             count += 1
             with sqlite3.connect(database_path) as con:
@@ -539,12 +464,12 @@ class BaseInteraction():
                 logger.info(f'Changed interactions {self.interaction_name}_give to {count} for {user_id=}')
             return count
         else:
-            initialize_user(user_id)
+            DBManager.initialize_row('interactions', DBManager.global_database_path, 'user_id', user_id)
             self.add_give_count(user_id)
 
     def get_receive_count(self, user_id):
-        update_columns([self.interaction_name])
-        if is_user_known(user_id):
+        DBManager.update_columns('interactions', DBManager.global_database_path, {f'{self.interaction_name}_receive': int}, defaults={f'{self.interaction_name}_receive': 0})
+        if DBManager.is_row_known('interactions', DBManager.global_database_path, 'user_id', user_id):
             with sqlite3.connect(database_path) as con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
@@ -555,8 +480,8 @@ class BaseInteraction():
         return 0
     
     def add_receive_count(self, user_id):
-        update_columns([self.interaction_name])
-        if is_user_known(user_id):
+        DBManager.update_columns('interactions', DBManager.global_database_path, {f'{self.interaction_name}_receive': int}, defaults={f'{self.interaction_name}_receive': 0})
+        if DBManager.is_row_known('interactions', DBManager.global_database_path, 'user_id', user_id):
             count = self.get_receive_count(user_id)
             count += 1
             with sqlite3.connect(database_path) as con:
@@ -565,7 +490,7 @@ class BaseInteraction():
                 logger.info(f'Changed interactions {self.interaction_name}_receive to {count} for {user_id=}')
             return count
         else:
-            initialize_user(user_id)
+            DBManager.initialize_row('interactions', DBManager.global_database_path, 'user_id', user_id)
             self.add_give_count(user_id)
 
 #region Interaction classes
