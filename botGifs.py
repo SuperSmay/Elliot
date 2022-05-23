@@ -395,6 +395,29 @@ hideGif = [
     "https://c.tenor.com/U_cc2yyR3p8AAAAC/embarrassed-hide.gif"
 ]
 
+fuckGif = [
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425299807113227/b8e34e30cb3d4df747e3736ba6165542.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425300599832586/2277500_jamescabello_hinoa-and-minoto.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425301690355762/2a2ada6dca4fd479d305f4a7e6085ade.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425302319497226/03c40be41f390775473001660a4d9a5f.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425302894129212/RDT_20210810_1913175059818877707538139.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425303389061150/RDT_20211222_1937508040908648715921875.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425303670067220/redditsave.com_9txkaz7bvyq61_1.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425304001413161/592_450.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425401074397264/RDT_20211222_1913384519538873605787386.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425401665798264/Image_2.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425401934221312/Image_1.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425402924097586/Image.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425403439992892/4f77fa9.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425526018531348/3957a47.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425526689607700/IMG_1451.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425527629148241/1644322923.brolaren_glass_3.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425528195371078/unknown.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425530003111976/ffd691ac2da200e00da9308b2749c678.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425530984591440/286fecea7e2ff9a5e0dfc43c280ba0e4.gif",
+    "https://cdn.discordapp.com/attachments/978424199309828167/978425532540665886/203.gif"
+]
+
 colors = [
     14381682,
     14394226,
