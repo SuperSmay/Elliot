@@ -303,6 +303,25 @@ class Interaction(commands.Cog, name='Interactions'):
         if message != None: args += message.split(' ')
         await ctx.respond(embed=HideInteraction(ctx, args).run_and_get_response())
 
+    @commands.command(name="fuck", description="Fuck a user")
+    async def fuck_prefix(self, ctx, *args):
+        if not ctx.channel.nsfw: return
+        log_event('prefix_command', ctx=ctx)
+        interaction_object = FuckInteraction(ctx, args)
+        view = discord.ui.View()
+        button = interaction_object.get_report_button()
+        view.add_item(item=button)
+        await ctx.reply(embed=interaction_object.run_and_get_response(), view=view, mention_author=False)
+
+    # @commands.slash_command(name="fuck", description="Fuck a user")
+    # async def fuck_slash(self, ctx, user:Option(discord.Member, description='User to fuck', required=False), message:Option(str, description='Message to include', required=False)):
+    #     if not ctx.channel.nsfw: return
+    #     log_event('slash_command', ctx=ctx)
+    #     args = []
+    #     if user != None: args.append(user.mention)
+    #     if message != None: args += message.split(' ')
+    #     await ctx.respond(embed=FuckInteraction(ctx, args).run_and_get_response())
+
     #endregion
 
 
@@ -1009,5 +1028,44 @@ class HideInteraction(BaseInteraction):
             for id in user_id_list:
                 self.add_receive_count(id)
         self.add_give_count(self.ctx.author.id)
+
+class FuckInteraction(BaseInteraction):
+
+    def __init__(self, ctx: commands.Context, args):
+        super().__init__(ctx, args, 'fuck')
+
+    def no_ping_title(self):  #The title to use if no pings are provided
+        return f"{self.ctx.author.display_name} is horny"
+
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is fucking {self.get_joined_names(name_list)}"
+
+    def no_ping_image(self):
+        return random.choice(botGifs.lurkGif)
+
+    def ping_image(self):
+        return random.choice(botGifs.fuckGif)
+
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was fucked {self.get_receive_count(self.ctx.author.id)} times, and fucked others {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message
+
+    def get_report_button(self):
+        return self.ReportButton(self)
+
+    class ReportButton(discord.ui.Button):
+        def __init__(self, interaction_object):
+            self.reported_user = interaction_object.ctx.author
+            self.report_author = 0
+            super().__init__(style=discord.enums.ButtonStyle.danger, label='Report Harassment ⚠')
+
+        async def callback(self, interaction: discord.Interaction):
+            self.report_author = interaction.user
+            if self.reported_user.id == self.report_author.id: return
+            await interaction.response.send_message('Thank you for your report. It is also recommended to send a report to Discord.', ephemeral=True)
+            owner = await bot.fetch_user(bot.owner_id)
+            await owner.send(f'Harassment Report Filed:\nReport Author: {self.report_author.id}\nReported User: {self.reported_user.id}')
+
 
 #endregion
