@@ -1056,6 +1056,31 @@ class FuckInteraction(BaseInteraction):
 
     class ReportButton(discord.ui.Button):
         def __init__(self, interaction_object):
+            self.interaction_object = interaction_object
+            super().__init__(style=discord.enums.ButtonStyle.danger, label='Report Harassment ⚠')
+
+        async def callback(self, interaction: discord.Interaction):
+            view = discord.ui.View()
+            button = self.ReportConfirmButton(self.interaction_object)
+            view.add_item(button)
+            await interaction.response.send_message('Confirm Report?', view=view, ephemeral=True)
+
+        class ReportConfirmButton(discord.ui.Button):
+            def __init__(self, interaction_object):
+                self.reported_user = interaction_object.ctx.author
+                self.report_author = 0
+                super().__init__(style=discord.enums.ButtonStyle.danger, label='Confirm Report?')
+
+            async def callback(self, interaction: discord.Interaction):
+                self.report_author = interaction.user
+                if self.reported_user.id == self.report_author.id: return
+                owner = await bot.fetch_user(bot.owner_id)
+                await owner.send(f'Harassment Report Filed:\nReport Author: {self.report_author.id}\nReported User: {self.reported_user.id}')
+
+
+
+    class ReportConfirmButton(discord.ui.Button):
+        def __init__(self, interaction_object):
             self.reported_user = interaction_object.ctx.author
             self.report_author = 0
             super().__init__(style=discord.enums.ButtonStyle.danger, label='Report Harassment ⚠')
