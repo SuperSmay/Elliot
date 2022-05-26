@@ -1,15 +1,12 @@
+import logging
+import sqlite3
 from fnmatch import fnmatch
-from random import choices
-from sys import prefix
+
 import discord
+from discord.commands import Option, OptionChoice, SlashCommand, SlashCommandGroup
 from discord.ext import commands
-from discord.commands import Option, OptionChoice, SlashCommandGroup, SlashCommand
 
 import DBManager
-
-import sqlite3
-import logging
-
 from Statistics import log_event
 
 ADD_ALIASES = ['add', 'a', 'append']
