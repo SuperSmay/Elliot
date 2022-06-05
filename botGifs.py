@@ -79,7 +79,39 @@ handholdGif = [
     "https://c.tenor.com/oHi2mkSVipEAAAAC/anime-hold-hand.gif",
     "https://c.tenor.com/c-jglUJs4mEAAAAC/hang-das.gif",
     "https://c.tenor.com/jA87SbGb3XsAAAAC/promise-anime.gif",
-    "https://c.tenor.com/du8B7p54DLcAAAAC/hand-couple.gif"
+    "https://c.tenor.com/du8B7p54DLcAAAAC/hand-couple.gif",
+    "https://c.tenor.com/rU3xZo2_jaIAAAAC/anime-hold.gif",
+    "https://c.tenor.com/7fazqx3v-CMAAAAC/rent-a-girlfriend-mami-chan.gif",
+    "https://c.tenor.com/4wqTSH9Ep30AAAAC/couple-anime.gif",
+    "https://c.tenor.com/F8EMJbkDNDYAAAAC/avatar-legendof-korra.gif",
+
+]
+
+glompGif = [
+    "https://c.tenor.com/NmjEMv0JNNsAAAAC/renora-rwby.gif",
+    "https://c.tenor.com/-Tsibb6fFFoAAAAC/hug-cute.gif",
+    "https://c.tenor.com/BVSo_P_FbukAAAAC/hug-hugging.gif",
+    "https://c.tenor.com/Eq-j-4gF7fQAAAAC/mlp-my-little-pony.gif",
+    "https://c.tenor.com/6gRZxDoo6IsAAAAC/shinsekai.gif",
+    "https://c.tenor.com/c0gkOH-hN7QAAAAC/hinata-shouyou-kozume-kenma.gif",
+    "https://c.tenor.com/9VAhRQHql5MAAAAC/anime-hug.gif",
+    "https://c.tenor.com/RVVRSlH_LBIAAAAC/nuts-and-dolts-mechanical-rose.gif",
+    "https://c.tenor.com/WaIKnq0pr6AAAAAC/hug-howls-moving-castle.gif",
+    "https://c.tenor.com/sFAe2o4-CNcAAAAC/warriors-cats-nice.gif",
+    "https://c.tenor.com/oQPT1dxDIVQAAAAC/anime-hug.gif",
+    "https://c.tenor.com/YZvj444L7r8AAAAC/idolish7-nagi.gif",
+    "https://c.tenor.com/7CeI4Tsmz7QAAAAC/anime-tackle.gif",
+    "https://c.tenor.com/knVtLvv6e78AAAAC/anime-hug.gif",
+    "https://c.tenor.com/FxM1KUGfkRwAAAAC/ons-mika.gif",
+    "https://c.tenor.com/6c4nX8Xij1YAAAAC/karneval-gareki-hug.gif",
+    "https://c.tenor.com/SGsBTMEGwKgAAAAC/rukia-ichigo.gif",
+    "https://c.tenor.com/xrsuSDeXWQkAAAAC/anime-attack-hug.gif",
+    "https://c.tenor.com/nmzZIEFv8nkAAAAC/hug-anime.gif",
+    "https://c.tenor.com/jpgg6hnKpVoAAAAC/anime-hug.gif",
+    "https://c.tenor.com/My2v_lTI3LIAAAAC/hug-anime.gif",
+    "https://c.tenor.com/V9NfrUxoCo0AAAAC/nelliel-ichigo.gif",
+    "https://c.tenor.com/Gdt-UprX0m8AAAAC/anime-hug.gif",
+    "https://c.tenor.com/7WHehpnb2FcAAAAC/anime-hug.gif"
 ]
 
 loveGif = [
@@ -273,7 +305,8 @@ lurkGif = [
     "https://c.tenor.com/-3LC776fSEMAAAAC/dog-peekaboo.gif",
     "https://c.tenor.com/55AetGRcdZEAAAAC/anime-peek.gif",
     "https://c.tenor.com/nb-IK5uyZDsAAAAC/peek-a-boo-hide.gif",
-    "https://c.tenor.com/ZuWC2FIwey4AAAAd/peaking-cute.gif"
+    "https://c.tenor.com/ZuWC2FIwey4AAAAd/peaking-cute.gif",
+    "https://c.tenor.com/ANZZTjfLOv0AAAAd/paiyumi-vtuber.gif"
 ]
 
 poutGif = [

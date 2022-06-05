@@ -95,6 +95,19 @@ class Interaction(commands.Cog, name='Interactions'):
         if message != None: args += message.split(' ')
         await ctx.respond(embed=HandholdInteraction(ctx, args).run_and_get_response())
 
+    @commands.command(name="glomp", description="glomps a user!")
+    async def glomp_prefix(self, ctx, *args):
+        log_event('prefix_command', ctx=ctx)
+        await ctx.reply(embed=GlompInteraction(ctx, args).run_and_get_response(), mention_author=False)
+
+    @commands.slash_command(name="glomp", description="glomps a user!")
+    async def glomp_slash(self, ctx, user:Option(discord.Member, description='User to glomp', required=False), message:Option(str, description='Message to include', required=False)):
+        log_event('slash_command', ctx=ctx)
+        args = []
+        if user != None: args.append(user.mention)
+        if message != None: args += message.split(' ')
+        await ctx.respond(embed=GlompInteraction(ctx, args).run_and_get_response())
+
     @commands.command(name="love", description="Loves a user!")
     async def love_prefix(self, ctx, *args):
         log_event('prefix_command', ctx=ctx)
@@ -619,9 +632,31 @@ class HandholdInteraction(BaseInteraction):
         return random.choice(botGifs.handholdGif)
 
     def get_count_message(self):
-        count_message = f"{self.ctx.author.display_name} got thier hand held {self.get_receive_count(self.ctx.author.id)} times, and held others hands {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = f"{self.ctx.author.display_name} got their hand held {self.get_receive_count(self.ctx.author.id)} times, and held others hands {self.get_give_count(self.ctx.author.id)} times." 
         count_message = count_message.replace("1 times", "once")
         return count_message
+
+class GlompInteraction(BaseInteraction):
+
+    def __init__(self, ctx: commands.Context, args):
+        super().__init__(ctx, args, 'glomp')
+
+    def no_ping_title(self):  #The title to use if no pings are provided
+        return f"{self.ctx.author.display_name} is looking for someone to glomp"
+
+    def ping_title(self, name_list):  #The title to use if there are pings
+        return f"{self.ctx.author.display_name} is glomping {self.get_joined_names(name_list)}!"
+
+    def no_ping_image(self):
+        return random.choice(botGifs.lurkGif)
+
+    def ping_image(self):
+        return random.choice(botGifs.glompGif)
+
+    def get_count_message(self):
+        count_message = f"{self.ctx.author.display_name} was glompped {self.get_receive_count(self.ctx.author.id)} times, and glompped others hands {self.get_give_count(self.ctx.author.id)} times." 
+        count_message = count_message.replace("1 times", "once")
+        return count_message   
 
 class LoveInteraction(BaseInteraction):
 
