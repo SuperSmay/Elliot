@@ -82,7 +82,7 @@ def ensure_table_exists(name: str, mode: Literal['global', 'guild', 'user']='glo
         if not does_table_exist(name, mode, id):
             with sqlite3.connect(database_path) as con:
                 cur = con.cursor()
-                cur.execute(f"CREATE TABLE {real_name} (time INTEGER PRIMARY KEY)")
+                cur.execute(f"CREATE TABLE {real_name} (time INTEGER PRIMARY KEY)")  # Ruh roh
                 logger.info(f'Created new {real_name} table in database {mode}')
     except Exception as e:
         logger.error(f'Failed to ensure {real_name} ({mode}) table exists', exc_info=e)

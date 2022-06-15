@@ -76,29 +76,6 @@ async def cutie(ctx):
   log_event('cutie_command', ctx=ctx)
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
-@bot.slash_command(name="leaderboard", description="Shows a leaderboard")
-async def leaderboard(ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver time', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
-  log_event('slash_command', ctx=ctx)
-  log_event('leaderboard_command', ctx=ctx)
-  if leaderboard == 'weekly':
-    interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
-  elif leaderboard == 'leaver':
-    interaction = Leaderboard.timeLeaderboard(ctx.author)
-  embed = await interaction.getLeaderboardEmbed()
-  await ctx.respond(embed=embed)
-
-@bot.command(name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
-async def leaderboard(ctx, leaderboard='leaver'):
-  log_event('prefix_command', ctx=ctx)
-  log_event('leaderboard_command', ctx=ctx)
-  if leaderboard == 'weekly':
-    interaction = Leaderboard.weeklyTimeLeaderboard(ctx.author)
-  elif leaderboard == 'leaver':
-    interaction = Leaderboard.timeLeaderboard(ctx.author)
-  embed = await interaction.getLeaderboardEmbed()
-  await ctx.reply(embed=embed, mention_author= False)
-
-
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
   if fetch_setting(payload.guild_id, 'verification_system') and fetch_setting(payload.guild_id, 'unverified_role') in [role.id for role in payload.member.roles]:
@@ -106,30 +83,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     verify = Verify.Verify(member= await payload.member.guild.fetch_member(payload.member.id))
     await verify.checkVerifyStatus()
 
-
-@bot.event
-async def on_member_remove(user):
-  timeSinceJoin = datetime.datetime.now(datetime.timezone.utc) - user.joined_at
-  if timeSinceJoin.days == 0 and timeSinceJoin.seconds <= 360:
-    leaderboard = Leaderboard.timeLeaderboard(user)
-    leaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
-    leaderboard.setScoreOnLeaderboard()
-    leaderboard.saveLeaderboard()
-    if leaderboard.indexToAnnounce < 10 and leaderboard.annouce:
-      channel_id = fetch_setting(user.guild.id, 'welcome_channel')
-      if channel_id is None: return
-      channel = await bot.fetch_channel(channel_id)
-      await channel.send(leaderboard.positionAnnoucenment())
-    
-    weeklyLeaderboard = Leaderboard.weeklyTimeLeaderboard(user)
-    weeklyLeaderboard.setUserScore(round(timeSinceJoin.seconds + timeSinceJoin.microseconds/1000000, 2))
-    weeklyLeaderboard.setScoreOnLeaderboard()
-    weeklyLeaderboard.saveLeaderboard()
-    if weeklyLeaderboard.indexToAnnounce < 1 and weeklyLeaderboard.annouce:
-      channel_id = fetch_setting(user.guild.id, 'welcome_channel')
-      if channel_id is None: return
-      channel = await bot.fetch_channel(channel_id)
-      await channel.send(weeklyLeaderboard.positionAnnoucenment())
     
 
 @bot.event
@@ -142,8 +95,9 @@ bot.add_cog(BumpReminder.BumpReminder())
 bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
 bot.add_cog(Settings.Settings())
+bot.add_cog(Leaderboard.Leaderboard())
+#bot.add_cog(Join.Join())
 bot.add_cog(Help.Help())
-bot.add_cog(Join.Join())
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
