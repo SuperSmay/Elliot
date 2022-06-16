@@ -1,14 +1,13 @@
 __pycache__
 .vscode
+.DS_Store
 Leaderboard
 InteractionCount
 Inventory
 script.exp
 start.sh
-bin
 Elliot
-include
-lib
+env
 lib64
 .cache
 token*
