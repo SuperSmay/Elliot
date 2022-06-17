@@ -168,7 +168,7 @@ class Settings(commands.Cog):
 
         name_type_dict = {name: SETTINGS_TYPES[name] for name in DEFAULT_SETTINGS}  # This is because the default settings dict is the master list and should be the only reference for which settings currently exist
         
-        DBManager.ensure_table_exists('settings')  
+        DBManager.ensure_table_exists('settings', 'guild_id', int)  
         DBManager.update_columns('settings', DBManager.global_database_path, name_type_dict)
 
     config_list_complete = [OptionChoice(name=SETTINGS_NAMES[setting], value=setting) for setting in DEFAULT_SETTINGS]
@@ -675,12 +675,5 @@ if __name__ == '__main__':
             cur = con.cursor()
             columns = cur.execute(f'PRAGMA table_info({table_name})').fetchall()
             return columns
-
-    DBManager.ensure_table_exists('settings')
-    DBManager.update_columns('settings')
-    #set_setting(866160840037236736, 'cafe_mode', False)
-    print(fetch_table('settings'))
-    print(fetch_setting(866160840037236736, 'prefix'))
-    print(list_columns('settings'))
 
     

@@ -49,7 +49,7 @@ def log_event(event_name, ctx: discord.ApplicationContext=None, modes: list[Lite
 
     # Global
     if modes is None or 'global' in modes:
-        DBManager.ensure_table_exists('statistics')
+        DBManager.ensure_table_exists('statistics', 'time', int)
 
         count = fetch_current_event_count(event_name, 'global')
         count += 1
@@ -58,14 +58,14 @@ def log_event(event_name, ctx: discord.ApplicationContext=None, modes: list[Lite
     # Guild
     if ctx is not None and (modes is None or 'guild' in modes):
         
-        DBManager.ensure_table_exists('statistics', 'guild', ctx.guild.id)
+        DBManager.ensure_table_exists('statistics', 'time', int, 'guild', ctx.guild.id)
 
         count = fetch_current_event_count(event_name, 'guild', ctx.guild.id)
         count += 1
         change_current_event_count_to(event_name, count, 'guild', ctx.guild.id)
 
     elif ctx is None and modes is not None and 'guild' in modes and id is not None:
-        DBManager.ensure_table_exists('statistics', 'guild', id)
+        DBManager.ensure_table_exists('statistics', 'time', int, 'guild', id)
 
         count = fetch_current_event_count(event_name, 'guild', id)
         count += 1
@@ -74,13 +74,13 @@ def log_event(event_name, ctx: discord.ApplicationContext=None, modes: list[Lite
     # User
     if ctx is not None and (modes is None or 'user' in modes):
         
-        DBManager.ensure_table_exists('statistics', 'user', ctx.author.id)
+        DBManager.ensure_table_exists('statistics', 'time', int, 'user', ctx.author.id)
 
         count = fetch_current_event_count(event_name, 'user', ctx.author.id)
         count += 1
         change_current_event_count_to(event_name, count, 'user', ctx.author.id)
     elif ctx is None and modes is not None and 'user' in modes and id is not None:
-        DBManager.ensure_table_exists('statistics', 'user', id)
+        DBManager.ensure_table_exists('statistics', 'time', int, 'user', id)
 
         count = fetch_current_event_count(event_name, 'user', id)
         count += 1
@@ -144,5 +144,5 @@ def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user
         return 0
     
 if __name__ == '__main__':
-    DBManager.ensure_table_exists()  
+    DBManager.ensure_table_exists('statistics', 'time', int)  
     log_event('test')

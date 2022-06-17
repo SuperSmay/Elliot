@@ -1,3 +1,4 @@
+import os
 import pathlib
 import sqlite3
 import logging
@@ -66,7 +67,7 @@ def is_row_known(table_name, database_path, primary_column: str, primary_value):
         logger.error(f'Failed to check if {primary_value=} is known', exc_info=e)
         raise e
 
-def ensure_table_exists(name: str, mode: Literal['global', 'guild', 'user']='global', id: int=None):
+def ensure_table_exists(name: str,  primary_column_name: str, primary_column_type, mode: Literal['global', 'guild', 'user']='global', id: int=None):
     '''
         Checks that the input table exists in the database, and creates it if it doesn't
 
@@ -82,7 +83,7 @@ def ensure_table_exists(name: str, mode: Literal['global', 'guild', 'user']='glo
         if not does_table_exist(name, mode, id):
             with sqlite3.connect(database_path) as con:
                 cur = con.cursor()
-                cur.execute(f"CREATE TABLE {real_name} (time INTEGER PRIMARY KEY)")  # Ruh roh
+                cur.execute(f"CREATE TABLE {real_name} ({primary_column_name} {type_to_typename(primary_column_type)} PRIMARY KEY)")  # Ruh roh
                 logger.info(f'Created new {real_name} table in database {mode}')
     except Exception as e:
         logger.error(f'Failed to ensure {real_name} ({mode}) table exists', exc_info=e)
@@ -120,11 +121,6 @@ def get_database_info(name: str, mode: Literal['global', 'guild', 'user']='globa
         real_name = f'{name}_{id}'
         database_path = user_database_path
         return real_name, database_path
-
-
-
-
-
 
 def get_columns_string(name_type_dict: dict[str, type]) -> str:
     '''
@@ -193,28 +189,6 @@ def update_columns(table_name, database_path, name_type_dict: dict[str, type], d
         logger.error(f'Failed to update {table_name} database columns', exc_info=e)
         raise e
 
-# def update_columns(name: str, name_type_dict: dict[str, type]):
-#     '''
-#         Adds any missing columns to the input table based on the input dictionary
-
-#         Parameters:
-#             - `name`: str; The name of the table to check
-#             - `name_type_dict`: dict[str, type]; A dictionary containing pairs of column names and types
-#     '''
-#     try:
-#         with sqlite3.connect(global_database_path) as con:
-#             cur = con.cursor()
-#             columns = cur.execute(f'PRAGMA table_info({name})').fetchall()
-#             columns_list = [column[1] for column in columns]
-#             for col_name, type in name_type_dict.items():
-#                 if col_name in columns_list:
-#                     continue
-#                 cur.execute(f"ALTER TABLE {name} ADD {col_name} {type_to_typename(type)}")
-#                 logger.info(f'Created new table column {col_name=} of type={type_to_typename(type)}')
-#     except Exception as e:
-#         logger.error(f'Failed to update {name=} database columns', exc_info=e)
-#         raise e
-
 def does_table_exist(name: str, mode: Literal['global', 'guild', 'user']='global', id: int=-1):
     '''
         Checks if the input table exists
@@ -228,6 +202,8 @@ def does_table_exist(name: str, mode: Literal['global', 'guild', 'user']='global
     real_name, database_path = get_database_info(name, mode, id)
 
     try:
+        if not pathlib.Path.exists(database_path.parent):
+            os.makedirs(database_path.parent)
         with sqlite3.connect(database_path) as con:
             cur = con.cursor()
             table = cur.execute(f"SELECT * FROM sqlite_master WHERE type='table' AND name='{real_name}'").fetchone()
@@ -238,3 +214,10 @@ def does_table_exist(name: str, mode: Literal['global', 'guild', 'user']='global
     except Exception as e:
         logger.error(f'Failed to check that {real_name} table exists', exc_info=e)
         raise e
+
+
+def test():
+    ensure_table_exists('test_table', 'test_id', int, mode='guild', id=1234)
+
+if __name__ == "__main__":
+    test()

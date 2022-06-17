@@ -32,7 +32,7 @@ class LeaderboardData():
 
     #Get leaderboard 
     def get_leaderboard(self, member) -> list[dict]:
-        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
+        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
         with sqlite3.connect(database_path) as con:
@@ -70,7 +70,7 @@ class LeaderboardData():
 
     #Edit 
     def set_score(self, member, score):
-        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
+        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
         old_score = self.get_member_score(member)
@@ -159,7 +159,7 @@ class WeeklyLeaveTimeLeaderboard(LeaderboardData):
         leaderboard = self.get_leaderboard(member)
 
         if len(leaderboard) == 0 or (datetime.datetime.timestamp(datetime.datetime.now()) - leaderboard[0]["join_time"]) > 604800 or score < leaderboard[0]["score"]:
-            DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
+            DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
             database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
             DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
             with sqlite3.connect(database_path) as con:

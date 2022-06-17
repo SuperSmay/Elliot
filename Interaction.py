@@ -26,7 +26,7 @@ logger.addFilter(on_log)
 class Interaction(commands.Cog, name='Interactions'):
 
     def __init__(self):
-        DBManager.ensure_table_exists('interactions')
+        DBManager.ensure_table_exists('interactions', 'user_id', int)
 
     #region Commands
 
