@@ -96,7 +96,7 @@ bot.add_cog(BotInfo.BotInfo())
 bot.add_cog(Groovy.Groovy())
 bot.add_cog(Settings.Settings())
 bot.add_cog(Leaderboard.Leaderboard())
-#bot.add_cog(Join.Join())
+bot.add_cog(Join.Join())
 bot.add_cog(Help.Help())
 
 try:
