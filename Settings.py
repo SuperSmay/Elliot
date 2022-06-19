@@ -378,14 +378,14 @@ class Settings(commands.Cog):
                 return discord.Embed(description=f'{self.get_display_formatted_value(converted_value, setting_name)} is already in {SETTINGS_NAMES[setting_name]}!', color=16741747)
             current_list.append(converted_value)
             set_value = set_setting(ctx.guild.id, setting_name, current_list)
-            return discord.Embed(description=f'Added {self.get_display_formatted_value(set_value, setting_name)} to {SETTINGS_NAMES[setting_name]}!', color=7528669)
+            return discord.Embed(description=f'Added {self.get_display_formatted_value(converted_value, setting_name)} to {SETTINGS_NAMES[setting_name]}!', color=7528669)
         else:
             if converted_value not in current_list:
                 return discord.Embed(description=f'{self.get_display_formatted_value(converted_value, setting_name)} is not in the list!', color=16741747)
             current_list: list = fetch_setting(ctx.guild.id, setting_name)
             current_list.remove(converted_value)
             set_value = set_setting(ctx.guild.id, setting_name, current_list)
-            return discord.Embed(description=f'Removed {self.get_display_formatted_value(set_value, setting_name)} from {SETTINGS_NAMES[setting_name]}!', color=7528669)
+            return discord.Embed(description=f'Removed {self.get_display_formatted_value(converted_value, setting_name)} from {SETTINGS_NAMES[setting_name]}!', color=7528669)
     #endregion
         
     def get_internal_setting_name(self, input_name: str):
@@ -586,6 +586,9 @@ def set_setting(guild_id, setting, value):
             - `guild_id`: int; The guild id to set the setting for
             - `setting`: str; The setting name
             - `value`: Any; The setting value
+
+        Returns;
+            `str`; The new setting value
     '''
     log_event('config_chnage', modes=['global', 'guild'], id=guild_id)
     if value is not None and type(value) != SETTINGS_TYPES[setting]: raise TypeError(value)
