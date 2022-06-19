@@ -235,7 +235,9 @@ class Settings(commands.Cog):
         max_page = max((len(DEFAULT_SETTINGS) - 1)//10, 0)
         page = min(max_page, max(page, 0))
         embed=discord.Embed(title=f'⋅•⋅⊰∙∘☽ Settings ☾∘∙⊱⋅•⋅', description='Bot configuration options', color=7528669)
-        for setting_name in list(DEFAULT_SETTINGS.keys())[10*page: 10*(page + 1)]:
+        sorted_keys = list(DEFAULT_SETTINGS.keys())
+        sorted_keys.sort()
+        for setting_name in sorted_keys[10*page: 10*(page + 1)]:
             embed.add_field(name=f'{SETTINGS_NAMES[setting_name]}', value=SETTINGS_DESCRIPTIONS[setting_name])
         embed.set_footer(text=f'Page {min(page+1, max_page + 1)} of {max_page + 1}')
         value = 1 if True else value
