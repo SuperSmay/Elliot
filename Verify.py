@@ -1,100 +1,122 @@
-import discord
-from Settings import fetch_setting
-from GlobalVariables import bot
+import asyncio
+from email import message
+import logging
 import traceback
 
-class Verify:
+import discord
+from discord.ext import commands
 
-    def __init__(self, member, message= None):
-        self.guild = member.guild
-        self.member = member
-        self.message = message
+from GlobalVariables import bot, on_log
+from Settings import fetch_setting
+from Statistics import log_event
 
-    async def verify(self):
-        unverifiedRole = fetch_setting(self.guild.id, 'unverified_role')
-        verifiedRole = fetch_setting(self.guild.id, 'verified_role')
-        welcomeChannel = fetch_setting(self.guild.id, 'welcome_channel')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addFilter(on_log)
+
+class Verify(commands.Cog):
+
+    def __init__(self):
+        ...
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        if fetch_setting(payload.guild_id, 'verification_system') and fetch_setting(payload.guild_id, 'unverified_role') in [role.id for role in payload.member.roles]:
+            await asyncio.sleep(1)  # Chill to let reaction role bots do their thing
+            member = await payload.member.guild.fetch_member(payload.member.id)
+            channel = await member.guild.fetch_channel(payload.channel_id)
+            message = await channel.fetch_message(payload.message_id)
+            await self.check_verify_status(member, message)
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if fetch_setting(message.guild.id, 'verification_system') and fetch_setting(message.guild.id, 'unverified_role') in [role.id for role in message.author.roles]:
+            await self.check_verify_status(message.author, message)
+
+    async def verify(self, member, message=None):
+        unverified_role = fetch_setting(member.guild.id, 'unverified_role')
+        verified_role = fetch_setting(member.guild.id, 'verified_role')
+        welcome_channel = fetch_setting(member.guild.id, 'welcome_channel')
         try:
-            await self.member.remove_roles(self.guild.get_role(unverifiedRole), reason= 'Autoverify')
-            await self.member.add_roles(self.guild.get_role(verifiedRole))
+            await member.remove_roles(member.guild.get_role(unverified_role), reason= 'Autoverify')
+            await member.add_roles(member.guild.get_role(verified_role))
         except discord.errors.Forbidden:
+            logger.warn('Role permissions missing')
+            if message is None: 
+                welcome_channel.send('I do not have role edit permission for verification!')
+            else:
+                await message.reply('I do not have role edit permission for verification!', mention_author=False)
             return
-        try: await self.logAction(f"Autoverified {self.member.mention}")
-        except AttributeError: pass  #I don't even know it just doesn't work sometimes
-        try: await self.member.send("You've been verified. Welcome to The Gayming Café!!")
+        logger.info(f'Verified user {member} on guild {member.guild.name}')
+        log_event('user_verified', modes=['global', 'guild'], id=member.guild.id)
+        try: await self.log_action(message, f"Autoverified {member.mention}")
+        except AttributeError: pass  # I don't even know it just doesn't work sometimes
+        try: await member.send("You've been verified. Welcome to The Gayming Café!!")
         except discord.errors.Forbidden: 
-            if welcomeChannel is None: return
-            await bot.get_channel(welcomeChannel).send(content= f"{self.member.mention}, you've been verified. Welcome to The Gayming Café!!") 
+            if welcome_channel is None: return
+            await bot.get_channel(welcome_channel).send(content= f"{member.mention}, you've been verified. Welcome to The Gayming Café!!") 
 
-    async def ageDeny(self):
-        try: await self.guild.kick(user= self.member, reason= "Autokick - Outside age range")
+    async def age_deny(self, member):
+        try: await member.guild.kick(user= member, reason= "Autokick - Outside age range")
         except discord.errors.Forbidden: return
-        try: await self.member.send(f"Sorry, you are not in the age range for {self.guild.name}. If you chose wrong age role accidentally, feel free to join again.")
+        try: await member.send(f"Sorry, you are not in the age range for {member.guild.name}. If you chose wrong age role accidentally, feel free to join again.")
         except discord.errors.Forbidden: pass
-        try: await self.logAction(f"Autokicked {self.member.mention} - Outside age range")
+        try: await self.log_action(f"Autokicked {member.mention} - Outside age range", member)
         except AttributeError: pass
 
-    async def verifyInfo(self):
-        roleChannel = fetch_setting(self.guild.id, 'role_channel')
-        await self.message.reply(f"To get verified, you must have at least one pronoun role and an age role{f', from <#{roleChannel}>' if roleChannel is not None else ''}. If you don't feel comfortable sharing your age or have other difficulties, feel free to DM a mod and they'll help you out!", mention_author= False)
+    async def verify_info(self, message):
+        role_channel = fetch_setting(message.guild.id, 'role_channel')
+        await message.reply(f"To get verified, you must have at least one pronoun role and an age role{f', from <#{role_channel}>' if role_channel is not None else ''}. If you don't feel comfortable sharing your age or have other difficulties, feel free to DM a mod and they'll help you out!", mention_author= False)
 
-    async def checkVerifyStatus(self):
-        unverifiedRole = fetch_setting(self.guild.id, 'unverified_role')
-        verifiedRole =  fetch_setting(self.guild.id, 'verified_role')
-        if unverifiedRole is None or verifiedRole is None: return
+    async def check_verify_status(self, member: discord.Member, message: discord.Message=None):
+        unverified_role = fetch_setting(member.guild.id, 'unverified_role')
+        verified_role =  fetch_setting(member.guild.id, 'verified_role')
+        if unverified_role is None or verified_role is None: return
         try:
-            if unverifiedRole in [role.id for role in self.member.roles]:
-                if self.isTooOld():
-                    await self.ageDeny()
-                elif self.isTooYoung():
-                    await self.ageDeny()
-                elif self.hasPronounRole() and self.hasAgeRole():
-                    await self.verify()
-                elif self.message != None and ("verify" in self.message.content or "verified" in self.message.content or "help" in self.message.content):
-                    await self.verifyInfo()
+            if unverified_role in [role.id for role in member.roles]:
+                if self.is_too_old(member):
+                    await self.age_deny(member)
+                elif self.is_too_young(member):
+                    await self.age_deny(member)
+                elif self.has_pronoun_role(member) and self.has_age_role(member):
+                    await self.verify(member, message)
+                elif message != None and ("verify" in message.content or "verified" in message.content or "help" in message.content):
+                    await self.verify_info(message)
         except Exception as e:
-            if self.message == None:
-                traceback.print_exc()
-                return
-            error = traceback.format_exc()
-            error = error.replace("c:\\Users\\31415\\Dropbox\\AmesBot", "bot")
-            error += f"\nVars:\nMessage: {self.message.content}"
-            await self.message.reply(content= f"An error occured. If you're seeing this it means <@243759220057571328> is a big dummy. If you can reproduce this message DM reproduction steps to <@243759220057571328>", mention_author= False) 
-            smay = await bot.fetch_user(243759220057571328)
-            await smay.send(f"An error occured.\nMessage link: https://discord.com/channels/{self.message.guild.id}/{self.message.channel.id}/{self.message.id}\n```{error}```")
-            traceback.print_exc()
-            return
+            logger.error('Verification check failed', exc_info=True)
+            if message != None:
+                await message.reply(content="A verification error has occurred.")
 
-    async def logAction(self, action):
-        channel_id = fetch_setting(self.guild.id, 'log_channel')
+    async def log_action(self, member, action):
+        channel_id = fetch_setting(member.guild.id, 'log_channel')
         if channel_id is None: return
-        channel = self.guild.get_channel(channel_id)
+        channel = member.guild.get_channel(channel_id)
         embed = discord.Embed(title= 'Automatic action taken', description= action)
         await channel.send(embed= embed)
 
-    def hasAgeRole(self):
-        ageRoleList = fetch_setting(self.guild.id, 'age_role_list')
-        for roleID in ageRoleList:
-            if roleID in [role.id for role in self.member.roles]:
+    def has_age_role(self, member):
+        age_role_list = fetch_setting(member.guild.id, 'age_role_list')
+        for role_id in age_role_list:
+            if role_id in [role.id for role in member.roles]:
                 return True
         return False
 
-    def hasPronounRole(self):
-        pronounRoleList = fetch_setting(self.guild.id, 'pronoun_role_list')
-        for roleID in pronounRoleList:
-            if roleID in [role.id for role in self.member.roles]:
+    def has_pronoun_role(self, member):
+        pronoun_role_list = fetch_setting(member.guild.id, 'pronoun_role_list')
+        for role_id in pronoun_role_list:
+            if role_id in [role.id for role in member.roles]:
                 return True
         return False
 
-    def isTooYoung(self):
-        tooYoungRole = fetch_setting(self.guild.id, 'too_young_role')
-        if tooYoungRole in [role.id for role in self.member.roles]:
+    def is_too_young(self, member):
+        too_young_role = fetch_setting(member.guild.id, 'too_young_role')
+        if too_young_role in [role.id for role in member.roles]:
             return True
         return False
 
-    def isTooOld(self):
-        tooOldRole = fetch_setting(self.guild.id, 'too_old_role')
-        if tooOldRole in [role.id for role in self.member.roles]:
+    def is_too_old(self, member):
+        too_old_role = fetch_setting(member.guild.id, 'too_old_role')
+        if too_old_role in [role.id for role in member.roles]:
             return True
         return False
 

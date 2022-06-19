@@ -1,5 +1,4 @@
 #Bot
-import asyncio
 import datetime
 import logging
 import pathlib
@@ -45,10 +44,6 @@ async def on_message(message: discord.Message):
     if hasattr(message.guild, 'id'):  # Ephemeral things
       log_event('message_send', modes=['global', 'guild'], id=message.guild.id)
   if message.author.bot: return
-  if fetch_setting(message.guild.id, 'verification_system') and fetch_setting(message.guild.id, 'unverified_role') in [role.id for role in message.author.roles]:
-    verify = Verify.Verify(member= message.author, message= message)
-    await verify.checkVerifyStatus()
-
   if str(bot.user.id) in message.content:
     await message.add_reaction("<a:ping:866475995317534740>")
 
@@ -76,13 +71,6 @@ async def cutie(ctx):
   log_event('cutie_command', ctx=ctx)
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
-@bot.event
-async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-  if fetch_setting(payload.guild_id, 'verification_system') and fetch_setting(payload.guild_id, 'unverified_role') in [role.id for role in payload.member.roles]:
-    await asyncio.sleep(1)  #Chill to let reaction role bots do their thing
-    verify = Verify.Verify(member= await payload.member.guild.fetch_member(payload.member.id))
-    await verify.checkVerifyStatus()
-
     
 
 @bot.event
@@ -97,6 +85,7 @@ bot.add_cog(Groovy.Groovy())
 bot.add_cog(Settings.Settings())
 bot.add_cog(Leaderboard.Leaderboard())
 bot.add_cog(Join.Join())
+bot.add_cog(Verify.Verify())
 bot.add_cog(Help.Help())
 
 try:
