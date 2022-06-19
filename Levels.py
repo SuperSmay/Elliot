@@ -31,4 +31,7 @@ class Levels(commands.Cog):
         
         level_manager.set_score(message.author, message_time, column_name="last_xp_message_time")
 
+        message_count = level_manager.get_member_score(message.author, leaderboard, column_name="message_count")
+        message_count += 1
 
+        level_manager.set_score(message.author, message_count, column_name="message_count")
