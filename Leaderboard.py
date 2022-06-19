@@ -38,7 +38,7 @@ class LeaderboardData():
         with sqlite3.connect(database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
-            sort = 'DESC' if self.lower_score_better else 'ASC'
+            sort = 'ASC' if self.lower_score_better else 'DESC'
             rows = cur.execute(f"SELECT * FROM {database_name} ORDER BY score {sort}").fetchall()
             logger.info(f'Fetched leaderboard for guild_id={member.guild.id}')
             log_event('fetch_leaderboard', modes=['global', 'guild'], id=member.guild.id)
