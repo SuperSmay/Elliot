@@ -23,12 +23,13 @@ class LeaderboardData():
     def __init__(self, internal_name):
         self.internal_name = internal_name
 
-        #Options'
+        #Options
         self.leaderboard_title = "Leaderboard"
         self.overwrite_old_score = True
         self.lower_score_better = False
         self.schema = {"user_id" : int, "score" : int}
         self.defaults = {"score" : 0}
+        self.units = ''
 
     #Get leaderboard 
     def get_leaderboard(self, member) -> list[dict]:
@@ -124,7 +125,15 @@ class LeaderboardData():
     #List of users
     async def leaderboard_list(self, member, page_index, leaderboard=None):
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        leaderboard_list = [f"{self.get_position_number(leaderboard.index(position))} - {(await bot.fetch_user(position['user_id'])).name} - {position['score']} seconds" for position in leaderboard[page_index * 10:(page_index + 1) * 10]]
+        leaderboard_list = []
+        for position in leaderboard[page_index * 10:(page_index + 1) * 10]:
+            position_number = self.get_position_number(leaderboard.index(position))
+            try:
+                member_name = (await bot.fetch_user(position['user_id'])).name
+            except discord.errors.NotFound:
+                member_name = position['user_id']
+            score = position['score']
+            leaderboard_list.append(f'{position_number} - {member_name} - {score} {self.units}')
         return leaderboard_list[:10]
 
     def leaderboard_string(self, leaderboard_list):
@@ -140,6 +149,7 @@ class LeaveTimeLeaderboard(LeaderboardData):
         super().__init__("leave_time")
         self.leaderboard_title = 'Leaver'
         self.lower_score_better = True
+        self.units = 'seconds'
 
     def position_annoucenment(self, member):
         leaderboard = self.get_leaderboard(member)
@@ -153,6 +163,7 @@ class WeeklyLeaveTimeLeaderboard(LeaderboardData):
         self.lower_score_better = True
         self.schema = {"user_id" : int, "score" : int, "join_time": int}
         self.defaults = {"score" : 0}
+        self.units = 'seconds'
 
     def set_score(self, member, score):
 
