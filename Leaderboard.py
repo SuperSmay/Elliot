@@ -27,12 +27,14 @@ class LeaderboardData():
         self.leaderboard_title = "Leaderboard"
         self.overwrite_old_score = True
         self.lower_score_better = False
-        self.schema = {"user_id" : int, "score" : int}
-        self.defaults = {"score" : 0}
+        self.schema = {"user_id" : int, 'score' : int}
+        self.defaults = {'score' : 0}
         self.units = ''
+        self.default_column = 'score'
 
     #Get leaderboard 
-    def get_leaderboard(self, member) -> list[dict]:
+    def get_leaderboard(self, member, column_name=None) -> list[dict]:
+        column_name = column_name if column_name is not None else self.default_column
         DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
@@ -40,21 +42,26 @@ class LeaderboardData():
             con.row_factory = sqlite3.Row
             cur = con.cursor()
             sort = 'ASC' if self.lower_score_better else 'DESC'
-            rows = cur.execute(f"SELECT * FROM {database_name} ORDER BY score {sort}").fetchall()
+            rows = cur.execute(f"SELECT * FROM {database_name} ORDER BY {column_name} {sort}").fetchall()
             logger.info(f'Fetched leaderboard for guild_id={member.guild.id}')
             log_event('fetch_leaderboard', modes=['global', 'guild'], id=member.guild.id)
             return rows
 
-    def get_member_score(self, member, leaderboard=None):
+    def get_member_score(self, member, leaderboard=None, column_name=None):
+        column_name = column_name if column_name is not None else self.default_column
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
         for entry in leaderboard:
             if entry['user_id'] == member.id:
-                return entry['score']
+                return entry[column_name]
+        if column_name in self.defaults:
+            return self.defaults[column_name]
+        return None
 
-    def member_better_than_index(self, member, index, leaderboard=None):
+    def member_better_than_index(self, member, index, leaderboard=None, column_name=None):
+        column_name = column_name if column_name is not None else self.default_column
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
         score = self.get_member_score(member, leaderboard)
-        return (score > leaderboard[index]["score"] and not self.lower_score_better) or (score < leaderboard[index]["score"] and self.lower_score_better)
+        return (score > leaderboard[index][column_name] and not self.lower_score_better) or (score < leaderboard[index][column_name] and self.lower_score_better)
 
     def is_member_on_leaderboard(self, member):
         for entry in self.get_leaderboard(member):
@@ -70,18 +77,21 @@ class LeaderboardData():
         return -1
 
     #Edit 
-    def set_score(self, member, score):
+    def set_score(self, member, score, column_name=None):
+        column_name = column_name if column_name is not None else self.default_column
         DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
+        if not DBManager.is_row_known(database_name, database_path, 'user_id', member.id):
+            DBManager.initialize_row(database_name, database_path, 'user_id', member.id)
         old_score = self.get_member_score(member)
-        if old_score is not None:
+        if old_score is not None and not self.overwrite_old_score:
             if self.lower_score_better and score > old_score: return
             if not self.lower_score_better and old_score > score: return
         with sqlite3.connect(database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
-            cur.execute(f"REPLACE INTO {database_name} (user_id, score) VALUES ({member.id}, {score})")
+            cur.execute(f"UPDATE {database_name} SET {column_name} = (?) WHERE user_id = {member.id}", (score,))
             logger.info(f'Score set for user_id={member.id}')
             return True
     
@@ -123,7 +133,8 @@ class LeaderboardData():
         except: return numberEmoteList[9]
 
     #List of users
-    async def leaderboard_list(self, member, page_index, leaderboard=None):
+    async def leaderboard_list(self, member, page_index, leaderboard=None, column_name=None):
+        column_name = column_name if column_name is not None else self.default_column
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
         leaderboard_list = []
         for position in leaderboard[page_index * 10:(page_index + 1) * 10]:
@@ -132,7 +143,7 @@ class LeaderboardData():
                 member_name = (await bot.fetch_user(position['user_id'])).name
             except discord.errors.NotFound:
                 member_name = position['user_id']
-            score = position['score']
+            score = position[column_name]
             leaderboard_list.append(f'{position_number} - {member_name} - {score} {self.units}')
         return leaderboard_list[:10]
 

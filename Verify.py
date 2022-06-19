@@ -30,7 +30,7 @@ class Verify(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if not hasattr(message.author, 'roless'):
+        if not hasattr(message.author, 'roles'):
             logger.warn('Member has no roles attr')
             logger.info(message.jump_url)
             logger.info(vars(message.author))
