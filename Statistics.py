@@ -11,7 +11,7 @@ import pathlib
 import DBManager
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 global_database_name = 'Elliot.sqlite'
 global_database_path = pathlib.Path(f'Storage/{global_database_name}')

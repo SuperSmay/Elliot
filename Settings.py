@@ -155,7 +155,7 @@ CHANNEL_ID_SETTINGS = [  # Must be in type
 ]
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 global_prefix_dict = {}  # Caches
 global_verification_system_dict = {}
