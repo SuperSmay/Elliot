@@ -197,7 +197,7 @@ class Leaderboard(commands.Cog, name='Leaderboards'):
                 await channel.send(leaderboard.position_annoucenment(member))
 
     @commands.slash_command(name="leaderboard", description="Shows a leaderboard")
-    async def leaderboard(self, ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver time', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
+    async def leaderboard_slash(self, ctx, leaderboard:Option(str, description='Leaderboard to show', choices=[OptionChoice('Weekly top leaver time', 'weekly'), OptionChoice('Top 10 leaver times', 'leaver')], required=False, default='leaver')):
         log_event('slash_command', ctx=ctx)
         log_event('leaderboard_command', ctx=ctx)
         if leaderboard == 'weekly':
@@ -208,7 +208,7 @@ class Leaderboard(commands.Cog, name='Leaderboards'):
         await ctx.respond(embed=embed)
 
     @commands.command(name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
-    async def leaderboard(self, ctx, leaderboard='leaver'):
+    async def leaderboard_prefix(self, ctx, leaderboard='leaver'):
         if leaderboard == 'weekly':
             leaderboard_data = WeeklyLeaveTimeLeaderboard()
         else:
