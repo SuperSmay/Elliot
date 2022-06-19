@@ -32,7 +32,7 @@ def on_log(record: LogRecord):
 bot = commands.Bot(command_prefix=prefix, description="Robo Barista for The Gayming Café!", intents=intents, help_command=None, case_insensitive=True, strip_after_prefix=True)
 bot.owner_id = 243759220057571328
 
-bot_version = '0.5.5'
+bot_version = '0.5.8'
 
 last_start_time = datetime.datetime.utcnow()
 
