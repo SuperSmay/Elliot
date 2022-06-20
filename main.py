@@ -17,6 +17,7 @@ import Join
 import Leaderboard
 import Settings
 import Verify
+import Levels
 from Settings import fetch_setting
 from Statistics import log_event
 from GlobalVariables import bot, last_start_time, on_log
@@ -86,6 +87,7 @@ bot.add_cog(Settings.Settings())
 bot.add_cog(Leaderboard.Leaderboard())
 bot.add_cog(Join.Join())
 bot.add_cog(Verify.Verify())
+bot.add_cog(Levels.Levels())
 bot.add_cog(Help.Help())
 
 try:
