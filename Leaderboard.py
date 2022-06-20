@@ -120,10 +120,10 @@ class LeaderboardData():
         return placement
 
     #Create leaderboard
-    async def get_leaderboard_embed(self, member, page_index = 0):
-        leaderboard = self.get_leaderboard(member)
+    async def get_leaderboard_embed(self, member, page_index = 0, column_name=None):
+        leaderboard = self.get_leaderboard(member, column_name)
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{member.guild.name}'s {self.leaderboard_title} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
-        embed.add_field(name= "**Leaderboard**", value= self.leaderboard_string(await self.leaderboard_list(member, page_index, leaderboard)))
+        embed.add_field(name= "**Leaderboard**", value= self.leaderboard_string(await self.leaderboard_list(member, page_index, leaderboard, column_name)))
         embed.set_thumbnail(url=bot.user.avatar.url)
         embed.set_footer(text=f'Page {page_index + 1} of {math.ceil(len(leaderboard) / 10)}')
         return embed
@@ -138,14 +138,18 @@ class LeaderboardData():
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
         leaderboard_list = []
         for position in leaderboard[page_index * 10:(page_index + 1) * 10]:
-            position_number = self.get_position_number(leaderboard.index(position))
-            try:
-                member_name = (await bot.fetch_user(position['user_id'])).name
-            except discord.errors.NotFound:
-                member_name = position['user_id']
-            score = position[column_name]
-            leaderboard_list.append(f'{position_number} - {member_name} - {score} {self.units}')
+            index = leaderboard.index(position)
+            leaderboard_list.append(await self.position_string(index, position, column_name))
         return leaderboard_list[:10]
+
+    async def position_string(self, index, leaderboard_slot, column_name):
+        position_number = self.get_position_number(index)
+        try:
+            member_name = (await bot.fetch_user(leaderboard_slot['user_id'])).name
+        except discord.errors.NotFound:
+            member_name = leaderboard_slot['user_id']
+        score = leaderboard_slot[column_name] 
+        return f'{position_number} - {member_name} - {score} {self.units}'
 
     def leaderboard_string(self, leaderboard_list):
         if len(leaderboard_list) == 0:
