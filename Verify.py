@@ -24,9 +24,7 @@ class Verify(commands.Cog):
         if fetch_setting(payload.guild_id, 'verification_system') and fetch_setting(payload.guild_id, 'unverified_role') in [role.id for role in payload.member.roles]:
             await asyncio.sleep(1)  # Chill to let reaction role bots do their thing
             member = await payload.member.guild.fetch_member(payload.member.id)
-            channel = await member.guild.fetch_channel(payload.channel_id)
-            message = await channel.fetch_message(payload.message_id)
-            await self.check_verify_status(member, message)
+            await self.check_verify_status(member)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
