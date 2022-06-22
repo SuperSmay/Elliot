@@ -22,8 +22,8 @@ class LevelManager(Leaderboard.LeaderboardData):
         super().__init__('levels')
         self.leaderboard_title = "Server XP"
 
-        self.schema = {"user_id" : int, "message_count" : int, "voice_chat_time": int, "xp": int, "last_xp_message_time": int}
-        self.defaults = {"message_count" : 0, "voice_chat_time": 0, "xp": 0, "last_xp_message_time": 0}
+        self.schema = {"user_id" : int, "message_count" : int, "voice_chat_time": int, "xp": int, "last_xp_message_time": int, 'bot': bool}
+        self.defaults = {"message_count" : 0, "voice_chat_time": 0, "xp": 0, "last_xp_message_time": 0, 'bot': False}
         self.default_column = "xp"
 
 
@@ -73,6 +73,10 @@ class LevelManager(Leaderboard.LeaderboardData):
     
     def change_voice_chat_time(self, member, change):
         return self.change_score(member, change, column_name='voice_chat_time')
+
+    def on_row_init(self, member, column_name):
+        if member.bot:
+            self.set_score(member, True, column_name='bot')
     
 class Levels(commands.Cog):
     def __init__(self) -> None:
@@ -82,9 +86,6 @@ class Levels(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-
-        if message.author.bot: 
-            return
         
         level_manager = LevelManager()
 

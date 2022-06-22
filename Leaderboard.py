@@ -35,7 +35,7 @@ class LeaderboardData():
     #Get leaderboard 
     def get_leaderboard(self, member, column_name=None) -> list[dict]:
         column_name = column_name if column_name is not None else self.default_column
-        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
+        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'user_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
         with sqlite3.connect(database_path) as con:
@@ -79,12 +79,12 @@ class LeaderboardData():
     #Edit 
     def set_score(self, member, score, column_name=None):
         column_name = column_name if column_name is not None else self.default_column
-        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
+        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'user_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
         if not DBManager.is_row_known(database_name, database_path, 'user_id', member.id):
             DBManager.initialize_row(database_name, database_path, 'user_id', member.id)
-        
+            self.on_row_init(member, column_name)
         if not self.overwrite_old_score:
             # We only need the old score if we need to check it for overwrite purposes
             old_score = self.get_member_score(member)
@@ -108,11 +108,12 @@ class LeaderboardData():
         Change the score by the specified amount
         '''
         column_name = column_name if column_name is not None else self.default_column
-        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
+        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'user_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
         if not DBManager.is_row_known(database_name, database_path, 'user_id', member.id):
             DBManager.initialize_row(database_name, database_path, 'user_id', member.id)
+            self.on_row_init(member, column_name)
         with sqlite3.connect(database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
@@ -120,6 +121,10 @@ class LeaderboardData():
             logger.info(f'Score {column_name} changed by {change} for user_id={member.id}')
             return True
         return False
+
+    # Events
+    def on_row_init(self, member, column_name):
+        pass
 
     # Message to send
     def position_annoucenment(self, member):
@@ -211,7 +216,7 @@ class WeeklyLeaveTimeLeaderboard(LeaderboardData):
         leaderboard = self.get_leaderboard(member)
 
         if len(leaderboard) == 0 or (datetime.datetime.timestamp(datetime.datetime.now()) - leaderboard[0]["join_time"]) > 604800 or score < leaderboard[0]["score"]:
-            DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
+            DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'user_id', int, 'guild', member.guild.id)
             database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
             DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
             with sqlite3.connect(database_path) as con:
