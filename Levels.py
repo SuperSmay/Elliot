@@ -55,37 +55,30 @@ class LevelManager(Leaderboard.LeaderboardData):
 
     def get_xp(self, member, leaderboard=None):
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        return self.get_member_score(member, leaderboard, column_name="xp")
+        return self.get_member_score(member, leaderboard, column_name='xp')
     
-    def change_xp(self, member, change, leaderboard=None):
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        xp = self.get_xp(member, leaderboard)
-        xp += change
-        return self.set_score(member, xp, column_name="xp")
+    def change_xp(self, member, change):
+        return self.change_score(member, change, column_name='xp')
 
     def get_message_count(self, member, leaderboard=None):
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        return self.get_member_score(member, leaderboard, column_name="message_count")
+        return self.get_member_score(member, leaderboard, column_name='message_count')
     
-    def change_message_count(self, member, change, leaderboard=None):
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        message_count = self.get_message_count(member, leaderboard)
-        message_count += change
-        return self.set_score(member, message_count, column_name="message_count")
+    def change_message_count(self, member, change):
+        return self.change_score(member, change, column_name='message_count')
 
     def get_voice_chat_time(self, member, leaderboard=None):
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        return self.get_member_score(member, leaderboard, column_name="voice_chat_time")
+        return self.get_member_score(member, leaderboard, column_name='voice_chat_time')
     
-    def change_voice_chat_time(self, member, change, leaderboard=None):
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        voice_chat_time = self.get_voice_chat_time(member, leaderboard)
-        voice_chat_time += change
-        return self.set_score(member, voice_chat_time, column_name="voice_chat_time")
+    def change_voice_chat_time(self, member, change):
+        return self.change_score(member, change, column_name='voice_chat_time')
     
 class Levels(commands.Cog):
     def __init__(self) -> None:
         self.levels_voice_chat_loop.start()
+
+        self.watched_channel_ids = []
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -94,9 +87,8 @@ class Levels(commands.Cog):
             return
         
         level_manager = LevelManager()
-        leaderboard = level_manager.get_leaderboard(message.author)
 
-        last_xp_time = level_manager.get_member_score(message.author, leaderboard, column_name="last_xp_message_time")
+        last_xp_time = level_manager.get_member_score(message.author, column_name="last_xp_message_time")
         message_time = int(datetime.datetime.timestamp(message.created_at))
         
         # Ignore if message was within a minute of the last time XP was given
@@ -106,48 +98,55 @@ class Levels(commands.Cog):
         # Set the last time a message gave this user XP
         level_manager.set_score(message.author, message_time, column_name="last_xp_message_time")
         # Add the message count
-        level_manager.change_message_count(message.author, 1, leaderboard=leaderboard)
+        level_manager.change_message_count(message.author, 1)
         # Add the XP
-        level_manager.change_xp(message.author, MESSAGE_XP, leaderboard=leaderboard)
+        level_manager.change_xp(message.author, MESSAGE_XP)
+
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        channel_id = after.channel.id if after.channel is not None else before.channel.id
+        logger.info(f"Member={member.id} entered voice chat {channel_id}")
+
+        if channel_id not in self.watched_channel_ids:
+            self.watched_channel_ids.append(channel_id)
+        
+
 
     @tasks.loop(minutes=1)
     async def levels_voice_chat_loop(self):
         logger.info("Checking voice chats for xp")
 
-        for guild in bot.guilds:
+        for channel_id in self.watched_channel_ids:
 
-            for category in guild.categories:
+            channel: discord.VoiceChannel = await bot.fetch_channel(channel_id)
 
-                for channel in category.voice_channels:
-                    
+            if channel.type != discord.ChannelType.voice:
+                logger.warn("Text Channel in Voice Channel Watch List")
+                return
 
-                    logger.info(channel.name)
+            voice_states: dict[int, discord.VoiceState] = channel.voice_states
 
-                    level_manager = LevelManager()
+            if len(voice_states) < 2:
+                if channel_id in self.watched_channel_ids:
+                    self.watched_channel_ids.remove(channel_id)
+                return 
 
-                    # if channel.type != discord.ChannelType.voice:
-                    #     return
+            level_manager = LevelManager()
 
-                    voice_states: dict[int, discord.VoiceState] = channel.voice_states
+            for member_id, voice_state in voice_states.items():
+                # Ignore AFK users and deafened users (They aren't really participating so...)
+                if voice_state.afk or voice_state.self_deaf or voice_state.deaf:
+                    continue
 
-                    # if len(voice_states) < 2:
-                    #     return 
+                member = await channel.guild.fetch_member(member_id)
 
-                    for member_id, voice_state in voice_states.items():
-                        # Ignore AFK users and deafened users (They aren't really participating so...)
-                        if voice_state.afk or voice_state.self_deaf or voice_state.deaf:
-                            continue
-
-                        member = await guild.fetch_member(member_id)
-
-                        leaderboard = level_manager.get_leaderboard(member)
-
-                        level_manager.change_voice_chat_time(member, 1, leaderboard)
-                        level_manager.change_xp(member, VOICE_XP)
+                level_manager.change_voice_chat_time(member, 1)
+                level_manager.change_xp(member, VOICE_XP)
 
     @levels_voice_chat_loop.before_loop
     async def before_voice_loop(self):
-        logger.info("Starting Voice XP Loop...")
+        logger.info("Starting voice XP loop...")
 
 
 

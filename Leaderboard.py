@@ -84,18 +84,44 @@ class LeaderboardData():
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
         if not DBManager.is_row_known(database_name, database_path, 'user_id', member.id):
             DBManager.initialize_row(database_name, database_path, 'user_id', member.id)
-        old_score = self.get_member_score(member)
-        if old_score is not None and not self.overwrite_old_score:
-            if self.lower_score_better and score > old_score: return
-            if not self.lower_score_better and old_score > score: return
+        
+        if not self.overwrite_old_score:
+            # We only need the old score if we need to check it for overwrite purposes
+            old_score = self.get_member_score(member)
+            if old_score is not None:
+                # Cancel score set if the score is "worse"
+                if self.lower_score_better and score > old_score:
+                    return
+                if not self.lower_score_better and old_score > score:
+                    return
+
         with sqlite3.connect(database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
             cur.execute(f"UPDATE {database_name} SET {column_name} = (?) WHERE user_id = {member.id}", (score,))
-            logger.info(f'Score set for user_id={member.id}')
+            logger.info(f'Score {column_name} set to {score} for user_id={member.id}')
             return True
+        return False
     
-    #Message to send
+    def change_score(self, member, change, column_name):
+        '''
+        Change the score by the specified amount
+        '''
+        column_name = column_name if column_name is not None else self.default_column
+        DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'guild_id', int, 'guild', member.guild.id)
+        database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
+        DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
+        if not DBManager.is_row_known(database_name, database_path, 'user_id', member.id):
+            DBManager.initialize_row(database_name, database_path, 'user_id', member.id)
+        with sqlite3.connect(database_path) as con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            cur.execute(f"UPDATE {database_name} SET {column_name} = {column_name} + {change} WHERE user_id = {member.id}")
+            logger.info(f'Score {column_name} changed by {change} for user_id={member.id}')
+            return True
+        return False
+
+    # Message to send
     def position_annoucenment(self, member):
         leaderboard = self.get_leaderboard(member)
         return f"Congratulations <@{member.id}>! You just got **{self.placement(member, leaderboard)}** on the {self.leaderboard_title} leaderboard with a score of **{self.get_member_score(member, leaderboard)}**!!"
@@ -119,7 +145,7 @@ class LeaderboardData():
             placement = "13th place"
         return placement
 
-    #Create leaderboard
+    # Create leaderboard
     async def get_leaderboard_embed(self, member, page_index = 0, column_name=None):
         leaderboard = self.get_leaderboard(member, column_name)
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{member.guild.name}'s {self.leaderboard_title} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
@@ -132,7 +158,7 @@ class LeaderboardData():
         try: return numberEmoteList[index]
         except: return numberEmoteList[9]
 
-    #List of users
+    # List of users
     async def leaderboard_list(self, member, page_index, leaderboard=None, column_name=None):
         column_name = column_name if column_name is not None else self.default_column
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
