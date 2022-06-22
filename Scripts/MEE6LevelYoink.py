@@ -25,7 +25,7 @@ async def run_api():
             print(player['username'])
             member = LeaderboardMember(int(player['id']), int(player['guild_id']))
             level_manger.set_score(member, int(player['message_count']), column_name='message_count')
-            level_manger.set_score(member, int(player['message_count']*20), column_name='xp')
+            level_manger.set_score(member, int(player['message_count'])*20, column_name='xp')
         
 
 def main():
