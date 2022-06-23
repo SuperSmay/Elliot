@@ -152,7 +152,7 @@ class Levels(commands.Cog):
 
 
     @commands.slash_command(name="levels", description="Shows the level leaderboard")
-    async def levels_slash(self, ctx, sort:Option(str, description='Sort levels leaderboard', choices=[OptionChoice('Total XP', 'xp'), OptionChoice('Minutes messaged', 'messages'), OptionChoice('Minutes in VC', 'vc')], required=False, default='xp'), page_number:Option(int, description='Page number', required=False, default=1)):
+    async def levels_slash(self, ctx, sort:Option(str, name='sort', description='Sort levels leaderboard', choices=[OptionChoice('Total XP', 'xp'), OptionChoice('Minutes messaged', 'messages'), OptionChoice('Minutes in VC', 'vc')], required=False, default='xp'), page_number:Option(int, name='page', description='Page number to show', required=False, default=1), show_bots:Option(bool, name='bots', description='Show bots in leaderboard', required=False, default=False)):
         log_event('slash_command', ctx=ctx)
         log_event('leaderboard_command', ctx=ctx)
         level_manager = LevelManager()
@@ -160,14 +160,26 @@ class Levels(commands.Cog):
         if sort == 'messages': sort = 'message_count'
         elif sort == 'vc': sort = 'voice_chat_time'
         else: sort = 'xp'
-        embed = await level_manager.get_leaderboard_embed(ctx.author, page_index, column_name=sort)
+        if show_bots: exclude_names = []
+        else: exclude_names = ['bot']
+        embed = await level_manager.get_leaderboard_embed(ctx.author, page_index, column_name=sort, exclude_names=exclude_names)
         await ctx.respond(embed=embed)
 
     @commands.command(name="levels", description="Shows the level leaderboard")
-    async def levels_prefix(self, ctx, sort='xp', page_number=1):
+    async def levels_prefix(self, ctx, input_1='xp', input_2='1'):
         log_event('prefix_command', ctx=ctx)
         log_event('leaderboard_command', ctx=ctx)
         level_manager = LevelManager()
+        try: 
+            page_number = int(input_1)
+            sort = input_2
+        except ValueError:
+            sort = input_1
+            try:
+                page_number = int(input_2)
+            except ValueError:
+                page_number = 1
+
         page_index = max(0, page_number - 1)
         if sort == 'messages' or sort == 'message' or sort == 'm': 
             sort = 'message_count'
@@ -178,5 +190,5 @@ class Levels(commands.Cog):
         else:
             sort = 'xp'
             level_manager.leaderboard_title = 'Levels'
-        embed = await level_manager.get_leaderboard_embed(ctx.author, page_index, column_name=sort)
+        embed = await level_manager.get_leaderboard_embed(ctx.author, page_index, column_name=sort, exclude_names=['bot'])
         await ctx.reply(embed=embed, mention_author=False)

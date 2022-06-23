@@ -215,6 +215,16 @@ def does_table_exist(name: str, mode: Literal['global', 'guild', 'user']='global
         logger.error(f'Failed to check that {real_name} table exists', exc_info=e)
         raise e
 
+def get_exlcude_string(column_list, exclude_value):
+    if len(column_list) == 0:
+        return ''
+
+    exlude_strings = []
+    for name in column_list:
+        exlude_strings.append(f"{name} != {exclude_value}")
+
+    return f"WHERE {'or'.join(exlude_strings)}"
+
 
 def test():
     ensure_table_exists('test_table', 'test_id', int, mode='guild', id=1234)

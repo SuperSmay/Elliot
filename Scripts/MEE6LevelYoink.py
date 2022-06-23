@@ -4,6 +4,12 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # https://stackoverflow.com/questions/16780014/import-file-from-parent-directory
 import Levels
 
+try:
+    guild_id = int(input("Guild id:"))
+except ValueError:
+    print("Guild IDs must be integers!")
+    exit()
+
 # Fake guild to skip discord API
 class LeaderboardGuild:
     def __init__(self, id) -> None:
@@ -13,9 +19,10 @@ class LeaderboardGuild:
 class LeaderboardMember:
     def __init__(self, id, guild_id) -> None:
         self.id = id
+        self.bot = False
         self.guild = LeaderboardGuild(guild_id)
 
-mee6API = API(811369107181666343)
+mee6API = API(guild_id)
 
 async def run_api():
     level_manger = Levels.LevelManager()

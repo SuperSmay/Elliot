@@ -33,8 +33,9 @@ class LeaderboardData():
         self.default_column = 'score'
 
     #Get leaderboard 
-    def get_leaderboard(self, member, column_name=None) -> list[dict]:
+    def get_leaderboard(self, member, column_name=None, exclude_names=None) -> list[dict]:
         column_name = column_name if column_name is not None else self.default_column
+        exclude_names = exclude_names if exclude_names is not None else []
         DBManager.ensure_table_exists(f'{self.internal_name}_leaderboard', 'user_id', int, 'guild', member.guild.id)
         database_name, database_path = DBManager.get_database_info(f'{self.internal_name}_leaderboard', 'guild', member.guild.id)
         DBManager.update_columns(database_name, database_path, self.schema, self.defaults, False)
@@ -42,7 +43,8 @@ class LeaderboardData():
             con.row_factory = sqlite3.Row
             cur = con.cursor()
             sort = 'ASC' if self.lower_score_better else 'DESC'
-            rows = cur.execute(f"SELECT * FROM {database_name} ORDER BY {column_name} {sort}").fetchall()
+            exclude = DBManager.get_exlcude_string(exclude_names, 1)
+            rows = cur.execute(f"SELECT * FROM {database_name} {exclude} ORDER BY {column_name} {sort}").fetchall()
             logger.info(f'Fetched leaderboard for guild_id={member.guild.id}')
             log_event('fetch_leaderboard', modes=['global', 'guild'], id=member.guild.id)
             return rows
@@ -57,20 +59,14 @@ class LeaderboardData():
             return self.defaults[column_name]
         return None
 
-    def member_better_than_index(self, member, index, leaderboard=None, column_name=None):
-        column_name = column_name if column_name is not None else self.default_column
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
-        score = self.get_member_score(member, leaderboard)
-        return (score > leaderboard[index][column_name] and not self.lower_score_better) or (score < leaderboard[index][column_name] and self.lower_score_better)
-
     def is_member_on_leaderboard(self, member):
         for entry in self.get_leaderboard(member):
             if entry["user_id"] == member.id: return True
         return False
 
-    def get_user_index_on_leaderboard(self, member, leaderboard=None):
+    def get_user_index_on_leaderboard(self, member, leaderboard=None, exclude_names=None):
         index = 0
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
+        leaderboard = self.get_leaderboard(member, exclude_names=exclude_names) if leaderboard is None else leaderboard
         while index < len(leaderboard):
             if leaderboard[index]["user_id"] == member.id: return index
             index += 1
@@ -131,8 +127,8 @@ class LeaderboardData():
         leaderboard = self.get_leaderboard(member)
         return f"Congratulations <@{member.id}>! You just got **{self.placement(member, leaderboard)}** on the {self.leaderboard_title} leaderboard with a score of **{self.get_member_score(member, leaderboard)}**!!"
 
-    def placement(self, member, leaderboard=None):
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
+    def placement(self, member, leaderboard=None, exclude_names=None):
+        leaderboard = self.get_leaderboard(member, exclude_names=exclude_names) if leaderboard is None else leaderboard
         index = self.get_user_index_on_leaderboard(member, leaderboard)
 
         if index == 0:
@@ -151,8 +147,8 @@ class LeaderboardData():
         return placement
 
     # Create leaderboard
-    async def get_leaderboard_embed(self, member, page_index = 0, column_name=None):
-        leaderboard = self.get_leaderboard(member, column_name)
+    async def get_leaderboard_embed(self, member, page_index = 0, column_name=None, exclude_names=None):
+        leaderboard = self.get_leaderboard(member, column_name, exclude_names)
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{member.guild.name}'s {self.leaderboard_title} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
         embed.add_field(name= "**Leaderboard**", value= self.leaderboard_string(await self.leaderboard_list(member, page_index, leaderboard, column_name)))
         embed.set_thumbnail(url=bot.user.avatar.url)
@@ -164,9 +160,10 @@ class LeaderboardData():
         except: return numberEmoteList[9]
 
     # List of users
-    async def leaderboard_list(self, member, page_index, leaderboard=None, column_name=None):
+    async def leaderboard_list(self, member, page_index, leaderboard=None, column_name=None, exclude_names=None):
         column_name = column_name if column_name is not None else self.default_column
-        leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
+        exclude_names = exclude_names if exclude_names is not None else []
+        leaderboard = self.get_leaderboard(member, exclude_names=exclude_names) if leaderboard is None else leaderboard
         leaderboard_list = []
         for position in leaderboard[page_index * 10:(page_index + 1) * 10]:
             index = leaderboard.index(position)
