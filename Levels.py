@@ -92,6 +92,8 @@ class Levels(commands.Cog):
 
         if message.channel.type == discord.ChannelType.private:
             return
+        if message.is_system():
+            return
         
         level_manager = LevelManager()
 

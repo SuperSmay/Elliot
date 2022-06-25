@@ -28,6 +28,8 @@ class Verify(commands.Cog):
     async def on_message(self, message: discord.Message):
         if message.channel.type == discord.ChannelType.private:
             return
+        if message.is_system():
+            return
         if not hasattr(message.author, 'roles'):
             logger.warn('Member has no roles attr')
             logger.info(message.jump_url)

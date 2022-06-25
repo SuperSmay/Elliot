@@ -44,7 +44,10 @@ async def on_message(message: discord.Message):
   if message.author.id == bot.user.id: 
     if hasattr(message.guild, 'id'):  # Ephemeral things
       log_event('message_send', modes=['global', 'guild'], id=message.guild.id)
-  if message.author.bot: return
+  if message.author.bot: 
+    return
+  if message.is_system():
+    return
   if str(bot.user.id) in message.content:
     await message.add_reaction("<a:ping:866475995317534740>")
 
