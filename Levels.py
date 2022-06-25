@@ -131,21 +131,19 @@ class Levels(commands.Cog):
                 logger.warn("Text Channel in Voice Channel Watch List")
                 return
 
-            voice_states: dict[int, discord.VoiceState] = channel.voice_states
+            member_voice_states: dict[int: discord.VoiceState] = {await channel.guild.fetch_member(member_id): voice_state for member_id, voice_state in channel.voice_states.items()}
 
-            if len(voice_states) < 2:
+            if len([member for member in member_voice_states if not member.bot]) < 2:
                 if channel_id in self.watched_channel_ids:
                     self.watched_channel_ids.remove(channel_id)
                 return 
 
             level_manager = LevelManager()
 
-            for member_id, voice_state in voice_states.items():
+            for member, voice_state in member_voice_states.items():
                 # Ignore AFK users and deafened users (They aren't really participating so...)
                 if voice_state.afk or voice_state.self_deaf or voice_state.deaf:
                     continue
-
-                member = await channel.guild.fetch_member(member_id)
 
                 level_manager.change_voice_chat_time(member, 1)
                 level_manager.change_xp(member, VOICE_XP)
