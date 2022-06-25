@@ -28,10 +28,11 @@ class Verify(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if message.channel.type == discord.ChannelType.private:
+            return
         if not hasattr(message.author, 'roles'):
             logger.warn('Member has no roles attr')
             logger.info(message.jump_url)
-            logger.info(vars(message.author))
         if fetch_setting(message.guild.id, 'verification_system') and fetch_setting(message.guild.id, 'unverified_role') in [role.id for role in message.author.roles]:
             await self.check_verify_status(message.author, message)
 
