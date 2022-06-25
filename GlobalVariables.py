@@ -4,6 +4,7 @@ import datetime
 from logging import LogRecord
 from Settings import fetch_setting
 from Statistics import log_event
+import traceback
 
 intents = discord.Intents().default()
 intents.members = True
@@ -20,7 +21,7 @@ def on_log(record: LogRecord):
 
         async def send_error():
             user =  await bot.fetch_user(bot.owner_id)
-            embed = discord.Embed(title='An error occurred', description=f'```{record.getMessage()}\n{record.pathname}\nLINE:{record.lineno}```')
+            embed = discord.Embed(title='An error occurred', description=f'```{record.getMessage()}\n{record.pathname}\nLINE:{record.lineno}\n{traceback.format_exc()}```')
             await user.send(embed=embed)
 
         bot.loop.create_task(send_error())
