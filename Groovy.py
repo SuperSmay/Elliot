@@ -746,6 +746,16 @@ class iPod:
             - `add_to_queue`: bool; Whether to add the song to the queue or not
         '''
         parsed_input = self.parse_input(input)
+
+        parsed_empty = True
+        for value in parsed_input.values():
+            if value == []:
+                continue
+            parsed_empty = False
+
+        if parsed_empty:
+            bot.loop.create_task(self.respond_to_unknown_url(ctx, input))
+
         for youtube_url in parsed_input['youtube_links']:
             self.receive_youtube_url(ctx, youtube_url, add_to_queue)
         for youtube_playlist_url in parsed_input['youtube_playlist_links']:
@@ -2436,6 +2446,10 @@ class iPod:
     async def respond_to_add_unloaded_item(self, ctx, item_added):
         embed = discord.Embed(description=f'Loading {item_added}...')
         await item_added.loading_context.send_message(ctx, embed)
+
+    async def respond_to_unknown_url(self, ctx, url):
+        embed = discord.Embed(description=f'Unknown url `{url}`. This website is not supported.')
+        await self.send_response(ctx, embed)
 
     async def respond_to_load_error(self, ctx, item_added, exception=None, message=None):
         if exception != None:
