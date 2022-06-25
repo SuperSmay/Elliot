@@ -20,11 +20,9 @@ class Verify(commands.Cog):
         ...
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        if fetch_setting(payload.guild_id, 'verification_system') and fetch_setting(payload.guild_id, 'unverified_role') in [role.id for role in payload.member.roles]:
-            await asyncio.sleep(1)  # Chill to let reaction role bots do their thing
-            member = await payload.member.guild.fetch_member(payload.member.id)
-            await self.check_verify_status(member)
+    async def on_member_update(self, before, after: discord.Member):
+        if fetch_setting(after.guild.id, 'verification_system') and fetch_setting(after.guild.id, 'unverified_role') in [role.id for role in after.roles]:
+            await self.check_verify_status(after)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
