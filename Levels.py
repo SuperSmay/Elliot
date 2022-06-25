@@ -85,10 +85,13 @@ class Levels(commands.Cog):
     def __init__(self) -> None:
         self.levels_voice_chat_loop.start()
 
-        self.watched_channel_ids = []
+        self.watched_channel_ids = set()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+
+        if message.channel.type == discord.ChannelType.private:
+            return
         
         level_manager = LevelManager()
 
@@ -112,8 +115,7 @@ class Levels(commands.Cog):
         channel_id = after.channel.id if after.channel is not None else before.channel.id
         logger.info(f"Member={member.id} entered voice chat {channel_id}")
 
-        if channel_id not in self.watched_channel_ids:
-            self.watched_channel_ids.append(channel_id)
+        self.watched_channel_ids.add(channel_id)
         
 
 
