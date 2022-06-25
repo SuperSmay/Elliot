@@ -35,15 +35,14 @@ class LevelManager(Leaderboard.LeaderboardData):
             member_name = leaderboard_slot['user_id']
         score = leaderboard_slot[column_name]
 
-        level_text = ''
         if column_name == 'xp':
-            score = self.xp_to_level(score)
-            level_text = 'Level '
+            level = self.xp_to_level(score)
+            return f'{position_number} - {member_name} - Level {level}'
 
-        if column_name == 'message_count': self.units = 'minutes messaging'
-        if column_name == 'voice_chat_time': self.units = 'minutes in voice chat'
+        if column_name == 'message_count': units = 'minutes messaging'
+        if column_name == 'voice_chat_time': units = 'minutes in voice chat'
 
-        return f'{position_number} - {member_name} - {level_text}{score} {self.units}'
+        return f'{position_number} - {member_name} - {score} {units}'
 
 
     def xp_to_level(self, xp: int):
@@ -52,6 +51,10 @@ class LevelManager(Leaderboard.LeaderboardData):
         level = (5/6) * (xp + 75.703)**(1/3) - 3.525
         # not exactly correct but close enough
         return int(level)
+
+    def level_to_required_xp(self, level: int):
+        xp = ((6/5) * (level + 3.525))**3 - 75.703
+        return int(xp+1)
 
     def get_xp(self, member, leaderboard=None):
         leaderboard = self.get_leaderboard(member) if leaderboard is None else leaderboard
