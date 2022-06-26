@@ -19,12 +19,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 logger.addFilter(on_log)
 
-load_dotenv(pathlib.Path('Globals/.env'))
-
-USE_DEV_MODE = os.environ.get('USE_DEV_MODE')
-
-TOKEN = os.environ.get('BOT_TOKEN') if not USE_DEV_MODE else os.environ.get('DEV_TOKEN')
-
 @bot.event
 async def on_ready():
     global last_start_time
@@ -99,26 +93,38 @@ async def reload(ctx):
         await ctx.reply(embed=discord.Embed(description=f"Reloading modules complete. {failed} failed."))
 
 
-bot.load_extension('Extensions.BotInfo')
-bot.load_extension('Extensions.Interaction')
-bot.load_extension('Extensions.BumpReminder')
-bot.load_extension('Extensions.Groovy')
-bot.load_extension('Extensions.Settings')
-bot.load_extension('Extensions.Leaderboard')
-bot.load_extension('Extensions.Join')
-bot.load_extension('Extensions.Verify')
-bot.load_extension('Extensions.Levels')
-bot.load_extension('Extensions.Help')
 
-try:
-    bot.loop.run_until_complete(bot.start(token=TOKEN))
-except KeyboardInterrupt:
-    for cog in list(bot.cogs.keys()).copy():
-        bot.remove_cog(cog)
-    bot.loop.run_until_complete(bot.close())
+def main():
 
-    # cancel all tasks lingering
-finally:
-    bot.loop.close()
-    sleep(1)
-    logger.info("Closing up, have a nice day!")
+    load_dotenv(pathlib.Path('Globals/.env'))
+
+    USE_DEV_MODE = os.environ.get('USE_DEV_MODE')
+
+    TOKEN = os.environ.get('BOT_TOKEN') if not USE_DEV_MODE else os.environ.get('DEV_TOKEN')
+
+    bot.load_extension('Extensions.BotInfo')
+    bot.load_extension('Extensions.Interaction')
+    bot.load_extension('Extensions.BumpReminder')
+    bot.load_extension('Extensions.Groovy')
+    bot.load_extension('Extensions.Settings')
+    bot.load_extension('Extensions.Leaderboard')
+    bot.load_extension('Extensions.Join')
+    bot.load_extension('Extensions.Verify')
+    bot.load_extension('Extensions.Levels')
+    bot.load_extension('Extensions.Help')
+
+    try:
+        bot.loop.run_until_complete(bot.start(token=TOKEN))
+    except KeyboardInterrupt:
+        for cog in list(bot.cogs.keys()).copy():
+            bot.remove_cog(cog)
+        bot.loop.run_until_complete(bot.close())
+
+        # cancel all tasks lingering
+    finally:
+        bot.loop.close()
+        sleep(1)
+        logger.info("Closing up, have a nice day!")
+
+if __name__ == '__main__':
+    main()
