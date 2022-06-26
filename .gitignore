@@ -8,6 +8,7 @@ script.exp
 start.sh
 Elliot
 env
+.env
 lib64
 .cache
 token*
@@ -15,10 +16,6 @@ extratokens
 test*
 use-dev-mode
 InteractionCountDict
-youtube-api-key
-spotify-secret
-spotify-id
-genius-token
 output*
 Elliot.sqlite
 ElliotGuild.sqlite
