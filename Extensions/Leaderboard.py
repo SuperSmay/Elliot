@@ -7,10 +7,10 @@ import discord
 from discord.commands import Option, OptionChoice
 from discord.ext import commands
 
-import DBManager
-from GlobalVariables import bot, numberEmoteList, on_log
-from Settings import fetch_setting
-from Statistics import log_event
+import Globals.DBManager as DBManager
+from Globals.GlobalVariables import bot, numberEmoteList, on_log
+from Extensions.Settings import fetch_setting
+from Extensions.Statistics import log_event
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

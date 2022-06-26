@@ -8,7 +8,7 @@ import sqlite3
 import logging
 import pathlib
 
-import DBManager
+import Globals.DBManager as DBManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

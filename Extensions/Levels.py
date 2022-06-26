@@ -4,11 +4,10 @@ from discord.ext import commands, tasks
 import datetime
 import logging
 
-from GlobalVariables import bot, on_log
-from Statistics import log_event
+from Globals.GlobalVariables import bot, on_log
+from Extensions.Statistics import log_event
 
-# import DBManager
-import Leaderboard
+import Extensions.Leaderboard as Leaderboard
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

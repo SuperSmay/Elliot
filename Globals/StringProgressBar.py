@@ -1,6 +1,6 @@
 
 #Attempts to import the progress bar
-import Progress_Bar as Bar #For running the file by itself
+import Globals.ProgressBar as Bar #For running the file by itself
 
 
 class StringBar(Bar.ProgressBar):

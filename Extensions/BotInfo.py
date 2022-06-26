@@ -4,9 +4,9 @@ import math
 import discord
 from discord.ext import commands, tasks
 import datetime
-from Statistics import log_event
+from Extensions.Statistics import log_event
 
-from GlobalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
+from Globals.GlobalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
 
 def setup(bot):
     bot.add_cog(BotInfo())

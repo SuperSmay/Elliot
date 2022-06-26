@@ -1,11 +1,10 @@
-import datetime
 import logging
 import random
-from Settings import fetch_setting
+from Extensions.Settings import fetch_setting
 import discord
 from discord.ext import commands
 
-from GlobalVariables import on_log
+from Globals.GlobalVariables import on_log
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

@@ -1,9 +1,9 @@
 import sqlite3
 import json
-import Interaction
+import Extensions.Interaction as Interaction
 import pathlib
 
-import DBManager
+import Globals.DBManager as DBManager
 
 database_name = 'Elliot.sqlite'
 database_path = pathlib.Path(database_name)

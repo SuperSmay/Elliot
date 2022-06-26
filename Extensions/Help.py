@@ -4,10 +4,10 @@ import math
 import discord
 from discord.ext import commands
 
-from Settings import fetch_setting
-from Statistics import log_event
+from Extensions.Settings import fetch_setting
+from Extensions.Statistics import log_event
 
-from GlobalVariables import bot
+from Globals.GlobalVariables import bot
 from discord import Option, SlashCommand, SlashCommandGroup
 
 def setup(bot):

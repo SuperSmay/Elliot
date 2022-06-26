@@ -6,8 +6,8 @@ import discord
 from discord.commands import Option, OptionChoice, SlashCommand, SlashCommandGroup
 from discord.ext import commands
 
-import DBManager
-from Statistics import log_event
+import Globals.DBManager as DBManager
+from Extensions.Statistics import log_event
 
 ADD_ALIASES = ['add', 'a', 'append']
 REMOVE_ALIASES = ['remove', 'r', 'rm', 'delete', 'yeet']

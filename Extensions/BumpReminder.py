@@ -5,10 +5,10 @@ import traceback
 import discord
 
 from discord.ext import commands, tasks
-from Statistics import log_event
+from Extensions.Statistics import log_event
 
-from GlobalVariables import bot, on_log
-from Settings import fetch_setting
+from Globals.GlobalVariables import bot, on_log
+from Extensions.Settings import fetch_setting
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

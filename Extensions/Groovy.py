@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from typing import Literal
 
 import discord
+import Globals.StringProgressBar as StringProgressBar
 import googleapiclient.discovery
 import lyricsgenius
 import requests
@@ -20,12 +21,11 @@ import youtube_dl
 from discord.commands import Option, OptionChoice, SlashCommandGroup
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+from Globals.GlobalVariables import bot, on_log
 from youtubesearchpython import VideosSearch
 
-import String_Progress_Bar
-from GlobalVariables import bot, on_log
-from Settings import fetch_setting, set_setting
-from Statistics import log_event
+from Extensions.Settings import fetch_setting, set_setting
+from Extensions.Statistics import log_event
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addFilter(on_log)
 
-load_dotenv()
+load_dotenv(pathlib.Path('Globals/.env'))
 
 ytdlFormatOptions = {
     'format': 'bestaudio/best',
@@ -1418,7 +1418,7 @@ class iPod:
         return new_time
 
     def get_progress_bar(self, progress_seconds, total_seconds):
-        bar = String_Progress_Bar.StringBar(length=30, percent=min(100*progress_seconds/total_seconds, 100))
+        bar = StringProgressBar.StringBar(length=30, percent=min(100*progress_seconds/total_seconds, 100))
         bar.edge_back = '▻'
         bar.edge_front = '◅'
         bar.symbol = '●'

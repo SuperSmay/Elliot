@@ -2,8 +2,8 @@ import discord
 from discord.ext import commands
 import datetime
 from logging import LogRecord
-from Settings import fetch_setting
-from Statistics import log_event
+from Extensions.Settings import fetch_setting
+from Extensions.Statistics import log_event
 import traceback
 
 intents = discord.Intents().default()

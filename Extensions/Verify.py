@@ -1,14 +1,11 @@
-import asyncio
-from email import message
 import logging
-import traceback
 
 import discord
 from discord.ext import commands
+from Globals.GlobalVariables import bot, on_log
 
-from GlobalVariables import bot, on_log
-from Settings import fetch_setting
-from Statistics import log_event
+from Extensions.Settings import fetch_setting
+from Extensions.Statistics import log_event
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

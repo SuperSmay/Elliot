@@ -1,9 +1,9 @@
 from typing import AsyncContextManager
 import discord
 from discord import embeds
-from GlobalVariables import client, numberEmoteList, prefix, loadedInventories
+from Globals.GlobalVariables import client, numberEmoteList, prefix, loadedInventories
 from Menu import menu
-from activeMessages import activeMessages
+from Globals.activeMessages import activeMessages
 import asyncio
 import json
 import pathlib

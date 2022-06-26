@@ -4,12 +4,13 @@ import logging
 import os
 from time import sleep
 
+import pathlib
 from dotenv import load_dotenv
 import discord
 from discord.commands import Option, OptionChoice
 
-from Statistics import log_event
-from GlobalVariables import bot, last_start_time, on_log
+from Extensions.Statistics import log_event
+from Globals.GlobalVariables import bot, last_start_time, on_log
 
 logging.basicConfig()
 logging.root.addFilter(on_log)
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 logger.addFilter(on_log)
 
-load_dotenv()
+load_dotenv(pathlib.Path('Globals/.env'))
 
 USE_DEV_MODE = os.environ.get('USE_DEV_MODE')
 
@@ -98,16 +99,16 @@ async def reload(ctx):
         await ctx.reply(embed=discord.Embed(description=f"Reloading modules complete. {failed} failed."))
 
 
-bot.load_extension('BotInfo')
-bot.load_extension('Interaction')
-bot.load_extension('BumpReminder')
-bot.load_extension('Groovy')
-bot.load_extension('Settings')
-bot.load_extension('Leaderboard')
-bot.load_extension('Join')
-bot.load_extension('Verify')
-bot.load_extension('Levels')
-bot.load_extension('Help')
+bot.load_extension('Extensions.BotInfo')
+bot.load_extension('Extensions.Interaction')
+bot.load_extension('Extensions.BumpReminder')
+bot.load_extension('Extensions.Groovy')
+bot.load_extension('Extensions.Settings')
+bot.load_extension('Extensions.Leaderboard')
+bot.load_extension('Extensions.Join')
+bot.load_extension('Extensions.Verify')
+bot.load_extension('Extensions.Levels')
+bot.load_extension('Extensions.Help')
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))

@@ -1,20 +1,17 @@
-import random
-from Statistics import log_event
-
-import botGifs
-from fnmatch import fnmatch
-import traceback
-import pathlib
-import json
 import logging
+import pathlib
+import random
 import sqlite3
+from fnmatch import fnmatch
 
 import discord
-from discord.ext import commands, tasks
+import Globals.BotGifs as BotGifs
+import Globals.DBManager as DBManager
 from discord import Option
+from discord.ext import commands, tasks
+from Globals.GlobalVariables import bot, on_log
 
-from GlobalVariables import bot, on_log
-import DBManager
+from Extensions.Statistics import log_event
 
 database_name = 'Elliot.sqlite'
 database_path = pathlib.Path(f'Storage/{database_name}')
@@ -459,7 +456,7 @@ class BaseInteraction():
         return user_id_list, included_message
     
     def get_color(self):
-        return random.choice(botGifs.colors)
+        return random.choice(BotGifs.colors)
 
     def get_id_from_ping(self, ping):
         id = ping.replace("<", "").replace(">", "").replace("@", "").replace("!", "").replace("&", "")
@@ -541,10 +538,10 @@ class HugInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is hugging {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.hugGif)
+        return random.choice(BotGifs.hugGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got hugged {self.get_receive_count(self.ctx.author.id)} times, and hugged others {self.get_give_count(self.ctx.author.id)} times." 
@@ -563,10 +560,10 @@ class KissInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is kissing {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.kissGif)
+        return random.choice(BotGifs.kissGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got kissed {self.get_receive_count(self.ctx.author.id)} times, and kissed others {self.get_give_count(self.ctx.author.id)} times." 
@@ -585,10 +582,10 @@ class PunchInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is punching {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.punchGif)
+        return random.choice(BotGifs.punchGif)
 
     def ping_image(self):
-        return random.choice(botGifs.punchGif)
+        return random.choice(BotGifs.punchGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got punched {self.get_receive_count(self.ctx.author.id)} times, and punched others {self.get_give_count(self.ctx.author.id)} times." 
@@ -607,10 +604,10 @@ class KillInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} killed {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.killGif)
+        return random.choice(BotGifs.killGif)
 
     def ping_image(self):
-        return random.choice(botGifs.killGif)
+        return random.choice(BotGifs.killGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got killed {self.get_receive_count(self.ctx.author.id)} times, and killed others {self.get_give_count(self.ctx.author.id)} times." 
@@ -629,10 +626,10 @@ class HandholdInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is holding {self.get_joined_names(name_list)}'s hand{'' if len(name_list) < 2 else 's'}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.handholdGif)
+        return random.choice(BotGifs.handholdGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got their hand held {self.get_receive_count(self.ctx.author.id)} times, and held others hands {self.get_give_count(self.ctx.author.id)} times." 
@@ -651,10 +648,10 @@ class GlompInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is glomping {self.get_joined_names(name_list)}!"
 
     def no_ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def ping_image(self):
-        return random.choice(botGifs.glompGif)
+        return random.choice(BotGifs.glompGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was glompped {self.get_receive_count(self.ctx.author.id)} times, and glompped others hands {self.get_give_count(self.ctx.author.id)} times." 
@@ -673,10 +670,10 @@ class LoveInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} loves {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.loveGif)
+        return random.choice(BotGifs.loveGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got loved {self.get_receive_count(self.ctx.author.id)} times, and loved others {self.get_give_count(self.ctx.author.id)} times." 
@@ -695,10 +692,10 @@ class CuddleInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is cuddling {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.cuddleGif)
+        return random.choice(BotGifs.cuddleGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got cuddled with {self.get_receive_count(self.ctx.author.id)} times, and cuddled others {self.get_give_count(self.ctx.author.id)} times." 
@@ -717,10 +714,10 @@ class PatInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is patting {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.patGif)
+        return random.choice(BotGifs.patGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got pat {self.get_receive_count(self.ctx.author.id)} times, and patted others {self.get_give_count(self.ctx.author.id)} times." 
@@ -739,10 +736,10 @@ class PeckInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} pecks {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.selfHugGif)
+        return random.choice(BotGifs.selfHugGif)
 
     def ping_image(self):
-        return random.choice(botGifs.peckGif)
+        return random.choice(BotGifs.peckGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got pecked {self.get_receive_count(self.ctx.author.id)} times, and pecked others {self.get_give_count(self.ctx.author.id)} times." 
@@ -761,10 +758,10 @@ class ChaseInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is chasing {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def ping_image(self):
-        return random.choice(botGifs.chaseGif)
+        return random.choice(BotGifs.chaseGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was chased {self.get_receive_count(self.ctx.author.id)} times, and chased others {self.get_give_count(self.ctx.author.id)} times." 
@@ -783,10 +780,10 @@ class BoopInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} booped {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def ping_image(self):
-        return random.choice(botGifs.boopGif)
+        return random.choice(BotGifs.boopGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got booped {self.get_receive_count(self.ctx.author.id)} times, and booped others {self.get_give_count(self.ctx.author.id)} times." 
@@ -805,10 +802,10 @@ class BonkInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} bonked {self.get_joined_names(name_list)}!"
 
     def no_ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def ping_image(self):
-        return random.choice(botGifs.bonkGif)
+        return random.choice(BotGifs.bonkGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got bonked {self.get_receive_count(self.ctx.author.id)} times, and bonked others {self.get_give_count(self.ctx.author.id)} times." 
@@ -827,10 +824,10 @@ class RunInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is running at {self.get_joined_names(name_list)}!"
 
     def no_ping_image(self):
-        return random.choice(botGifs.runGif)
+        return random.choice(BotGifs.runGif)
 
     def ping_image(self):
-        return random.choice(botGifs.chaseGif)
+        return random.choice(BotGifs.chaseGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} got ran at {self.get_receive_count(self.ctx.author.id)} times, and ran {self.get_give_count(self.ctx.author.id)} times." 
@@ -855,10 +852,10 @@ class DieInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} wants {self.get_joined_names(name_list)} to die :c"
 
     def no_ping_image(self):
-        return random.choice(botGifs.dieGif)
+        return random.choice(BotGifs.dieGif)
 
     def ping_image(self):
-        return random.choice(botGifs.dieGif)
+        return random.choice(BotGifs.dieGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} died {self.get_give_count(self.ctx.author.id)} times." 
@@ -883,10 +880,10 @@ class DanceInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is dancing with {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.danceGif)
+        return random.choice(BotGifs.danceGif)
 
     def ping_image(self):
-        return random.choice(botGifs.danceGif)
+        return random.choice(BotGifs.danceGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was danced with {self.get_receive_count(self.ctx.author.id)} times, and danced {self.get_give_count(self.ctx.author.id)} times." 
@@ -911,10 +908,10 @@ class LurkInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is watching {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was watched {self.get_receive_count(self.ctx.author.id)} times, and lurked {self.get_give_count(self.ctx.author.id)} times." 
@@ -939,10 +936,10 @@ class PoutInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is pouting at {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.poutGif)
+        return random.choice(BotGifs.poutGif)
 
     def ping_image(self):
-        return random.choice(botGifs.poutGif)
+        return random.choice(BotGifs.poutGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was pouted at {self.get_receive_count(self.ctx.author.id)} times, and pouted {self.get_give_count(self.ctx.author.id)} times." 
@@ -967,10 +964,10 @@ class EatInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is eating {self.get_joined_names(name_list)}!"
 
     def no_ping_image(self):
-        return random.choice(botGifs.eatGif)
+        return random.choice(BotGifs.eatGif)
 
     def ping_image(self):
-        return random.choice(botGifs.eatGif)
+        return random.choice(BotGifs.eatGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was eaten {self.get_receive_count(self.ctx.author.id)} times, and ate {self.get_give_count(self.ctx.author.id)} times." 
@@ -995,10 +992,10 @@ class CryInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is crying for {self.get_joined_names(name_list)} :c"
 
     def no_ping_image(self):
-        return random.choice(botGifs.cryGif)
+        return random.choice(BotGifs.cryGif)
 
     def ping_image(self):
-        return random.choice(botGifs.cryGif)
+        return random.choice(BotGifs.cryGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} cried {self.get_give_count(self.ctx.author.id)} times." 
@@ -1023,10 +1020,10 @@ class BlushInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is blushing becuase of {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.blushGif)
+        return random.choice(BotGifs.blushGif)
 
     def ping_image(self):
-        return random.choice(botGifs.blushGif)
+        return random.choice(BotGifs.blushGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} blushed {self.get_give_count(self.ctx.author.id)} times." 
@@ -1051,10 +1048,10 @@ class HideInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is hiding from {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.hideGif)
+        return random.choice(BotGifs.hideGif)
 
     def ping_image(self):
-        return random.choice(botGifs.hideGif)
+        return random.choice(BotGifs.hideGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} hid {self.get_give_count(self.ctx.author.id)} times." 
@@ -1079,10 +1076,10 @@ class FuckInteraction(BaseInteraction):
         return f"{self.ctx.author.display_name} is fucking {self.get_joined_names(name_list)}"
 
     def no_ping_image(self):
-        return random.choice(botGifs.lurkGif)
+        return random.choice(BotGifs.lurkGif)
 
     def ping_image(self):
-        return random.choice(botGifs.fuckGif)
+        return random.choice(BotGifs.fuckGif)
 
     def get_count_message(self):
         count_message = f"{self.ctx.author.display_name} was fucked {self.get_receive_count(self.ctx.author.id)} times, and fucked others {self.get_give_count(self.ctx.author.id)} times." 
