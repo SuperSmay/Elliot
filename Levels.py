@@ -17,6 +17,9 @@ logger.addFilter(on_log)
 MESSAGE_XP = 20
 VOICE_XP = 5
 
+def setup(bot):
+    bot.add_cog(Levels())
+
 class LevelManager(Leaderboard.LeaderboardData):
     def __init__(self):
         super().__init__('levels')

@@ -157,9 +157,13 @@ CHANNEL_ID_SETTINGS = [  # Must be int type
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-global_prefix_dict = {}  # Caches
+# Caches
+global_prefix_dict = {}  
 global_verification_system_dict = {}
 global_unverified_role_dict = {}
+
+def setup(bot):
+    bot.add_cog(Settings())
 
 class Settings(commands.Cog):
     def __init__(self):

@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addFilter(on_log)
 
+def setup(bot):
+    bot.add_cog(BumpReminder())
+
 class BumpReminder(commands.Cog, name='Bump Reminder'):
 
     def __init__(self):

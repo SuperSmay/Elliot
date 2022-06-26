@@ -8,6 +8,9 @@ from Statistics import log_event
 
 from GlobalVariables import bot, last_start_time, bot_version, code_contributors, gif_contributors
 
+def setup(bot):
+    bot.add_cog(BotInfo())
+
 class BotInfo(commands.Cog, name='Bot Info'):
     def __init__(self):
         pass

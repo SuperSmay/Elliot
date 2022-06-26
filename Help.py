@@ -10,6 +10,9 @@ from Statistics import log_event
 from GlobalVariables import bot
 from discord import Option, SlashCommand, SlashCommandGroup
 
+def setup(bot):
+    bot.add_cog(Help())
+
 class Help(commands.Cog, name='Help'):
     def __init__(self):
         pass

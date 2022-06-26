@@ -25,7 +25,9 @@ from GlobalVariables import bot, last_start_time, on_log
 logging.basicConfig()
 logging.root.addFilter(on_log)
 
-use_dev_mode = pathlib.Path.exists(pathlib.Path('use-dev-mode')) and open(pathlib.Path('use-dev-mode'), 'r').read().lower() == 'true'
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+logger.addFilter(on_log)
 
 tokenFile = open(pathlib.Path('token'), 'r') if not use_dev_mode else open(pathlib.Path('token-dev'), 'r')
 TOKEN = tokenFile.read()
@@ -75,7 +77,7 @@ async def cutie(ctx):
   log_event('cutie_command', ctx=ctx)
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
-    
+# Admin bot internal commands
 @bot.command(name="shutdown", description="Shutdown the bot")
 async def shutdown(ctx):
     if ctx.author.id != bot.owner_id:
@@ -85,21 +87,38 @@ async def shutdown(ctx):
         bot.remove_cog(cog)
         bot.loop.run_until_complete(await bot.close())
 
+@bot.command(name="reload", description="Reloads all cogs")
+async def reload(ctx):
+    if ctx.author.id != bot.owner_id:
+        return
+    await ctx.reply(embed=discord.Embed(description="Reloading modules..."))
+    failed = 0
+    for extension in list(bot.extensions):
+        try:
+            bot.reload_extension(extension)
+            logger.info(f"Reloaded module {extension}")
+        except Exception:
+            logger.error("Failed to reload modules", exc_info=True)
+            failed += 1
+    else:
+        await ctx.reply(embed=discord.Embed(description=f"Reloading modules complete. {failed} failed."))
+
+
 @bot.event
 async def on_member_join(user):
   scan = ImageScan.MemberScanner(user)
   await scan.scanMember()
 
-bot.add_cog(Interaction.Interaction())
-bot.add_cog(BumpReminder.BumpReminder())
-bot.add_cog(BotInfo.BotInfo())
-bot.add_cog(Groovy.Groovy())
-bot.add_cog(Settings.Settings())
-bot.add_cog(Leaderboard.Leaderboard())
-bot.add_cog(Join.Join())
-bot.add_cog(Verify.Verify())
-bot.add_cog(Levels.Levels())
-bot.add_cog(Help.Help())
+bot.load_extension('BotInfo')
+bot.load_extension('Interaction')
+bot.load_extension('BumpReminder')
+bot.load_extension('Groovy')
+bot.load_extension('Settings')
+bot.load_extension('Leaderboard')
+bot.load_extension('Join')
+bot.load_extension('Verify')
+bot.load_extension('Levels')
+bot.load_extension('Help')
 
 try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))

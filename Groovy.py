@@ -82,6 +82,9 @@ genius_token = (open(pathlib.Path('genius-token'), 'r')).read()
 genius = lyricsgenius.Genius(genius_token, verbose=False, remove_section_headers=True)
 
 music_players = {}
+
+def setup(bot):
+    bot.add_cog(Groovy())
 #endregion
 
 class YTDLSource(discord.PCMVolumeTransformer):
