@@ -105,11 +105,6 @@ async def reload(ctx):
         await ctx.reply(embed=discord.Embed(description=f"Reloading modules complete. {failed} failed."))
 
 
-@bot.event
-async def on_member_join(user):
-  scan = ImageScan.MemberScanner(user)
-  await scan.scanMember()
-
 bot.load_extension('BotInfo')
 bot.load_extension('Interaction')
 bot.load_extension('BumpReminder')
