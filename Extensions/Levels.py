@@ -10,7 +10,7 @@ from Extensions.Statistics import log_event
 import Extensions.Leaderboard as Leaderboard
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 logger.addFilter(on_log)
 
 MESSAGE_XP = 20

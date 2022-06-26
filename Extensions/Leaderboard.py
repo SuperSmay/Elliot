@@ -13,7 +13,7 @@ from Extensions.Settings import fetch_setting
 from Extensions.Statistics import log_event
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 logger.addFilter(on_log)
 
 def setup(bot):
