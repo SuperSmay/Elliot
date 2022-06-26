@@ -35,12 +35,13 @@ TOKEN = tokenFile.read()
 @bot.event
 async def on_ready():
   global last_start_time
-  print("I love coffee")
-  log_event('startup')
-  last_start_time = datetime.datetime.utcnow()
-  async for guild in bot.fetch_guilds(limit=150):
-    print(guild.name)
-  
+    logger.info("I love coffee")
+    log_event('startup')
+    last_start_time = datetime.datetime.utcnow()
+    async for guild in bot.fetch_guilds(limit=150):
+        logger.info(guild.name)
+
+
 @bot.event
 async def on_message(message: discord.Message):
   if message.author.id == bot.user.id: 
@@ -131,4 +132,4 @@ except KeyboardInterrupt:
 finally:
     bot.loop.close()
     sleep(1)
-    print("Closing up, have a nice day!")
+    logger.info("Closing up, have a nice day!")
