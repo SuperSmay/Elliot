@@ -99,7 +99,7 @@ async def reload(ctx):
             bot.reload_extension(extension)
             logger.info(f"Reloaded module {extension}")
         except Exception:
-            logger.error("Failed to reload modules", exc_info=True)
+            logger.error(f"Failed to reload module {extension}", exc_info=True)
             failed += 1
     else:
         await ctx.reply(embed=discord.Embed(description=f"Reloading modules complete. {failed} failed."))
