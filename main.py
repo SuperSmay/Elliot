@@ -16,7 +16,7 @@ logging.basicConfig()
 logging.root.addFilter(on_log)
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.DEBUG)
 logger.addFilter(on_log)
 
 @bot.event
