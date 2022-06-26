@@ -147,7 +147,7 @@ ROLE_ID_SETTINGS = [  # Must be int type
     'bot_role',
 ]
 
-CHANNEL_ID_SETTINGS = [  # Must be in type
+CHANNEL_ID_SETTINGS = [  # Must be int type
     'welcome_channel',
     'role_channel',
     'log_channel',
