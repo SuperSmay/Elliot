@@ -76,6 +76,14 @@ async def cutie(ctx):
   await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
     
+@bot.command(name="shutdown", description="Shutdown the bot")
+async def shutdown(ctx):
+    if ctx.author.id != bot.owner_id:
+        return
+    await ctx.reply(embed=discord.Embed(description="Closing up, have a nice day!"), mention_author=False)
+    for cog in list(bot.cogs.keys()).copy():
+        bot.remove_cog(cog)
+        bot.loop.run_until_complete(await bot.close())
 
 @bot.event
 async def on_member_join(user):
