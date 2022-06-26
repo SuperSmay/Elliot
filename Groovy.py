@@ -1,29 +1,31 @@
 import asyncio
 import concurrent.futures
 import datetime
-from difflib import SequenceMatcher
 import logging
-import lyricsgenius
+import os
 import pathlib
 import random
 import re
-from typing import Literal
-import requests
 import threading
 import urllib.parse
+from difflib import SequenceMatcher
+from typing import Literal
 
 import discord
 import googleapiclient.discovery
+import lyricsgenius
+import requests
 import spotipy
 import youtube_dl
-from discord.ext import commands, tasks
 from discord.commands import Option, OptionChoice, SlashCommandGroup
+from discord.ext import commands, tasks
+from dotenv import load_dotenv
 from youtubesearchpython import VideosSearch
-from Statistics import log_event
 
+import String_Progress_Bar
 from GlobalVariables import bot, on_log
 from Settings import fetch_setting, set_setting
-import String_Progress_Bar
+from Statistics import log_event
 
 ##TODO List
     ## Youtube-DL simple youtube links ✓
@@ -48,6 +50,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addFilter(on_log)
 
+load_dotenv()
+
 ytdlFormatOptions = {
     'format': 'bestaudio/best',
     'extractaudio': True,
@@ -71,14 +75,15 @@ ffmpegOptions = {
 
 ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
 
-client_id = (open(pathlib.Path('spotify-id'), 'r')).read()
-client_secret = (open(pathlib.Path('spotify-secret'), 'r')).read()
+client_id = os.environ.get('SPOTIFY_ID')
+client_secret = os.environ.get('SPOTIFY_SECRET')
 client_credentials_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
 sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager) #spotify object to access API
 
-yt = googleapiclient.discovery.build("youtube", "v3", developerKey = (open(pathlib.Path('youtube-api-key'), 'r')).read())
+youtube_key = os.environ.get('YOUTUBE_API_KEY')
+yt = googleapiclient.discovery.build("youtube", "v3", developerKey=youtube_key)
 
-genius_token = (open(pathlib.Path('genius-token'), 'r')).read()
+genius_token = os.environ.get('GENIUS_TOKEN')
 genius = lyricsgenius.Genius(genius_token, verbose=False, remove_section_headers=True)
 
 music_players = {}

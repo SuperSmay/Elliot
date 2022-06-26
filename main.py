@@ -1,24 +1,13 @@
-#Bot
+# Bot
 import datetime
 import logging
-import pathlib
+import os
 from time import sleep
 
+from dotenv import load_dotenv
 import discord
 from discord.commands import Option, OptionChoice
 
-import BotInfo
-import Help
-import BumpReminder
-import Groovy
-import ImageScan
-import Interaction
-import Join
-import Leaderboard
-import Settings
-import Verify
-import Levels
-from Settings import fetch_setting
 from Statistics import log_event
 from GlobalVariables import bot, last_start_time, on_log
 
@@ -29,12 +18,15 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 logger.addFilter(on_log)
 
-tokenFile = open(pathlib.Path('token'), 'r') if not use_dev_mode else open(pathlib.Path('token-dev'), 'r')
-TOKEN = tokenFile.read()
+load_dotenv()
+
+USE_DEV_MODE = os.environ.get('USE_DEV_MODE')
+
+TOKEN = os.environ.get('BOT_TOKEN') if not USE_DEV_MODE else os.environ.get('DEV_TOKEN')
 
 @bot.event
 async def on_ready():
-  global last_start_time
+    global last_start_time
     logger.info("I love coffee")
     log_event('startup')
     last_start_time = datetime.datetime.utcnow()
@@ -44,39 +36,40 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
-  if message.author.id == bot.user.id: 
-    if hasattr(message.guild, 'id'):  # Ephemeral things
-      log_event('message_send', modes=['global', 'guild'], id=message.guild.id)
-  if message.author.bot: 
-    return
-  if message.is_system():
-    return
-  if str(bot.user.id) in message.content:
-    await message.add_reaction("<a:ping:866475995317534740>")
+    if message.author.id == bot.user.id:
+        if hasattr(message.guild, 'id'):  # Ephemeral things
+            log_event('message_send', modes=['global', 'guild'], id=message.guild.id)
+    if message.author.bot:
+        return
+    if message.is_system():
+        return
+    if str(bot.user.id) in message.content:
+        await message.add_reaction("<a:ping:866475995317534740>")
 
-  await bot.process_commands(message)
-
-
+    await bot.process_commands(message)
 
 
 @bot.event
 async def on_message_edit(oldMessage, newMessage: discord.Message):
-  if newMessage.author.bot: return
-  if oldMessage.content == newMessage.content: return
-  print("ON MESSAGE EDIT")
-  await bot.process_commands(newMessage)
+    if newMessage.author.bot:
+        return
+    if oldMessage.content == newMessage.content:
+        return
+    await bot.process_commands(newMessage)
+
 
 @bot.slash_command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
-  log_event('slash_command', ctx=ctx)
-  log_event('cutie_command', ctx=ctx)
-  await ctx.respond(embed=discord.Embed(description="ur a cutie 2 ;3"))
+    log_event('slash_command', ctx=ctx)
+    log_event('cutie_command', ctx=ctx)
+    await ctx.respond(embed=discord.Embed(description="ur a cutie 2 ;3"))
+
 
 @bot.command(name="cutie", description="you are a cutie")
 async def cutie(ctx):
-  log_event('prefix_command', ctx=ctx)
-  log_event('cutie_command', ctx=ctx)
-  await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
+    log_event('prefix_command', ctx=ctx)
+    log_event('cutie_command', ctx=ctx)
+    await ctx.reply(embed=discord.Embed(description="ur a cutie 2 ;3"), mention_author=False)
 
 # Admin bot internal commands
 @bot.command(name="shutdown", description="Shutdown the bot")
@@ -120,9 +113,9 @@ try:
     bot.loop.run_until_complete(bot.start(token=TOKEN))
 except KeyboardInterrupt:
     for cog in list(bot.cogs.keys()).copy():
-      bot.remove_cog(cog)
+        bot.remove_cog(cog)
     bot.loop.run_until_complete(bot.close())
-    
+
     # cancel all tasks lingering
 finally:
     bot.loop.close()
