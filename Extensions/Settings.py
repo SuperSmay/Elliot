@@ -36,6 +36,9 @@ DEFAULT_SETTINGS = {  #Required settings dict, provides a default value and serv
     'shuffle': False,
     'game_mode': False,
     'auto_skip': False,
+    'level_system': True,
+    'levelup_channel': None,
+    'mention_levelups': True,
 
 }
 
@@ -60,6 +63,9 @@ SETTINGS_NAMES = {  #Required settings dict, provides a user-facing setting name
     'shuffle': 'Shuffle',
     'game_mode': 'Music Player Game Mode',
     'auto_skip': 'Music Player Autoskip',
+    'level_system': 'Level System',
+    'levelup_channel': 'Levelup Message Channel',
+    'mention_levelups': 'Mention Levelups',
 }
 
 SETTINGS_ALIASES = {  #Optional settings dict for other usable names
@@ -81,6 +87,9 @@ SETTINGS_ALIASES = {  #Optional settings dict for other usable names
     'announce_songs': ['announcesongs'],
     'game_mode': ['gamemode'],
     'auto_skip': ['autoskip'],
+    'level_system': ['levels', 'levelsystem'],
+    'levelup_channel': ['level_channel', 'levelupchannel', 'levelchannel'],
+    'mention_levelups': ['ping_levelups', 'mention_level', 'ping_level', 'pinglevelups', 'mentionlevel', 'pinglevel', ],
 }
 
 SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of the setting
@@ -104,6 +113,9 @@ SETTINGS_DESCRIPTIONS = {  #Required settings dict, provides a description of th
     'shuffle': 'Shuffle the upcoming playlist (Queue is unaffected!)',
     'game_mode': 'Turns on the guessing game for the music player',
     'auto_skip': 'Skip songs after they have been guessed in game mode',
+    'level_system': 'Allow members to gain xp by sending messages and chatting in voice chats',
+    'levelup_channel': 'Channel to send level up messages to. Level up messages are silenced if no channel is provided',
+    'mention_levelups': 'Mention members in level up messages',
 }
 
 SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the setting value
@@ -127,6 +139,9 @@ SETTINGS_TYPES = {  #Required settings dict, provides the expected type of the s
     'shuffle': bool,
     'game_mode': bool,
     'auto_skip': bool,
+    'level_system': bool,
+    'levelup_channel': int,
+    'mention_levelups': bool,
 }
 
 LIST_TYPES = {  #Required if SETTINGS_TYPE is list
@@ -152,6 +167,7 @@ CHANNEL_ID_SETTINGS = [  # Must be int type
     'role_channel',
     'log_channel',
     'bump_channel',
+    'levelup_channel',
 ]
 
 logger = logging.getLogger(__name__)

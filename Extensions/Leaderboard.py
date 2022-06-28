@@ -95,8 +95,11 @@ class LeaderboardData():
         with sqlite3.connect(database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
+            old_score = cur.execute(f"SELECT * FROM {database_name} WHERE user_id = {member.id}").fetchone()[column_name]
             cur.execute(f"UPDATE {database_name} SET {column_name} = (?) WHERE user_id = {member.id}", (score,))
+            new_score = score
             logger.info(f'Score {column_name} set to {score} for user_id={member.id}')
+            self.on_score_change(member, old_score, new_score, column_name)
             return True
         return False
     
@@ -114,13 +117,19 @@ class LeaderboardData():
         with sqlite3.connect(database_path) as con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
+            old_score = cur.execute(f"SELECT * FROM {database_name} WHERE user_id = {member.id}").fetchone()[column_name]
             cur.execute(f"UPDATE {database_name} SET {column_name} = {column_name} + {change} WHERE user_id = {member.id}")
+            new_score = cur.execute(f"SELECT * FROM {database_name} WHERE user_id = {member.id}").fetchone()[column_name]
             logger.info(f'Score {column_name} changed by {change} for user_id={member.id}')
+            self.on_score_change(member, old_score, new_score, column_name)
             return True
         return False
 
     # Events
     def on_row_init(self, member, column_name):
+        pass
+
+    def on_score_change(self, member, old_score, new_score, column_name):
         pass
 
     # Message to send

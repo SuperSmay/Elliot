@@ -7,6 +7,7 @@ import logging
 from Globals.GlobalVariables import bot, on_log
 import Globals.StringProgressBar as StringProgressBar
 from Extensions.Statistics import log_event
+from Extensions.Settings import fetch_setting
 
 import Extensions.Leaderboard as Leaderboard
 
@@ -93,6 +94,38 @@ class LevelManager(Leaderboard.LeaderboardData):
         if member.bot:
             self.set_score(member, True, column_name='bot')
 
+    def on_score_change(self, member, old_score, new_score, column_name):
+        if column_name == 'xp':
+            return self.on_xp_change(member, old_score, new_score)
+
+        
+    # Level specific events
+    def on_xp_change(self, member, old_score, new_score):
+        old_level = self.xp_to_level(old_score)
+        new_level = self.xp_to_level(new_score)
+
+        if new_level > old_level:
+            return self.on_levelup(member, new_level)
+
+    def on_levelup(self, member, level):
+        bot.loop.create_task(self.respond_to_levelup(member, level))
+
+
+    async def respond_to_levelup(self, member: discord.Member, level):
+        channel_id = fetch_setting(member.guild.id, 'levelup_channel')
+        if channel_id is None:
+            return
+        # Skip if channel doesn't exist (probably deleted)
+        if channel_id not in [channel.id for channel in member.guild.channels]:
+            return
+
+        channel = member.guild.get_channel(channel_id)
+
+        if not channel.permissions_for(member.guild.get_member(bot.user.id)).send_messages:
+            return
+
+        await channel.send(self.get_levelup_message(member, level))
+
     # Constructors
     def get_rank_embed(self, member: discord.Member, column_name='xp', exclude_names: list[str]=['bot']):
         embed = discord.Embed()
@@ -138,6 +171,12 @@ class LevelManager(Leaderboard.LeaderboardData):
         embed.color = 7528669
 
         return embed
+
+    def get_levelup_message(self, member, level):
+        if fetch_setting(member.guild.id, 'mention_levelups'):
+            return f"Congratulations {member.mention}, you hit level {level}!"
+        else:
+            return f"Congratulations {member.display_name}, you hit level {level}!"
 
     
 class Levels(commands.Cog):
