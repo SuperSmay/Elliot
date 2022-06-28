@@ -148,13 +148,21 @@ class LeaderboardData():
         return placement
 
     # Create leaderboard
-    async def get_leaderboard_embed(self, member, page_index = 0, column_name=None, exclude_names=None):
+    async def fetch_leaderboard_embed(self, member, page_index = 0, column_name=None, exclude_names=None):
         leaderboard = self.get_leaderboard(member, column_name, exclude_names)
         embed = discord.Embed(title= f"⋅•⋅⊰∙∘☽{member.guild.name}'s {self.leaderboard_title} Leaderboard☾∘∙⊱⋅•⋅", color= 7528669)
         embed.add_field(name= "**Leaderboard**", value= self.leaderboard_string(await self.leaderboard_list(member, page_index, leaderboard, column_name)))
         embed.set_thumbnail(url=bot.user.avatar.url)
         embed.set_footer(text=f'Page {page_index + 1} of {math.ceil(len(leaderboard) / 10)}')
         return embed
+
+    def get_user_index_on_leaderboard(self, member, leaderboard=None, exclude_names=None):
+        index = 0
+        leaderboard = self.get_leaderboard(member, exclude_names=exclude_names) if leaderboard is None else leaderboard
+        while index < len(leaderboard):
+            if leaderboard[index]["user_id"] == member.id: return index
+            index += 1
+        return -1
 
     def get_position_number(self, index):
         try: return numberEmoteList[index]
@@ -259,7 +267,7 @@ class Leaderboard(commands.Cog, name='Leaderboards'):
             leaderboard_data = WeeklyLeaveTimeLeaderboard()
         elif leaderboard == 'leaver':
             leaderboard_data = LeaveTimeLeaderboard()
-        embed = await leaderboard_data.get_leaderboard_embed(ctx.author)
+        embed = await leaderboard_data.fetch_leaderboard_embed(ctx.author)
         await ctx.respond(embed=embed)
 
     @commands.command(name="leaderboard", aliases=['leaverboard'], description="Shows a leaderboard")
@@ -268,5 +276,5 @@ class Leaderboard(commands.Cog, name='Leaderboards'):
             leaderboard_data = WeeklyLeaveTimeLeaderboard()
         else:
             leaderboard_data = LeaveTimeLeaderboard()
-        embed = await leaderboard_data.get_leaderboard_embed(ctx.author)
+        embed = await leaderboard_data.fetch_leaderboard_embed(ctx.author)
         await ctx.reply(embed=embed, mention_author= False)
