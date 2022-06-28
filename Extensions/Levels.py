@@ -337,7 +337,10 @@ class Levels(commands.Cog):
         else:
             sort = 'xp'
 
-        member = await ctx.guild.fetch_member(member_id)
+        try:
+            member = await ctx.guild.fetch_member(member_id)
+        except discord.errors.NotFound:
+            member = ctx.author
 
         embed = level_manager.get_rank_embed(member, column_name=sort, exclude_names=['bot'])
         await ctx.reply(embed=embed, mention_author=False)
