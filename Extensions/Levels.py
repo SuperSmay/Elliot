@@ -112,9 +112,15 @@ class LevelManager(Leaderboard.LeaderboardData):
         xp = self.get_xp(member, leaderboard=leaderboard)
         level = self.xp_to_level(xp)
 
+        current_progress_xp = xp - self.level_to_required_xp(level)
+
+        current_level_xp = self.level_to_required_xp(level)
         next_level_xp = self.level_to_required_xp(level+1)
 
-        percent = min(xp/next_level_xp * 100, 100)
+        xp_to_next_level = next_level_xp - current_level_xp
+
+
+        percent = min(current_progress_xp/xp_to_next_level * 100, 100)
 
         progress_bar = StringProgressBar.StringBar(percent=percent, length=15)
         progress_bar.edge_back = '▻'
@@ -124,7 +130,7 @@ class LevelManager(Leaderboard.LeaderboardData):
 
         embed.title = f"Rank #{index+1} - Level {level} - {member.display_name}"
         embed.description = f"Ranked #{index+1} out of {len(leaderboard)}"
-        embed.add_field(name=f"{self.stringigy_xp(xp)}/{self.stringigy_xp(next_level_xp)} xp", value=progress_bar.bar)
+        embed.add_field(name=f"{self.stringigy_xp(current_progress_xp)}/{self.stringigy_xp(xp_to_next_level)} xp to next level", value=progress_bar.bar)
 
         if 'bot' not in exclude_names:
             embed.description += " (Bots included)"
