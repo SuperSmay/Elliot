@@ -83,7 +83,7 @@ def ensure_table_exists(name: str,  primary_column_name: str, primary_column_typ
         with sqlite3.connect(database_path) as con:
             cur = con.cursor()
             cur.execute(f"CREATE TABLE IF NOT EXISTS {real_name} ({primary_column_name} {type_to_typename(primary_column_type)} PRIMARY KEY)")
-            logger.info(f'Created new {real_name} table in database {mode}')
+            # logger.info(f'Created new {real_name} table in database {mode}')
     except Exception as e:
         logger.error(f'Failed to ensure {real_name} ({mode}) table exists', exc_info=e)
         raise e
