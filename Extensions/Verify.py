@@ -26,6 +26,8 @@ class Verify(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
         if message.channel.type == discord.ChannelType.private:
             return
         if message.is_system():
