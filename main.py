@@ -45,12 +45,12 @@ async def on_message(message: discord.Message):
 
 
 @bot.event
-async def on_message_edit(oldMessage, newMessage: discord.Message):
-    if newMessage.author.bot:
+async def on_message_edit(old_message, new_message: discord.Message):
+    if new_message.author.bot:
         return
-    if oldMessage.content == newMessage.content:
+    if old_message.content == new_message.content:
         return
-    await bot.process_commands(newMessage)
+    await bot.process_commands(new_message)
 
 
 @bot.slash_command(name="cutie", description="you are a cutie")
