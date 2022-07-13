@@ -192,6 +192,8 @@ class Levels(commands.Cog):
             return
         if message.is_system():
             return
+        if not isinstance(message.author, discord.Member):
+            return
         
         level_manager = LevelManager()
 
@@ -223,30 +225,36 @@ class Levels(commands.Cog):
     async def levels_voice_chat_loop(self):
         logger.info("Checking voice chats for xp")
 
-        for channel_id in self.watched_channel_ids:
+        try:
 
-            channel: discord.VoiceChannel = await bot.fetch_channel(channel_id)
+            for channel_id in self.watched_channel_ids.copy():
 
-            if channel.type != discord.ChannelType.voice:
-                logger.warn("Text Channel in Voice Channel Watch List")
-                return
+                channel: discord.VoiceChannel = await bot.fetch_channel(channel_id)
 
-            member_voice_states: dict[int: discord.VoiceState] = {await channel.guild.fetch_member(member_id): voice_state for member_id, voice_state in channel.voice_states.items()}
+                if channel.type != discord.ChannelType.voice:
+                    logger.warn("Text Channel in Voice Channel Watch List")
+                    return
 
-            if len([member for member in member_voice_states if not member.bot]) < 2:
-                if channel_id in self.watched_channel_ids:
-                    self.watched_channel_ids.remove(channel_id)
-                return 
+                member_voice_states: dict[int: discord.VoiceState] = {await channel.guild.fetch_member(member_id): voice_state for member_id, voice_state in channel.voice_states.items()}
 
-            level_manager = LevelManager()
+                if len([member for member in member_voice_states if not member.bot]) < 2:
+                    if channel_id in self.watched_channel_ids:
+                        self.watched_channel_ids.remove(channel_id)
+                    return 
 
-            for member, voice_state in member_voice_states.items():
-                # Ignore AFK users and deafened users (They aren't really participating so...)
-                if voice_state.afk or voice_state.self_deaf or voice_state.deaf:
-                    continue
+                level_manager = LevelManager()
 
-                level_manager.change_voice_chat_time(member, 1)
-                level_manager.change_xp(member, VOICE_XP)
+                for member, voice_state in member_voice_states.items():
+                    # Ignore AFK users and deafened users (They aren't really participating so...)
+                    if voice_state.afk or voice_state.self_deaf or voice_state.deaf:
+                        continue
+
+                    level_manager.change_voice_chat_time(member, 1)
+                    level_manager.change_xp(member, VOICE_XP)
+        except Exception as e:
+            logger.error("Voice channel XP loop failed", exc_info=True)
+            user = await bot.fetch_user(bot.owner_id)
+            await user.send(f"`Voice channel XP loop failed\n{e}`")
 
     @levels_voice_chat_loop.before_loop
     async def before_voice_loop(self):
