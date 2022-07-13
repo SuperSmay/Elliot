@@ -20,3 +20,4 @@ output*
 Elliot.sqlite
 ElliotGuild.sqlite
 ElliotUser.sqlite
+temp*
