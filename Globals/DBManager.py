@@ -159,7 +159,7 @@ def type_to_typename(type):
     else:
         return 'BLOB'
 
-def update_columns(table_name, database_path, name_type_dict: dict[str, type], defaults: dict=None, allow_null=False):
+def update_columns(table_name, database_path, name_type_dict: dict[str, type], defaults: dict=None, allow_null=True):
     '''
         Adds any missing columns to the input table based on the input dictionary
 
@@ -182,7 +182,7 @@ def update_columns(table_name, database_path, name_type_dict: dict[str, type], d
                     default_value = defaults[col_name]
                 else:
                     default_value = None
-                cur.execute(f"ALTER TABLE {table_name} ADD {col_name} {type_to_typename(type)} DEFAULT {default_value} {'' if allow_null else 'NOT NULL'}")
+                cur.execute(f"ALTER TABLE {table_name} ADD {col_name} {type_to_typename(type)} {f'DEFAULT {default_value}' if default_value is not None else ''} {'' if allow_null else 'NOT NULL'}")
                 logger.info(f'Created new table column {col_name=} of type=int')
     except Exception as e:
         logger.error(f'Failed to update {table_name} database columns', exc_info=e)
