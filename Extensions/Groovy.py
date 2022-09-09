@@ -376,7 +376,9 @@ class iPod:
                         self.replace_item_in_partially_loaded_lists(partially_loaded_item, loaded_item)
                         self.on_preload_succeed(ctx, partially_loaded_item, loaded_item)
                     except Exception as e:
-                        if partially_loaded_item in self.partially_loaded_playlist: del(self.partially_loaded_playlist[self.partially_loaded_playlist.index(partially_loaded_item)])
+                        if partially_loaded_item in self.partially_loaded_playlist:
+                            index = self.partially_loaded_playlist.index(partially_loaded_item)
+                            del(self.partially_loaded_playlist[index])
                         self.on_load_fail(ctx, partially_loaded_item, e)
             
             do_loop = False
