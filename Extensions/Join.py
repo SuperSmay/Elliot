@@ -76,7 +76,7 @@ class JoinMessager(commands.Cog, name='Join'):
         channel_id = fetch_setting(self.guild.id, 'log_channel')
         if channel_id is None: return
         channel = self.guild.get_channel(channel_id)
-        embed = discord.Embed(title= "Member joined", description= f"User is {self.member.mention}", color= 15672122)
+        embed = discord.Embed(title= "Member joined", description= f"User is {self.member.mention}", color= 3127967)
         embed.set_author(name= self.member.display_name, url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
         embed.set_footer(text= f"ID: {self.member.id}")
         embed.set_thumbnail(url= self.member.avatar.url if hasattr(self.member.avatar, 'url') else 'https://cdn.discordapp.com/embed/avatars/1.png')
