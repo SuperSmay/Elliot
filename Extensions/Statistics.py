@@ -12,15 +12,6 @@ import Globals.DBManager as DBManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
-
-global_database_name = 'Elliot.sqlite'
-global_database_path = pathlib.Path(f'Storage/{global_database_name}')
-guild_database_name = 'ElliotGuild.sqlite'
-guild_database_path = pathlib.Path(f'Storage/{guild_database_name}')
-user_database_name = 'ElliotUser.sqlite'
-user_database_path = pathlib.Path(f'Storage/{user_database_name}')
-
-
 class Statistics(commands.Cog):
     ...
 
@@ -93,15 +84,15 @@ def change_current_event_count_to(event_name, count, mode: Literal['global', 'gu
 
     if mode == 'global':
         table_name = 'statistics'
-        database_path = global_database_path
+        database_path = DBManager.global_database_path
     elif mode == 'guild':
         if id is None: raise ValueError(id)
         table_name = f'statistics_{id}'
-        database_path = guild_database_path
+        database_path = DBManager.guild_database_path
     elif mode == 'user':
         if id is None: raise ValueError(id)
         table_name = f'statistics_{id}'
-        database_path = user_database_path
+        database_path = DBManager.user_database_path
     else:
         raise ValueError(mode)
 
@@ -118,15 +109,15 @@ def fetch_current_event_count(event_name, mode: Literal['global', 'guild', 'user
     
     if mode == 'global':
         real_name = 'statistics'
-        database_path = global_database_path
+        database_path = DBManager.global_database_path
     elif mode == 'guild':
         if id is None: raise ValueError(id)
         real_name = f'statistics_{id}'
-        database_path = guild_database_path
+        database_path = DBManager.guild_database_path
     elif mode == 'user':
         if id is None: raise ValueError(id)
         real_name = f'statistics_{id}'
-        database_path = user_database_path
+        database_path = DBManager.user_database_path
     else:
         raise ValueError(mode)
 
