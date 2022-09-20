@@ -98,7 +98,7 @@ def main():
 
     load_dotenv(pathlib.Path('Globals/.env'))
 
-    USE_DEV_MODE = os.environ.get('USE_DEV_MODE')
+    USE_DEV_MODE = os.environ.get('USE_DEV_MODE').lower() == 'true'
 
     TOKEN = os.environ.get('BOT_TOKEN') if not USE_DEV_MODE else os.environ.get('DEV_TOKEN')
 
