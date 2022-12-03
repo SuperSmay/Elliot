@@ -111,7 +111,7 @@ def main():
     bot.load_extension('Extensions.Join')
     bot.load_extension('Extensions.Verify')
     bot.load_extension('Extensions.Levels')
-    bot.load_extension('Extensions.Birthdays')
+    # bot.load_extension('Extensions.Birthdays')
     bot.load_extension('Extensions.Help')
 
     try:
