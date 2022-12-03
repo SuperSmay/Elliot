@@ -1804,6 +1804,7 @@ class iPod:
         logger.info('Reshuffle command receive')
         if fetch_setting(ctx.guild.id, 'shuffle'):
             self.reshuffle_list(self.partially_loaded_playlist)
+            self.ensure_preload(ctx)
             await self.respond_to_reshuffle_command(ctx)
         else:
             self.toggle_shuffle(ctx)
