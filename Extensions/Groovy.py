@@ -1788,6 +1788,21 @@ class iPod:
         self.toggle_shuffle(ctx)
 
     @groovy_decorator
+    async def on_reshuffle_command(self, ctx):
+        '''
+        Event to be called when the shuffle command is ran
+
+        Parameters:
+            - `ctx`: discord.commands.ApplicationContext; The context of the command
+        '''
+        logger.info('Reshuffle command receive')
+        if fetch_setting(ctx.guild.id, 'shuffle'):
+            self.reshuffle_list(self.partially_loaded_playlist)
+            await self.respond_to_reshuffle_command(ctx)
+        else:
+            self.toggle_shuffle(ctx)
+
+    @groovy_decorator
     async def on_pause_command(self, ctx):
         '''
         Event to be called when the pause command is ran
@@ -2498,6 +2513,10 @@ class iPod:
         embed = discord.Embed(description='Shuffle disabled', color=3093080)
         await self.send_response(ctx, embed)
 
+    async def respond_to_reshuffle_command(self, ctx):
+        embed = discord.Embed(description='Reshuffled playlist', color=3093080)
+        await self.send_response(ctx, embed)
+
     async def respond_to_announce_enable(self, ctx):
         embed = discord.Embed(description='Announce songs enabled', color=3093080)
         await self.send_response(ctx, embed)
@@ -2860,18 +2879,49 @@ class Groovy(commands.Cog, name='Groovy'):
         await player.on_playlist_command(ctx, list, page-1)
 
     @commands.command(name='shuffle', aliases=['sh'], description='Toggle shuffle mode')
+    async def prefix_shuffle(self, ctx, subcommand: str = ''):
+        log_event('prefix_command', ctx=ctx)
+        log_event('shuffle_command', ctx=ctx)
+
+        player = self.get_player(ctx)
+
+        if subcommand == 'toggle' or subcommand == 't':
+            subcommand = 'toggle'
+        elif subcommand == 'reshuffle' or subcommand == 'r':
+            subcommand = 'reshuffle'
+        else:
+            subcommand = 'toggle'
+
+        if subcommand == 'toggle':
+        await player.on_shuffle_command(ctx)
+        if subcommand == 'reshuffle':
+            await player.on_reshuffle_command(ctx)
+        
+    @commands.command(name='reshuffle', description='Reshuffle current playlist')
     async def prefix_shuffle(self, ctx):
         log_event('prefix_command', ctx=ctx)
         log_event('shuffle_command', ctx=ctx)
-        player = self.get_player(ctx)
-        await player.on_shuffle_command(ctx)
 
-    @commands.slash_command(name='shuffle', description='Toggle shuffle mode')
+        player = self.get_player(ctx)
+
+        await player.on_reshuffle_command(ctx)
+        
+
+    shuffle = SlashCommandGroup(name='shuffle', description='Manage Shuffle')
+
+    @shuffle.command(name='toggle', description='Toggle shuffle mode')
     async def slash_shuffle(self, ctx):
         log_event('slash_command', ctx=ctx)
         log_event('shuffle_command', ctx=ctx)
         player = self.get_player(ctx)
         await player.on_shuffle_command(ctx)
+
+    @shuffle.command(name='reshuffle', description='Reshuffle current playlist')
+    async def slash_shuffle(self, ctx):
+        log_event('slash_command', ctx=ctx)
+        log_event('shuffle_command', ctx=ctx)
+        player = self.get_player(ctx)
+        await player.on_reshuffle_command(ctx)
 
     @commands.command(name='announcesongs', aliases=['an', 'as'], description='Toggle announcing when a song starts')  # Prefix only
     async def prefix_announce(self, ctx):
