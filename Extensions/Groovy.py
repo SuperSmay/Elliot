@@ -224,6 +224,7 @@ class LoadedSpotifyTrack(PartiallyLoadedSong):
     def get_youtube_dl(self):
         title = f"{self.spotify_track_data['artists'][0]['name']} - {self.spotify_track_data['name']}"
         data = ytdl.extract_info(title, download=False)
+        # self.get_closest_song_from_search(search_result_data=data)
         loaded_song = LoadedYoutubeSong(data['entries'][0], self.loading_context, self.song_list, self.random_value)
         loaded_song.title_from_spotify = self.spotify_track_data['name']
         loaded_song.artist_from_spotify = self.spotify_track_data['artists'][0]['name']
@@ -231,6 +232,11 @@ class LoadedSpotifyTrack(PartiallyLoadedSong):
 
     def __str__(self):
         return self.spotify_track_data['name']
+
+    def get_closest_song_from_search(self, search_result_data):
+        
+        ...
+
 
 class LoadedYoutubePlaylist:
     def __init__(self, youtube_playlist_snippets: list, title: str, loading_context: SongLoadingContext) -> None:
@@ -2893,10 +2899,10 @@ class Groovy(commands.Cog, name='Groovy'):
             subcommand = 'toggle'
 
         if subcommand == 'toggle':
-        await player.on_shuffle_command(ctx)
+            await player.on_shuffle_command(ctx)
         if subcommand == 'reshuffle':
             await player.on_reshuffle_command(ctx)
-        
+
     @commands.command(name='reshuffle', description='Reshuffle current playlist')
     async def prefix_shuffle(self, ctx):
         log_event('prefix_command', ctx=ctx)
