@@ -67,16 +67,20 @@ class BumpReminder(commands.Cog, name='Bump Reminder'):
         #Get channel
         channel = await bot.fetch_channel(fetch_setting(guild.id, 'bump_channel'))
 
-        message = await channel.history(limit=50).find(search)
-        
-        if message == None:
-            message = await channel.history(limit=150).find(search)
+        try: 
+            message = await channel.history(limit=50).find(search)
+            
+            if message == None:
+                message = await channel.history(limit=150).find(search)
 
-        if message == None:
-            message = await channel.history(limit=1500).find(search)
+            if message == None:
+                message = await channel.history(limit=1500).find(search)
 
-        if message == None:
-            logger.info(f'Could not find bump message within 1500 messages for {guild.name}/{channel.name}')
+            if message == None:
+                logger.info(f'Could not find bump message within 1500 messages for {guild.name}/{channel.name}')
+        except Exception as e:
+            message = None
+            logger.error(f'Failed to get bump message for {guild.name}/{channel.name}', exc_info=True)
 
         return message
 
