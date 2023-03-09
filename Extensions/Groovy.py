@@ -17,7 +17,7 @@ import googleapiclient.discovery
 import lyricsgenius
 import requests
 import spotipy
-import youtube_dl
+import yt_dlp 
 from discord.commands import Option, OptionChoice, SlashCommandGroup
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
@@ -73,7 +73,7 @@ ffmpegOptions = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
 }
 
-ytdl = youtube_dl.YoutubeDL(ytdlFormatOptions)
+ytdl = yt_dlp.YoutubeDL(ytdlFormatOptions)
 
 client_id = os.environ.get('SPOTIFY_ID')
 client_secret = os.environ.get('SPOTIFY_SECRET')
